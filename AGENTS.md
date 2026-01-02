@@ -1,8 +1,21 @@
 # Agent Instructions
 
+## Task Management
+
+**Read `TODO.md` for the current implementation task list.**
+
+Rules for TODO.md:
+- **Remove tasks when completed** - don't leave them checked, delete them entirely
+- **Do not add new tasks** without discussing with the project owner first
+- **Add considerations** to the "Considerations" section at the bottom if you identify new work that might be needed
+- **Work through phases in order** - complete Phase N before starting Phase N+1 (unless explicitly told otherwise)
+- **Reference `DESIGN.md`** for architectural decisions and detailed specifications
+
 ## Project Overview
 
 Workspace CLI creates isolated Docker-in-Docker development environments with SSH access, persistent volumes, and port forwarding. It's a pure Node.js CLI with minimal dependencies.
+
+**v2 Architecture**: See `DESIGN.md` for the distributed architecture with agent daemon, API, and multi-client support (CLI, TUI, Web UI).
 
 ## Key Patterns
 
@@ -32,6 +45,11 @@ Workspace CLI creates isolated Docker-in-Docker development environments with SS
 Run tests after implementing each feature - don't stop until tests are passing.
 
 A feature is only complete when both `yarn build` and `npm test` succeed.
+
+**All tests must pass.** "Pre-existing failure" is not a valid excuse to leave tests broken. If you encounter a failing test:
+1. Fix it immediately, even if the failure predates your changes
+2. If the test is invalid or outdated, remove or update it
+3. Only skip fixing a test with explicit developer agreement
 
 Run tests with `npm test` (Vitest). Tests use real Docker containers and verify actual behavior.
 

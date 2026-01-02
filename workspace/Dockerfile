@@ -177,7 +177,11 @@ USER workspace
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
+RUN curl -fsSL https://opencode.ai/install | bash
+
 USER root
+
+ENV PATH="/home/workspace/.opencode/bin:${PATH}"
 
 RUN mkdir -p /home/workspace /workspace/config /workspace/template /workspace/source \
   && chown -R workspace:workspace /home/workspace /workspace

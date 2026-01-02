@@ -1,24 +1,29 @@
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '../..');
+async function buildImage() {
+  return new Promise((resolve, reject) => {
+    console.log('\n🏗️  Building workspace Docker image once for all tests...\n');
 
-export async function setup() {
-  console.log('\n🏗️  Building workspace Docker image once for all tests...\n');
-  try {
-    const workspacePath = path.join(PROJECT_ROOT, 'workspace');
-    execSync('docker build -t workspace:latest .', {
-      cwd: workspacePath,
+    const buildContext = path.join(process.cwd(), 'workspace');
+    const proc = spawn('docker', ['build', '-t', 'workspace:latest', buildContext], {
       stdio: 'inherit',
     });
-    console.log('\n✅ Workspace Docker image built successfully\n');
-  } catch (error) {
-    console.error('\n❌ Failed to build workspace Docker image\n');
-    throw error;
-  }
+
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) {
+        console.log('\n✅ Workspace Docker image built successfully\n');
+        resolve();
+      } else {
+        reject(new Error(`Docker build failed with exit code ${code}`));
+      }
+    });
+  });
+}
+
+export async function setup() {
+  await buildImage();
 }
 
 export async function teardown() {

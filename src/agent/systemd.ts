@@ -1,0 +1,213 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+import { spawn } from 'child_process';
+import { DEFAULT_PORT, DEFAULT_CONFIG_DIR } from '../shared/types';
+
+const SERVICE_NAME = 'workspace-agent';
+const SERVICE_DESCRIPTION = 'Workspace Agent Daemon';
+
+function getSystemdUserDir(): string {
+  return path.join(os.homedir(), '.config', 'systemd', 'user');
+}
+
+function getServicePath(): string {
+  return path.join(getSystemdUserDir(), `${SERVICE_NAME}.service`);
+}
+
+interface InstallOptions {
+  port?: number;
+  configDir?: string;
+}
+
+export function generateServiceFile(options: InstallOptions = {}): string {
+  const port = options.port || DEFAULT_PORT;
+  const configDir = options.configDir || DEFAULT_CONFIG_DIR;
+
+  const nodePath = process.execPath;
+  const agentPath = path.resolve(__dirname, 'index.js');
+
+  return `[Unit]
+Description=${SERVICE_DESCRIPTION}
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=${nodePath} ${agentPath}
+Restart=on-failure
+RestartSec=5
+Environment=WS_PORT=${port}
+Environment=WS_CONFIG_DIR=${configDir}
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+async function runSystemctl(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('systemctl', ['--user', ...args]);
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data;
+    });
+    proc.stderr.on('data', (data: Buffer) => {
+      stderr += data;
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      } else {
+        const err = new Error(`systemctl exited with code ${code}: ${stderr}`);
+        reject(err);
+      }
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+export async function installService(options: InstallOptions = {}): Promise<void> {
+  const serviceDir = getSystemdUserDir();
+  const servicePath = getServicePath();
+
+  await fs.mkdir(serviceDir, { recursive: true });
+
+  const serviceContent = generateServiceFile(options);
+  await fs.writeFile(servicePath, serviceContent, 'utf-8');
+
+  console.log(`Service file written to: ${servicePath}`);
+
+  try {
+    await runSystemctl(['daemon-reload']);
+    console.log('Systemd daemon reloaded');
+  } catch {
+    console.warn(
+      'Warning: Could not reload systemd daemon. You may need to run: systemctl --user daemon-reload'
+    );
+  }
+
+  try {
+    await runSystemctl(['enable', SERVICE_NAME]);
+    console.log(`Service ${SERVICE_NAME} enabled`);
+  } catch {
+    console.warn(
+      `Warning: Could not enable service. You may need to run: systemctl --user enable ${SERVICE_NAME}`
+    );
+  }
+
+  console.log('');
+  console.log('Installation complete! To start the agent:');
+  console.log(`  systemctl --user start ${SERVICE_NAME}`);
+  console.log('');
+  console.log('To check status:');
+  console.log(`  systemctl --user status ${SERVICE_NAME}`);
+  console.log('');
+  console.log('To view logs:');
+  console.log(`  journalctl --user -u ${SERVICE_NAME} -f`);
+}
+
+export async function uninstallService(): Promise<void> {
+  const servicePath = getServicePath();
+
+  try {
+    await runSystemctl(['stop', SERVICE_NAME]);
+    console.log(`Service ${SERVICE_NAME} stopped`);
+  } catch {
+    // Service might not be running
+  }
+
+  try {
+    await runSystemctl(['disable', SERVICE_NAME]);
+    console.log(`Service ${SERVICE_NAME} disabled`);
+  } catch {
+    // Service might not be enabled
+  }
+
+  try {
+    await fs.unlink(servicePath);
+    console.log(`Service file removed: ${servicePath}`);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw err;
+    }
+  }
+
+  try {
+    await runSystemctl(['daemon-reload']);
+    console.log('Systemd daemon reloaded');
+  } catch {
+    console.warn('Warning: Could not reload systemd daemon');
+  }
+
+  console.log('');
+  console.log('Uninstallation complete.');
+}
+
+export async function getServiceStatus(): Promise<{
+  installed: boolean;
+  enabled: boolean;
+  running: boolean;
+}> {
+  const servicePath = getServicePath();
+
+  let installed = false;
+  try {
+    await fs.access(servicePath);
+    installed = true;
+  } catch {
+    installed = false;
+  }
+
+  let enabled = false;
+  let running = false;
+
+  if (installed) {
+    try {
+      await runSystemctl(['is-enabled', SERVICE_NAME]);
+      enabled = true;
+    } catch {
+      enabled = false;
+    }
+
+    try {
+      await runSystemctl(['is-active', SERVICE_NAME]);
+      running = true;
+    } catch {
+      running = false;
+    }
+  }
+
+  return { installed, enabled, running };
+}
+
+export async function showStatus(): Promise<void> {
+  const status = await getServiceStatus();
+
+  console.log(`Service: ${SERVICE_NAME}`);
+  console.log(`  Installed: ${status.installed ? 'yes' : 'no'}`);
+
+  if (status.installed) {
+    console.log(`  Enabled: ${status.enabled ? 'yes' : 'no'}`);
+    console.log(`  Running: ${status.running ? 'yes' : 'no'}`);
+
+    if (status.running) {
+      console.log('');
+      console.log('Service is running. View logs with:');
+      console.log(`  journalctl --user -u ${SERVICE_NAME} -f`);
+    } else {
+      console.log('');
+      console.log('Service is not running. Start with:');
+      console.log(`  systemctl --user start ${SERVICE_NAME}`);
+    }
+  } else {
+    console.log('');
+    console.log('Service not installed. Install with:');
+    console.log('  workspace agent install');
+  }
+}

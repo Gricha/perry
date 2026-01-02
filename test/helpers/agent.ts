@@ -1,0 +1,301 @@
+import { spawn, ChildProcess } from 'child_process';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+import { AddressInfo, createServer } from 'net';
+import type {
+  AgentConfig,
+  HealthResponse,
+  InfoResponse,
+  WorkspaceInfo,
+  CreateWorkspaceRequest,
+  ApiError,
+} from '../../src/shared/types';
+
+interface ExecResult {
+  stdout: string;
+  stderr: string;
+  code: number | null;
+}
+
+interface ApiResponse<T> {
+  status: number;
+  data: T;
+}
+
+interface ApiClient {
+  health(): Promise<HealthResponse>;
+  info(): Promise<InfoResponse>;
+  listWorkspaces(): Promise<WorkspaceInfo[]>;
+  createWorkspace(data: CreateWorkspaceRequest): Promise<ApiResponse<WorkspaceInfo | ApiError>>;
+  getWorkspace(name: string): Promise<WorkspaceInfo | null>;
+  deleteWorkspace(name: string): Promise<{ status: number }>;
+  startWorkspace(name: string): Promise<ApiResponse<WorkspaceInfo | ApiError>>;
+  stopWorkspace(name: string): Promise<ApiResponse<WorkspaceInfo | ApiError>>;
+}
+
+export interface TestAgent {
+  port: number;
+  baseUrl: string;
+  configDir: string;
+  api: ApiClient;
+  process: ChildProcess;
+  exec(workspaceName: string, command: string): Promise<ExecResult>;
+  cleanup(): Promise<void>;
+  getOutput(): string;
+}
+
+interface TestAgentOptions {
+  config?: Partial<AgentConfig>;
+}
+
+export async function getRandomPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
+
+export async function createTempConfig(config: Partial<AgentConfig> = {}): Promise<string> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-test-'));
+
+  const agentConfig: AgentConfig = {
+    port: config.port || 7391,
+    credentials: {
+      env: config.credentials?.env || { TEST_VAR: 'test-value' },
+      files: config.credentials?.files || {},
+    },
+    scripts: config.scripts || {},
+  };
+
+  await fs.writeFile(path.join(tempDir, 'config.json'), JSON.stringify(agentConfig, null, 2));
+
+  await fs.writeFile(path.join(tempDir, 'state.json'), JSON.stringify({ workspaces: {} }, null, 2));
+
+  return tempDir;
+}
+
+export async function waitForHealthy(baseUrl: string, timeout = 10000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const response = await fetch(`${baseUrl}/health`);
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+      // Agent not ready yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
+}
+
+export function createApiClient(baseUrl: string): ApiClient {
+  const apiBase = `${baseUrl}/api/v1`;
+
+  return {
+    async health(): Promise<HealthResponse> {
+      const res = await fetch(`${baseUrl}/health`);
+      return res.json() as Promise<HealthResponse>;
+    },
+
+    async info(): Promise<InfoResponse> {
+      const res = await fetch(`${apiBase}/info`);
+      return res.json() as Promise<InfoResponse>;
+    },
+
+    async listWorkspaces(): Promise<WorkspaceInfo[]> {
+      const res = await fetch(`${apiBase}/workspaces`);
+      return res.json() as Promise<WorkspaceInfo[]>;
+    },
+
+    async createWorkspace(
+      data: CreateWorkspaceRequest
+    ): Promise<ApiResponse<WorkspaceInfo | ApiError>> {
+      const res = await fetch(`${apiBase}/workspaces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return { status: res.status, data: (await res.json()) as WorkspaceInfo | ApiError };
+    },
+
+    async getWorkspace(name: string): Promise<WorkspaceInfo | null> {
+      const res = await fetch(`${apiBase}/workspaces/${name}`);
+      if (res.status === 404) return null;
+      return res.json() as Promise<WorkspaceInfo>;
+    },
+
+    async deleteWorkspace(name: string): Promise<{ status: number }> {
+      const res = await fetch(`${apiBase}/workspaces/${name}`, {
+        method: 'DELETE',
+      });
+      return { status: res.status };
+    },
+
+    async startWorkspace(name: string): Promise<ApiResponse<WorkspaceInfo | ApiError>> {
+      const res = await fetch(`${apiBase}/workspaces/${name}/start`, {
+        method: 'POST',
+      });
+      return { status: res.status, data: (await res.json()) as WorkspaceInfo | ApiError };
+    },
+
+    async stopWorkspace(name: string): Promise<ApiResponse<WorkspaceInfo | ApiError>> {
+      const res = await fetch(`${apiBase}/workspaces/${name}/stop`, {
+        method: 'POST',
+      });
+      return { status: res.status, data: (await res.json()) as WorkspaceInfo | ApiError };
+    },
+  };
+}
+
+export async function execInWorkspace(containerName: string, command: string): Promise<ExecResult> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', ['exec', containerName, 'bash', '-c', command]);
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data;
+    });
+    proc.stderr.on('data', (data: Buffer) => {
+      stderr += data;
+    });
+
+    proc.on('close', (code) => {
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code });
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+export async function cleanupContainers(prefix: string): Promise<void> {
+  return new Promise((resolve) => {
+    const proc = spawn('docker', [
+      'ps',
+      '-a',
+      '--filter',
+      `name=${prefix}`,
+      '--format',
+      '{{.Names}}',
+    ]);
+    let containers = '';
+    proc.stdout.on('data', (data: Buffer) => {
+      containers += data;
+    });
+    proc.on('close', async () => {
+      const names = containers
+        .trim()
+        .split('\n')
+        .filter((n) => n);
+      for (const name of names) {
+        await new Promise<void>((r) => {
+          spawn('docker', ['rm', '-f', name]).on('close', r);
+        });
+      }
+      resolve();
+    });
+  });
+}
+
+export async function cleanupVolumes(prefix: string): Promise<void> {
+  return new Promise((resolve) => {
+    const proc = spawn('docker', [
+      'volume',
+      'ls',
+      '--filter',
+      `name=${prefix}`,
+      '--format',
+      '{{.Name}}',
+    ]);
+    let volumes = '';
+    proc.stdout.on('data', (data: Buffer) => {
+      volumes += data;
+    });
+    proc.on('close', async () => {
+      const names = volumes
+        .trim()
+        .split('\n')
+        .filter((n) => n);
+      for (const name of names) {
+        await new Promise<void>((r) => {
+          spawn('docker', ['volume', 'rm', '-f', name]).on('close', r);
+        });
+      }
+      resolve();
+    });
+  });
+}
+
+export async function startTestAgent(options: TestAgentOptions = {}): Promise<TestAgent> {
+  const port = await getRandomPort();
+  const configDir = await createTempConfig({ ...options.config, port });
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  const agentPath = path.join(process.cwd(), 'dist/agent/index.js');
+
+  const proc = spawn('node', [agentPath], {
+    env: {
+      ...process.env,
+      WS_CONFIG_DIR: configDir,
+      WS_PORT: String(port),
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  let agentOutput = '';
+  proc.stdout?.on('data', (data: Buffer) => {
+    agentOutput += data;
+  });
+  proc.stderr?.on('data', (data: Buffer) => {
+    agentOutput += data;
+  });
+
+  const healthy = await waitForHealthy(baseUrl);
+  if (!healthy) {
+    proc.kill();
+    throw new Error(`Agent failed to start. Output:\n${agentOutput}`);
+  }
+
+  const api = createApiClient(baseUrl);
+
+  return {
+    port,
+    baseUrl,
+    configDir,
+    api,
+    process: proc,
+
+    async exec(workspaceName: string, command: string): Promise<ExecResult> {
+      return execInWorkspace(`workspace-${workspaceName}`, command);
+    },
+
+    async cleanup(): Promise<void> {
+      proc.kill('SIGTERM');
+
+      await new Promise<void>((resolve) => {
+        proc.on('exit', () => resolve());
+        setTimeout(resolve, 2000);
+      });
+
+      await cleanupContainers('workspace-test-');
+      await cleanupVolumes('workspace-test-');
+
+      await fs.rm(configDir, { recursive: true, force: true });
+    },
+
+    getOutput(): string {
+      return agentOutput;
+    },
+  };
+}
+
+export function generateTestWorkspaceName(): string {
+  return `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
