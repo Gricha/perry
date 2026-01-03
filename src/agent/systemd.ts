@@ -75,6 +75,7 @@ async function runSystemctl(args: string[]): Promise<{ stdout: string; stderr: s
 export async function installService(options: InstallOptions = {}): Promise<void> {
   const serviceDir = getSystemdUserDir();
   const servicePath = getServicePath();
+  const errors: string[] = [];
 
   await fs.mkdir(serviceDir, { recursive: true });
 
@@ -86,19 +87,33 @@ export async function installService(options: InstallOptions = {}): Promise<void
   try {
     await runSystemctl(['daemon-reload']);
     console.log('Systemd daemon reloaded');
-  } catch {
-    console.warn(
-      'Warning: Could not reload systemd daemon. You may need to run: systemctl --user daemon-reload'
-    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Failed to reload systemd daemon: ${msg}`);
+    console.error(`Error: Could not reload systemd daemon. ${msg}`);
   }
 
   try {
     await runSystemctl(['enable', SERVICE_NAME]);
     console.log(`Service ${SERVICE_NAME} enabled`);
-  } catch {
-    console.warn(
-      `Warning: Could not enable service. You may need to run: systemctl --user enable ${SERVICE_NAME}`
-    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Failed to enable service: ${msg}`);
+    console.error(`Error: Could not enable service. ${msg}`);
+  }
+
+  if (errors.length > 0) {
+    console.log('');
+    console.error('Installation failed with errors:');
+    for (const error of errors) {
+      console.error(`  - ${error}`);
+    }
+    console.log('');
+    console.log('Manual steps required:');
+    console.log('  systemctl --user daemon-reload');
+    console.log(`  systemctl --user enable ${SERVICE_NAME}`);
+    console.log(`  systemctl --user start ${SERVICE_NAME}`);
+    throw new Error('Installation failed: systemd configuration could not be completed');
   }
 
   console.log('');

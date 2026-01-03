@@ -1,5 +1,8 @@
 import { spawn } from 'child_process';
 import path from 'path';
+import { stripANSI, hasText } from './text-utils';
+
+export { stripANSI, hasText };
 
 export interface CLIResult {
   stdout: string;
@@ -17,7 +20,7 @@ export async function runCLI(
   const { timeout = DEFAULT_TIMEOUT, env } = options;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('node', [BIN_PATH, ...args], {
+    const proc = spawn('bun', ['run', BIN_PATH, ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout,
       env: {
@@ -52,16 +55,6 @@ export async function runCLI(
       reject(err);
     });
   });
-}
-
-export function stripANSI(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*m/g, '');
-}
-
-export function hasText(output: string, text: string, ignoreCase = true): boolean {
-  const searchText = ignoreCase ? text.toLowerCase() : text;
-  const outputText = ignoreCase ? stripANSI(output).toLowerCase() : stripANSI(output);
-  return outputText.includes(searchText);
 }
 
 export function expectText(output: string, text: string): void {

@@ -58,6 +58,7 @@ export interface InfoResponse {
   uptime: number;
   workspacesCount: number;
   dockerVersion: string;
+  terminalConnections: number;
 }
 
 export const DEFAULT_PORT = 7391;

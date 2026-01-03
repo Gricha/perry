@@ -5,6 +5,9 @@ import { Plus, Play, Square, Trash2, RefreshCw } from 'lucide-react'
 import { api, type WorkspaceInfo, type CreateWorkspaceRequest } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 
 export function WorkspaceList() {
   const queryClient = useQueryClient()
@@ -91,31 +94,25 @@ export function WorkspaceList() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="text-sm font-medium">
-                  Name
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
                   id="name"
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="my-workspace"
-                  className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   autoFocus
                 />
               </div>
-              <div>
-                <label htmlFor="repo" className="text-sm font-medium">
-                  Repository (optional)
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="repo">Repository (optional)</Label>
+                <Input
                   id="repo"
                   type="text"
                   value={newRepo}
                   onChange={(e) => setNewRepo(e.target.value)}
                   placeholder="https://github.com/user/repo"
-                  className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
               <div className="flex gap-2">
@@ -172,15 +169,9 @@ export function WorkspaceList() {
                       {ws.name}
                     </CardTitle>
                   </Link>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      ws.status === 'running'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                    }`}
-                  >
+                  <Badge variant={ws.status === 'running' ? 'success' : 'muted'}>
                     {ws.status}
-                  </span>
+                  </Badge>
                 </div>
                 {ws.repo && (
                   <CardDescription className="truncate">

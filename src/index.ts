@@ -10,7 +10,6 @@ import { openShell } from './client/shell';
 import { startProxy, parsePortForward, formatPortForwards } from './client/proxy';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from './config/loader';
 import { buildImage } from './docker';
-import { startTui } from './tui';
 
 const program = new Command();
 
@@ -19,6 +18,7 @@ program
   .description('Distributed development environment orchestrator')
   .version(pkg.version)
   .action(async () => {
+    const { startTui } = await import('./tui/index.js');
     await startTui();
   });
 

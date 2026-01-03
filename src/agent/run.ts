@@ -3,13 +3,12 @@ import { RPCHandler } from '@orpc/server/node';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from '../config/loader';
 import { DEFAULT_PORT, type AgentConfig } from '../shared/types';
 import { WorkspaceManager } from '../workspace/manager';
-import { containerRunning } from '../docker';
+import { containerRunning, getContainerName } from '../docker';
 import { TerminalWebSocketServer } from '../terminal/websocket';
 import { createRouter } from './router';
 import { serveStatic } from './static';
 
 const startTime = Date.now();
-const CONTAINER_PREFIX = 'workspace-';
 
 function sendJson(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -21,10 +20,9 @@ function createAgentServer(configDir: string, config: AgentConfig) {
   const workspaces = new WorkspaceManager(configDir, currentConfig);
 
   const terminalServer = new TerminalWebSocketServer({
-    getContainerName: (name) => `${CONTAINER_PREFIX}${name}`,
+    getContainerName,
     isWorkspaceRunning: async (name) => {
-      const containerName = `${CONTAINER_PREFIX}${name}`;
-      return containerRunning(containerName);
+      return containerRunning(getContainerName(name));
     },
   });
 

@@ -82,19 +82,19 @@ export class TerminalSession {
       return;
     }
 
-    try {
-      spawn('docker', [
-        'exec',
-        this.containerName,
-        'stty',
-        'cols',
-        String(size.cols),
-        'rows',
-        String(size.rows),
-      ]);
-    } catch {
-      // Ignore resize errors
-    }
+    const resizeProc = spawn('docker', [
+      'exec',
+      this.containerName,
+      'stty',
+      'cols',
+      String(size.cols),
+      'rows',
+      String(size.rows),
+    ]);
+
+    resizeProc.on('error', () => {
+      // Ignore resize errors - terminal resize is best-effort
+    });
   }
 
   setOnData(callback: (data: Buffer) => void): void {

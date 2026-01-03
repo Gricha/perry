@@ -100,8 +100,21 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
       }
     });
 
+    const cleanup = () => {
+      process.removeListener('SIGINT', handleSignal);
+      process.removeListener('SIGTERM', handleSignal);
+    };
+
+    const handleSignal = () => {
+      proc.kill('SIGTERM');
+    };
+
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+
     proc.on('close', (code) => {
       clearTimeout(connectionTimeout);
+      cleanup();
       if (!connected) {
         reject(new Error(`SSH failed: ${errorOutput || `exit code ${code}`}`));
       } else {
@@ -110,14 +123,6 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
         }
         resolve();
       }
-    });
-
-    process.on('SIGINT', () => {
-      proc.kill('SIGTERM');
-    });
-
-    process.on('SIGTERM', () => {
-      proc.kill('SIGTERM');
     });
   });
 }

@@ -5,6 +5,7 @@ import { ArrowLeft, Play, Square, Trash2, Terminal as TerminalIcon, RefreshCw } 
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Terminal } from '@/components/Terminal'
 
 export function WorkspaceDetail() {
@@ -90,15 +91,9 @@ export function WorkspaceDetail() {
             Created {new Date(workspace.created).toLocaleString()}
           </p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
-            workspace.status === 'running'
-              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-          }`}
-        >
+        <Badge variant={workspace.status === 'running' ? 'success' : 'muted'} className="px-3 py-1 text-sm">
           {workspace.status}
-        </span>
+        </Badge>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

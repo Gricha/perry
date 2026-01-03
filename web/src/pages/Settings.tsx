@@ -4,6 +4,7 @@ import { Plus, Trash2, Save, RefreshCw } from 'lucide-react'
 import { api, type Credentials, type Scripts } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 
 export function Settings() {
   const queryClient = useQueryClient()
@@ -199,20 +200,20 @@ export function Settings() {
                 <div className="space-y-2">
                   {envVars.map((env, index) => (
                     <div key={index} className="flex gap-2 items-center">
-                      <input
+                      <Input
                         type="text"
                         value={env.key}
                         onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
                         placeholder="NAME"
-                        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                        className="flex-1 font-mono"
                       />
                       <span className="text-muted-foreground">=</span>
-                      <input
+                      <Input
                         type="password"
                         value={env.value}
                         onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
                         placeholder="value"
-                        className="flex-[2] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                        className="flex-[2] font-mono"
                       />
                       <Button
                         variant="ghost"
@@ -263,20 +264,20 @@ export function Settings() {
                 <div className="space-y-2">
                   {files.map((file, index) => (
                     <div key={index} className="flex gap-2 items-center">
-                      <input
+                      <Input
                         type="text"
                         value={file.source}
                         onChange={(e) => updateFile(index, 'source', e.target.value)}
                         placeholder="~/.ssh/id_rsa"
-                        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                        className="flex-1 font-mono"
                       />
                       <span className="text-muted-foreground">→</span>
-                      <input
+                      <Input
                         type="text"
                         value={file.dest}
                         onChange={(e) => updateFile(index, 'dest', e.target.value)}
                         placeholder="~/.ssh/id_rsa"
-                        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                        className="flex-1 font-mono"
                       />
                       <Button
                         variant="ghost"
@@ -310,7 +311,7 @@ export function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              <input
+              <Input
                 type="text"
                 value={postStartScript}
                 onChange={(e) => {
@@ -318,7 +319,7 @@ export function Settings() {
                   setHasScriptChanges(true)
                 }}
                 placeholder="~/scripts/post-start.sh"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                className="font-mono"
               />
               {scriptsMutation.error && (
                 <p className="mt-2 text-sm text-destructive">

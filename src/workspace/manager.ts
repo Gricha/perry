@@ -7,8 +7,8 @@ import type { Workspace, CreateWorkspaceOptions } from './types';
 import { StateManager } from './state';
 import { expandPath } from '../config/loader';
 import * as docker from '../docker';
+import { getContainerName } from '../docker';
 
-const CONTAINER_PREFIX = 'workspace-';
 const VOLUME_PREFIX = 'workspace-';
 const WORKSPACE_IMAGE = 'workspace:latest';
 const SSH_PORT_RANGE_START = 2200;
@@ -86,8 +86,8 @@ export class WorkspaceManager {
         } finally {
           try {
             await fs.unlink(tempTar);
-          } catch {
-            // Ignore cleanup errors
+          } catch (err) {
+            console.warn(`[workspace] Failed to clean up temp file ${tempTar}:`, err);
           }
         }
       } else {
@@ -148,17 +148,25 @@ export class WorkspaceManager {
     });
   }
 
+  private async syncWorkspaceStatus(workspace: Workspace): Promise<void> {
+    const containerName = getContainerName(workspace.name);
+    const running = await docker.containerRunning(containerName);
+    const newStatus = running ? 'running' : 'stopped';
+    if (
+      workspace.status !== newStatus &&
+      workspace.status !== 'creating' &&
+      workspace.status !== 'error'
+    ) {
+      workspace.status = newStatus;
+      await this.state.setWorkspace(workspace);
+    }
+  }
+
   async list(): Promise<Workspace[]> {
     const workspaces = await this.state.getAllWorkspaces();
 
     for (const ws of workspaces) {
-      const containerName = `${CONTAINER_PREFIX}${ws.name}`;
-      const running = await docker.containerRunning(containerName);
-      const newStatus = running ? 'running' : 'stopped';
-      if (ws.status !== newStatus && ws.status !== 'creating' && ws.status !== 'error') {
-        ws.status = newStatus;
-        await this.state.setWorkspace(ws);
-      }
+      await this.syncWorkspaceStatus(ws);
     }
 
     return workspaces;
@@ -170,24 +178,14 @@ export class WorkspaceManager {
       return null;
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
-    const running = await docker.containerRunning(containerName);
-    const newStatus = running ? 'running' : 'stopped';
-    if (
-      workspace.status !== newStatus &&
-      workspace.status !== 'creating' &&
-      workspace.status !== 'error'
-    ) {
-      workspace.status = newStatus;
-      await this.state.setWorkspace(workspace);
-    }
+    await this.syncWorkspaceStatus(workspace);
 
     return workspace;
   }
 
   async create(options: CreateWorkspaceOptions): Promise<Workspace> {
     const { name, clone, env } = options;
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     const volumeName = `${VOLUME_PREFIX}${name}`;
 
     const existing = await this.state.getWorkspace(name);
@@ -272,7 +270,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' not found`);
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     const exists = await docker.containerExists(containerName);
     if (!exists) {
       throw new Error(`Container for workspace '${name}' not found`);
@@ -301,7 +299,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' not found`);
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     const running = await docker.containerRunning(containerName);
     if (!running) {
       workspace.status = 'stopped';
@@ -322,7 +320,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' not found`);
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     const volumeName = `${VOLUME_PREFIX}${name}`;
 
     if (await docker.containerExists(containerName)) {
@@ -342,7 +340,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' not found`);
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     const running = await docker.containerRunning(containerName);
     if (!running) {
       throw new Error(`Workspace '${name}' is not running`);
@@ -357,7 +355,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' not found`);
     }
 
-    const containerName = `${CONTAINER_PREFIX}${name}`;
+    const containerName = getContainerName(name);
     return docker.getLogs(containerName, { tail });
   }
 }

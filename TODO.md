@@ -2,21 +2,32 @@
 
 > **Important**: Remove tasks from this list when completed. Do not add new tasks without discussing with the project owner first - add them to "Considerations" section instead.
 
-## Testing
+## Phase 7: Code Quality
 
 (Completed)
 
-## Phase 5: TUI
+## Phase 8: Code Deduplication
 
 (Completed)
 
-## Phase 6: Web UI
+## Phase 9: Error Handling
 
 (Completed)
 
-## Phase 7: Polish (Future)
+## Phase 10: Web UI Improvements
 
-- [ ] Comprehensive error messages with actionable fixes
+(Completed)
+
+## Phase 11: Documentation
+
+(Completed)
+
+## Phase 12: Testing
+
+(Completed)
+
+## Phase 13: Polish (Future)
+
 - [ ] User documentation
 - [ ] Docker image publishing to registry
 - [ ] `ws agent logs` command for debugging
@@ -34,4 +45,19 @@
 
 > Add items here to discuss with project owner before promoting to tasks.
 
-- Change oxlint warnings to errors (currently 9 warnings in pre-existing code: unused imports, unused variables, empty catch blocks)
+### Design Document Updates (Pending Review)
+
+- **Port range discrepancy**: Design says "starts at 4200" but implementation uses 2200-2400
+- **SSE streaming not implemented**: Design specifies SSE for log streaming (`?follow=true`) but implementation uses simple request/response
+- **Config API is writable**: Design says read-only but implementation allows updates via API (this is better, just document it)
+
+### Test Coverage (Low Priority)
+
+- **TUI testing**: `src/tui/app.ts` would require mocking OpenTUI renderer - complex and low value
+- **Systemd testing**: `src/agent/systemd.ts` requires systemd present - not feasible in CI
+- **Shell/proxy testing**: `src/client/shell.ts` and `src/client/proxy.ts` require SSH - complex integration test
+
+### Other
+
+- Add unit test directory structure (`test/unit/`)
+- Consider consolidating all types to `src/shared/types.ts`

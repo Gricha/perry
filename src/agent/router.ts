@@ -40,6 +40,17 @@ export interface RouterContext {
   terminalServer: TerminalWebSocketServer;
 }
 
+function mapErrorToORPC(err: unknown, defaultMessage: string): never {
+  const message = err instanceof Error ? err.message : defaultMessage;
+  if (message.includes('not found')) {
+    throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
+  }
+  if (message.includes('already exists')) {
+    throw new ORPCError('CONFLICT', { message });
+  }
+  throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+}
+
 export function createRouter(ctx: RouterContext) {
   const listWorkspaces = os.handler(async () => {
     return ctx.workspaces.list();
@@ -66,14 +77,7 @@ export function createRouter(ctx: RouterContext) {
       try {
         return await ctx.workspaces.create(input);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create workspace';
-        if (message.includes('already exists')) {
-          throw new ORPCError('CONFLICT', { message });
-        }
-        if (message.includes('not found')) {
-          throw new ORPCError('BAD_REQUEST', { message });
-        }
-        throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+        mapErrorToORPC(err, 'Failed to create workspace');
       }
     });
 
@@ -83,11 +87,7 @@ export function createRouter(ctx: RouterContext) {
       await ctx.workspaces.delete(input.name);
       return { success: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete workspace';
-      if (message.includes('not found')) {
-        throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-      }
-      throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+      mapErrorToORPC(err, 'Failed to delete workspace');
     }
   });
 
@@ -98,11 +98,7 @@ export function createRouter(ctx: RouterContext) {
       try {
         return await ctx.workspaces.start(input.name);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to start workspace';
-        if (message.includes('not found')) {
-          throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-        }
-        throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+        mapErrorToORPC(err, 'Failed to start workspace');
       }
     });
 
@@ -114,11 +110,7 @@ export function createRouter(ctx: RouterContext) {
         ctx.terminalServer.closeConnectionsForWorkspace(input.name);
         return await ctx.workspaces.stop(input.name);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to stop workspace';
-        if (message.includes('not found')) {
-          throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-        }
-        throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+        mapErrorToORPC(err, 'Failed to stop workspace');
       }
     });
 
@@ -128,11 +120,7 @@ export function createRouter(ctx: RouterContext) {
       try {
         return await ctx.workspaces.getLogs(input.name, input.tail);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to get logs';
-        if (message.includes('not found')) {
-          throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-        }
-        throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+        mapErrorToORPC(err, 'Failed to get logs');
       }
     });
 

@@ -13,6 +13,12 @@ import type {
 
 export * from './types';
 
+const CONTAINER_PREFIX = 'workspace-';
+
+export function getContainerName(name: string): string {
+  return `${CONTAINER_PREFIX}${name}`;
+}
+
 async function runCommand(
   command: string,
   args: string[],
@@ -104,7 +110,11 @@ export async function getContainer(name: string): Promise<ContainerInfo | null> 
       state: data.State.Running ? 'running' : data.State.Status,
       ports: portMappings,
     };
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such object') && !stderr.includes('no such container')) {
+      console.error(`[docker] Error getting container '${name}':`, stderr);
+    }
     return null;
   }
 }
@@ -268,7 +278,11 @@ export async function volumeExists(name: string): Promise<boolean> {
   try {
     await docker(['volume', 'inspect', name]);
     return true;
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such volume')) {
+      console.error(`[docker] Error checking volume '${name}':`, stderr);
+    }
     return false;
   }
 }
@@ -293,7 +307,11 @@ export async function getVolume(name: string): Promise<VolumeInfo | null> {
       driver: data.Driver,
       mountpoint: data.Mountpoint,
     };
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such volume')) {
+      console.error(`[docker] Error getting volume '${name}':`, stderr);
+    }
     return null;
   }
 }
@@ -302,7 +320,11 @@ export async function networkExists(name: string): Promise<boolean> {
   try {
     await docker(['network', 'inspect', name]);
     return true;
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such network')) {
+      console.error(`[docker] Error checking network '${name}':`, stderr);
+    }
     return false;
   }
 }
@@ -324,7 +346,11 @@ export async function getNetwork(name: string): Promise<NetworkInfo | null> {
       id: data.Id,
       driver: data.Driver,
     };
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such network')) {
+      console.error(`[docker] Error getting network '${name}':`, stderr);
+    }
     return null;
   }
 }
@@ -344,7 +370,11 @@ export async function imageExists(tag: string): Promise<boolean> {
   try {
     await docker(['image', 'inspect', tag]);
     return true;
-  } catch {
+  } catch (err) {
+    const stderr = (err as CommandError).stderr?.toLowerCase() || '';
+    if (!stderr.includes('no such image')) {
+      console.error(`[docker] Error checking image '${tag}':`, stderr);
+    }
     return false;
   }
 }

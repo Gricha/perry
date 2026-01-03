@@ -5,7 +5,9 @@
     "no-console": "off",
     "eqeqeq": "error",
     "no-var": "error",
-    "prefer-const": "error"
+    "prefer-const": "error",
+    "no-empty": "error",
+    "no-useless-catch": "error"
   },
   "ignorePatterns": ["dist", "node_modules", "workspace"]
 }

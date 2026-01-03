@@ -261,83 +261,106 @@ Location: `~/.config/workspace/state.json` (on worker)
 
 ## API Specification
 
+The agent uses [oRPC](https://orpc.unnoq.com/) for type-safe RPC communication. oRPC provides automatic TypeScript type inference between client and server, making API calls type-safe at compile time.
+
 ### Base URL
 
-`http://<worker>:7391/api/v1`
+`http://<worker>:7391/rpc`
 
-### Endpoints
+### oRPC Router Structure
 
-#### Health & Info
+The API is organized as a nested router with the following structure:
 
-```
-GET /health
-Response: { "status": "ok", "version": "2.0.0" }
-
-GET /info
-Response: {
-  "hostname": "my-desktop",
-  "uptime": 86400,
-  "workspacesCount": 3,
-  "dockerVersion": "24.0.0"
+```typescript
+{
+  workspaces: {
+    list: () => WorkspaceInfo[]
+    get: ({ name: string }) => WorkspaceInfo
+    create: ({ name: string, clone?: string, env?: Record<string, string> }) => WorkspaceInfo
+    delete: ({ name: string }) => { success: boolean }
+    start: ({ name: string }) => WorkspaceInfo
+    stop: ({ name: string }) => WorkspaceInfo
+    logs: ({ name: string, tail?: number }) => string
+  },
+  info: () => InfoResponse,
+  config: {
+    credentials: {
+      get: () => Credentials
+      update: (Credentials) => Credentials
+    },
+    scripts: {
+      get: () => Scripts
+      update: (Scripts) => Scripts
+    }
+  }
 }
 ```
 
-#### Workspaces
+### Data Types
 
-```
-GET /workspaces
-Response: [
-  { "name": "alpha", "status": "running", "created": "...", ... },
-  { "name": "beta", "status": "stopped", ... }
-]
-
-POST /workspaces
-Body: {
-  "name": "alpha",           // required, globally unique (hard block on collision)
-  "clone": "git@...",        // optional, repo to clone to home directory
-  "env": { ... }             // optional, additional env vars beyond configured
+```typescript
+interface WorkspaceInfo {
+  name: string
+  status: 'running' | 'stopped' | 'creating' | 'error'
+  containerId: string
+  created: string  // ISO 8601 timestamp
+  repo?: string
+  ports: { ssh: number, http?: number }
 }
-Response: { "name": "alpha", "status": "running", ... }
-Error: 409 if name exists
 
-GET /workspaces/:name
-Response: { "name": "alpha", "status": "running", ... }
-Error: 404 if not found
+interface InfoResponse {
+  hostname: string
+  uptime: number  // seconds
+  workspacesCount: number
+  dockerVersion: string
+  terminalConnections: number
+}
 
-DELETE /workspaces/:name
-Response: 204 No Content
-Error: 404 if not found
+interface Credentials {
+  env: Record<string, string>   // environment variables
+  files: Record<string, string> // destination -> source path mapping
+}
 
-POST /workspaces/:name/start
-Response: { "name": "alpha", "status": "running", ... }
-
-POST /workspaces/:name/stop
-Response: { "name": "alpha", "status": "stopped", ... }
-
-GET /workspaces/:name/logs?follow=true
-Response: SSE stream of log lines
+interface Scripts {
+  post_start?: string  // path to post-start script
+}
 ```
 
-#### Terminal
+### Error Handling
+
+oRPC errors use standard codes:
+- `NOT_FOUND` - Workspace doesn't exist
+- `CONFLICT` - Workspace name already exists
+- `INTERNAL_SERVER_ERROR` - Unexpected errors
+
+### Client Usage
+
+```typescript
+import { createORPCClient } from '@orpc/client'
+import type { AppRouter } from './router'
+
+const client = createORPCClient<AppRouter>({
+  baseURL: 'http://worker:7391/rpc'
+})
+
+// Type-safe API calls
+const workspaces = await client.workspaces.list()
+const workspace = await client.workspaces.create({ name: 'alpha', clone: 'git@github.com:user/repo' })
+await client.workspaces.stop({ name: 'alpha' })
+```
+
+### Terminal WebSocket
+
+Terminal access is still via WebSocket (not oRPC):
 
 ```
-GET /workspaces/:name/terminal
+GET /terminal/:name
 Upgrade: WebSocket
 
 Binary protocol:
 - Client → Server: stdin bytes
 - Server → Client: stdout bytes
 - Control frames: { "type": "resize", "cols": 80, "rows": 24 }
-```
-
-#### Configuration (Read-Only via API)
-
-```
-GET /config
-Response: {
-  "credentials": { "env": [...keys only...], "copy": [...] },
-  "scripts": { "post_start": "..." }
-}
 ```
 
 ---
