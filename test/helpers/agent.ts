@@ -272,7 +272,7 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
 
   const agentPath = path.join(process.cwd(), 'dist/agent/index.js');
 
-  const proc = spawn('node', [agentPath], {
+  const proc = spawn('bun', ['run', agentPath], {
     env: {
       ...process.env,
       WS_CONFIG_DIR: configDir,

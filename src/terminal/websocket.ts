@@ -80,20 +80,21 @@ export class TerminalWebSocketServer {
     });
 
     ws.on('message', (data: Buffer | string) => {
-      if (typeof data === 'string') {
+      const str = typeof data === 'string' ? data : data.toString();
+
+      if (str.startsWith('{')) {
         try {
-          const message = JSON.parse(data);
+          const message = JSON.parse(str);
           if (isControlMessage(message)) {
             session.resize({ cols: message.cols, rows: message.rows });
             return;
           }
         } catch {
-          // Not JSON, treat as regular input
+          // Not valid JSON control message, pass through as input
         }
-        session.write(data);
-      } else {
-        session.write(data);
       }
+
+      session.write(data);
     });
 
     ws.on('close', () => {

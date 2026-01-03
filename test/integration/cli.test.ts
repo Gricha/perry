@@ -259,14 +259,14 @@ describe('CLI commands', () => {
   });
 
   describe('error handling', () => {
-    it('shows error when no worker configured', async () => {
+    it('auto-detects localhost agent when no worker configured', async () => {
       const emptyConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-empty-'));
       await fs.writeFile(path.join(emptyConfigDir, 'client.json'), JSON.stringify({}));
 
-      const result = await runCLIExpectingError(['list'], ['No worker configured'], {
+      const result = await runCLI(['list'], {
         env: { WS_CONFIG_DIR: emptyConfigDir },
       });
-      expect(result.code).not.toBe(0);
+      expect(result.code).toBe(0);
 
       await fs.rm(emptyConfigDir, { recursive: true, force: true });
     });

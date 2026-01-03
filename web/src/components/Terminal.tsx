@@ -6,13 +6,15 @@ import { getTerminalUrl } from '@/lib/api'
 
 interface TerminalProps {
   workspaceName: string
+  initialCommand?: string
 }
 
-export function Terminal({ workspaceName }: TerminalProps) {
+export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const initialCommandSent = useRef(false)
 
   const connect = useCallback(() => {
     if (!terminalRef.current) return
@@ -47,6 +49,13 @@ export function Terminal({ workspaceName }: TerminalProps) {
       xterm.writeln('')
       const { cols, rows } = xterm
       ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+
+      if (initialCommand && !initialCommandSent.current) {
+        initialCommandSent.current = true
+        setTimeout(() => {
+          ws.send(initialCommand + '\n')
+        }, 500)
+      }
     }
 
     ws.onmessage = (event) => {
@@ -73,7 +82,7 @@ export function Terminal({ workspaceName }: TerminalProps) {
         ws.send(JSON.stringify({ type: 'resize', cols, rows }))
       }
     })
-  }, [workspaceName])
+  }, [workspaceName, initialCommand])
 
   useEffect(() => {
     connect()

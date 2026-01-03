@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Save, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Save, RefreshCw, FileKey, ArrowRight } from 'lucide-react'
 import { api, type Credentials } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 export function FilesSettings() {
@@ -62,9 +61,12 @@ export function FilesSettings() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <p className="text-destructive mb-4">Failed to load settings</p>
-        <Button onClick={() => refetch()} variant="outline">
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="text-destructive mb-4 text-center">
+          <p className="font-medium">Failed to load settings</p>
+          <p className="text-sm text-muted-foreground mt-1">Please check your connection</p>
+        </div>
+        <Button onClick={() => refetch()} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
@@ -72,91 +74,94 @@ export function FilesSettings() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="page-header">
+          <h1 className="page-title">Credential Files</h1>
+          <p className="page-description">Files copied into all new workspaces</p>
+        </div>
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-10 bg-secondary rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Credential Files</h1>
-        <p className="text-muted-foreground">
-          Files copied into all new workspaces (e.g., SSH keys)
-        </p>
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="page-title">Credential Files</h1>
+        <p className="page-description">Files copied into all new workspaces (e.g., SSH keys)</p>
       </div>
 
-      {isLoading ? (
-        <Card className="animate-pulse">
-          <CardHeader>
-            <div className="h-6 w-48 bg-muted rounded" />
-            <div className="h-4 w-64 bg-muted rounded mt-2" />
-          </CardHeader>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Credential Files</CardTitle>
-                <CardDescription>
-                  Files from the worker machine copied into each workspace
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={addFile} variant="outline" size="sm">
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add
-                </Button>
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="section-header flex-1 mb-0 border-b-0">File Mappings</div>
+          <div className="flex gap-2">
+            <Button onClick={addFile} variant="outline" size="sm">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={mutation.isPending || !hasChanges}
+              size="sm"
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" />
+              Save
+            </Button>
+          </div>
+        </div>
+
+        {files.length === 0 ? (
+          <div className="border border-dashed border-muted-foreground/20 rounded-lg p-8 text-center">
+            <FileKey className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">No credential files configured</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Click "Add" to configure file copying</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {files.map((file, index) => (
+              <div key={index} className="flex gap-2 items-center group">
+                <Input
+                  type="text"
+                  value={file.source}
+                  onChange={(e) => updateFile(index, 'source', e.target.value)}
+                  placeholder="~/.ssh/id_rsa (source)"
+                  className="flex-1 font-mono text-sm h-9"
+                />
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                <Input
+                  type="text"
+                  value={file.dest}
+                  onChange={(e) => updateFile(index, 'dest', e.target.value)}
+                  placeholder="~/.ssh/id_rsa (dest)"
+                  className="flex-1 font-mono text-sm h-9"
+                />
                 <Button
-                  onClick={handleSave}
-                  disabled={mutation.isPending || !hasChanges}
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeFile(index)}
+                  className="opacity-40 group-hover:opacity-100 transition-opacity h-9 w-9"
                 >
-                  <Save className="mr-1 h-4 w-4" />
-                  {mutation.isPending ? 'Saving...' : 'Save'}
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {files.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No credential files configured. Click "Add" to configure file copying.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {files.map((file, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <Input
-                      type="text"
-                      value={file.source}
-                      onChange={(e) => updateFile(index, 'source', e.target.value)}
-                      placeholder="~/.ssh/id_rsa (source on worker)"
-                      className="flex-1 font-mono"
-                    />
-                    <span className="text-muted-foreground">→</span>
-                    <Input
-                      type="text"
-                      value={file.dest}
-                      onChange={(e) => updateFile(index, 'dest', e.target.value)}
-                      placeholder="~/.ssh/id_rsa (dest in workspace)"
-                      className="flex-1 font-mono"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeFile(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {mutation.error && (
-              <p className="mt-2 text-sm text-destructive">
-                {(mutation.error as Error).message}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            ))}
+          </div>
+        )}
+
+        {mutation.error && (
+          <div className="mt-4 rounded border border-destructive/50 bg-destructive/10 p-3">
+            <p className="text-sm text-destructive">
+              {(mutation.error as Error).message}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -43,8 +43,29 @@ export interface CodingAgents {
   }
   claude_code?: {
     oauth_token?: string
-    connected_at?: string
+    credentials_path?: string
   }
+}
+
+export interface SessionInfo {
+  id: string
+  name: string | null
+  agentType: string
+  projectPath: string
+  messageCount: number
+  lastActivity: string
+  firstPrompt: string | null
+}
+
+export interface SessionMessage {
+  type: string
+  content: string | null
+  timestamp: string | null
+}
+
+export interface SessionDetail {
+  id: string
+  messages: SessionMessage[]
 }
 
 function getRpcUrl(): string {
@@ -67,6 +88,10 @@ const client = createORPCClient<{
     start: (input: { name: string }) => Promise<WorkspaceInfo>
     stop: (input: { name: string }) => Promise<WorkspaceInfo>
     logs: (input: { name: string; tail?: number }) => Promise<string>
+  }
+  sessions: {
+    list: (input: { workspaceName: string }) => Promise<{ sessions: SessionInfo[] }>
+    get: (input: { workspaceName: string; sessionId: string }) => Promise<SessionDetail>
   }
   info: () => Promise<InfoResponse>
   config: {
@@ -93,6 +118,9 @@ export const api = {
   startWorkspace: (name: string) => client.workspaces.start({ name }),
   stopWorkspace: (name: string) => client.workspaces.stop({ name }),
   getLogs: (name: string, tail = 100) => client.workspaces.logs({ name, tail }),
+  listSessions: (workspaceName: string) => client.sessions.list({ workspaceName }),
+  getSession: (workspaceName: string, sessionId: string) =>
+    client.sessions.get({ workspaceName, sessionId }),
   getInfo: () => client.info(),
   getCredentials: () => client.config.credentials.get(),
   updateCredentials: (data: Credentials) => client.config.credentials.update(data),

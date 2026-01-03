@@ -1,8 +1,9 @@
-import { spawn, ChildProcess } from 'child_process';
+import type { Subprocess, Terminal } from 'bun';
 import type { TerminalOptions, TerminalSize } from './types';
 
 export class TerminalSession {
-  private process: ChildProcess | null = null;
+  private process: Subprocess<'ignore', 'ignore', 'ignore'> | null = null;
+  private terminal: Terminal | null = null;
   private containerName: string;
   private user: string;
   private shell: string;
@@ -24,77 +25,54 @@ export class TerminalSession {
 
     const args = [
       'exec',
-      '-i',
+      '-it',
       '-u',
       this.user,
       '-e',
-      `TERM=${process.env.TERM || 'xterm-256color'}`,
-      '-e',
-      `COLUMNS=${this.size.cols}`,
-      '-e',
-      `LINES=${this.size.rows}`,
+      `TERM=xterm-256color`,
       this.containerName,
       this.shell,
     ];
 
-    this.process = spawn('docker', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    this.process = Bun.spawn(['docker', ...args], {
+      terminal: {
+        cols: this.size.cols,
+        rows: this.size.rows,
+        data: (_terminal: Terminal, chunk: Uint8Array) => {
+          if (this.onData) {
+            this.onData(Buffer.from(chunk));
+          }
+        },
+      },
+      stdin: 'ignore',
+      stdout: 'ignore',
+      stderr: 'ignore',
     });
 
-    this.process.stdout?.on('data', (data: Buffer) => {
-      if (this.onData) {
-        this.onData(data);
-      }
-    });
+    this.terminal = this.process.terminal!;
 
-    this.process.stderr?.on('data', (data: Buffer) => {
-      if (this.onData) {
-        this.onData(data);
-      }
-    });
-
-    this.process.on('exit', (code) => {
+    this.process.exited.then((code) => {
       this.process = null;
+      this.terminal = null;
       if (this.onExit) {
         this.onExit(code);
-      }
-    });
-
-    this.process.on('error', (err) => {
-      console.error('Terminal process error:', err);
-      this.process = null;
-      if (this.onExit) {
-        this.onExit(1);
       }
     });
   }
 
   write(data: Buffer | string): void {
-    if (!this.process?.stdin) {
+    if (!this.terminal) {
       return;
     }
-    this.process.stdin.write(data);
+    this.terminal.write(data.toString());
   }
 
   resize(size: TerminalSize): void {
     this.size = size;
-    if (!this.process) {
+    if (!this.terminal) {
       return;
     }
-
-    const resizeProc = spawn('docker', [
-      'exec',
-      this.containerName,
-      'stty',
-      'cols',
-      String(size.cols),
-      'rows',
-      String(size.rows),
-    ]);
-
-    resizeProc.on('error', () => {
-      // Ignore resize errors - terminal resize is best-effort
-    });
+    this.terminal.resize(size.cols, size.rows);
   }
 
   setOnData(callback: (data: Buffer) => void): void {
@@ -107,8 +85,9 @@ export class TerminalSession {
 
   kill(): void {
     if (this.process) {
-      this.process.kill('SIGTERM');
+      this.process.kill();
       this.process = null;
+      this.terminal = null;
     }
   }
 

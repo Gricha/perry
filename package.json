@@ -2,6 +2,7 @@
   "name": "@subroutinecom/workspace",
   "version": "0.1.13",
   "description": "Self-contained CLI for spinning up Docker-in-Docker workspaces with SSH and proxy helpers.",
+  "type": "module",
   "bin": {
     "workspace": "./dist/index.js"
   },
@@ -20,7 +21,7 @@
     "validate": "bun run check && bun run build && bun run test"
   },
   "engines": {
-    "bun": ">=1.0.0"
+    "bun": ">=1.3.5"
   },
   "dependencies": {
     "@opentui/core": "^0.1.67",

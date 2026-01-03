@@ -16,7 +16,7 @@ export interface CodingAgents {
   };
   claude_code?: {
     oauth_token?: string;
-    connected_at?: string;
+    credentials_path?: string;
   };
 }
 

@@ -451,6 +451,12 @@ export class WorkspaceTui {
 
     this.renderer.destroy();
 
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdout.write('\x1b[?1049l');
+    process.stdout.write('\x1b[?25h');
+
     const terminalUrl = this.client.getTerminalUrl(ws.name);
 
     await openShell({

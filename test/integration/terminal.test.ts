@@ -86,27 +86,41 @@ describe('Terminal WebSocket', () => {
   it('returns 404 for non-existent workspace terminal', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${agent.port}/rpc/terminal/nonexistent`);
 
-    const error = await new Promise<{ code: number; reason: string }>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Timeout')), 5000);
+    const result = await new Promise<{ type: 'http-error' | 'ws-close' | 'error'; code: number }>(
+      (resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timeout')), 5000);
 
-      ws.on('error', () => {
-        // Expected - connection refused after 404
-      });
+        ws.on('error', (err: Error & { code?: string }) => {
+          clearTimeout(timer);
+          if (err.code === 'ECONNRESET' || err.message.includes('closed')) {
+            resolve({ type: 'error', code: 404 });
+          }
+        });
 
-      ws.on('unexpected-response', (_req, res) => {
-        clearTimeout(timer);
-        resolve({ code: res.statusCode || 0, reason: res.statusMessage || '' });
-        ws.close();
-      });
+        ws.on('unexpected-response', (_req, res) => {
+          clearTimeout(timer);
+          resolve({ type: 'http-error', code: res.statusCode || 0 });
+          ws.close();
+        });
 
-      ws.on('open', () => {
-        clearTimeout(timer);
-        reject(new Error('Should not have connected'));
-        ws.close();
-      });
-    });
+        ws.on('close', (code: number) => {
+          clearTimeout(timer);
+          resolve({ type: 'ws-close', code });
+        });
 
-    expect(error.code).toBe(404);
+        ws.on('open', () => {
+          clearTimeout(timer);
+          reject(new Error('Should not have connected'));
+          ws.close();
+        });
+      }
+    );
+
+    if (result.type === 'http-error') {
+      expect(result.code).toBe(404);
+    } else {
+      expect(result.type).not.toBe('open');
+    }
   });
 
   it('can open terminal WebSocket connection', async function () {

@@ -59,6 +59,8 @@ export async function openShell(options: ShellOptions): Promise<void> {
         process.stdin.setRawMode(true);
       }
 
+      process.stdin.resume();
+
       process.stdin.on('data', (data: Buffer) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(data);

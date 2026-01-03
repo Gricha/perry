@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, RefreshCw } from 'lucide-react'
 import { api, type Scripts } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 export function ScriptsSettings() {
@@ -41,9 +40,12 @@ export function ScriptsSettings() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <p className="text-destructive mb-4">Failed to load settings</p>
-        <Button onClick={() => refetch()} variant="outline">
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="text-destructive mb-4 text-center">
+          <p className="font-medium">Failed to load settings</p>
+          <p className="text-sm text-muted-foreground mt-1">Please check your connection</p>
+        </div>
+        <Button onClick={() => refetch()} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
@@ -51,61 +53,62 @@ export function ScriptsSettings() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="page-header">
+          <h1 className="page-title">Scripts</h1>
+          <p className="page-description">Custom scripts executed during workspace lifecycle</p>
+        </div>
+        <div className="h-10 bg-secondary rounded animate-pulse" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Scripts</h1>
-        <p className="text-muted-foreground">
-          Custom scripts executed during workspace lifecycle
-        </p>
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="page-title">Scripts</h1>
+        <p className="page-description">Custom scripts executed during workspace lifecycle</p>
       </div>
 
-      {isLoading ? (
-        <Card className="animate-pulse">
-          <CardHeader>
-            <div className="h-6 w-48 bg-muted rounded" />
-            <div className="h-4 w-64 bg-muted rounded mt-2" />
-          </CardHeader>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Post-Start Script</CardTitle>
-                <CardDescription>
-                  Script executed after each workspace starts (path on worker machine)
-                </CardDescription>
-              </div>
-              <Button
-                onClick={handleSave}
-                disabled={mutation.isPending || !hasChanges}
-                size="sm"
-              >
-                <Save className="mr-1 h-4 w-4" />
-                {mutation.isPending ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="text"
-              value={postStartScript}
-              onChange={(e) => {
-                setPostStartScript(e.target.value)
-                setHasChanges(true)
-              }}
-              placeholder="~/scripts/post-start.sh"
-              className="font-mono"
-            />
-            {mutation.error && (
-              <p className="mt-2 text-sm text-destructive">
-                {(mutation.error as Error).message}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="section-header flex-1 mb-0 border-b-0">Post-Start Script</div>
+          <Button
+            onClick={handleSave}
+            disabled={mutation.isPending || !hasChanges}
+            size="sm"
+          >
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            Save
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          <Input
+            type="text"
+            value={postStartScript}
+            onChange={(e) => {
+              setPostStartScript(e.target.value)
+              setHasChanges(true)
+            }}
+            placeholder="~/scripts/post-start.sh"
+            className="font-mono text-sm h-9"
+          />
+          <p className="text-xs text-muted-foreground">
+            Path to script on worker machine. Executed after each workspace starts as the workspace user.
+          </p>
+        </div>
+
+        {mutation.error && (
+          <div className="mt-4 rounded border border-destructive/50 bg-destructive/10 p-3">
+            <p className="text-sm text-destructive">
+              {(mutation.error as Error).message}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

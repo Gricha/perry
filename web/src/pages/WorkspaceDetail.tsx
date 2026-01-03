@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Play, Square, Trash2, Terminal as TerminalIcon, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Play, Square, Trash2, Terminal as TerminalIcon, RefreshCw, MessageSquare } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -142,6 +142,13 @@ export function WorkspaceDetail() {
                   >
                     <TerminalIcon className="mr-2 h-4 w-4" />
                     {showTerminal ? 'Hide Terminal' : 'Terminal'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(`/workspaces/${name}/sessions`)}
+                  >
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Sessions
                   </Button>
                 </>
               ) : (

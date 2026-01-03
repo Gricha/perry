@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -8,9 +7,7 @@ import {
   KeyRound,
   FileKey,
   Terminal,
-  ChevronDown,
-  ChevronRight,
-  Circle,
+  Cpu,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
@@ -23,9 +20,6 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation()
-  const [settingsExpanded, setSettingsExpanded] = useState(
-    location.pathname.startsWith('/settings')
-  )
 
   const { data: workspaces } = useQuery({
     queryKey: ['workspaces'],
@@ -34,7 +28,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   const settingsLinks = [
     { to: '/settings/environment', label: 'Environment', icon: KeyRound },
-    { to: '/settings/agents', label: 'Coding Agents', icon: Terminal },
+    { to: '/settings/agents', label: 'Coding Agents', icon: Cpu },
     { to: '/settings/files', label: 'Credential Files', icon: FileKey },
     { to: '/settings/scripts', label: 'Scripts', icon: Terminal },
   ]
@@ -43,108 +37,106 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     <>
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/50 lg:hidden',
-          isOpen ? 'block' : 'hidden'
+          'fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-200',
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
         onClick={onToggle}
       />
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 h-full w-64 bg-card border-r transition-transform duration-200 lg:translate-x-0 lg:static lg:z-0',
+          'fixed left-0 top-0 z-50 flex h-screen w-60 flex-col bg-card border-r transition-transform duration-200 ease-out lg:translate-x-0 lg:static lg:z-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b px-4">
-          <Link to="/" className="flex items-center space-x-2">
-            <Boxes className="h-5 w-5" />
-            <span className="font-semibold">Workspace</span>
+        <div className="flex h-14 items-center justify-between border-b px-4 flex-shrink-0">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-primary/15">
+              <Boxes className="h-4 w-4 text-primary" />
+            </div>
+            <span className="font-semibold text-sm tracking-tight">Command</span>
           </Link>
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden h-8 w-8"
             onClick={onToggle}
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4">
+        <nav className="flex-1 overflow-y-auto p-3">
           <div className="space-y-6">
+            {/* Workspaces Section */}
             <div>
-              <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Workspaces
-              </div>
-              <div className="space-y-1">
+              <div className="section-header">Workspaces</div>
+              <div className="space-y-0.5">
                 <Link
                   to="/workspaces"
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent',
-                    location.pathname === '/workspaces' && 'bg-accent'
+                    'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                    location.pathname === '/workspaces' && 'nav-active'
                   )}
                   onClick={() => isOpen && onToggle()}
                 >
-                  <Boxes className="h-4 w-4" />
-                  All Workspaces
+                  <Boxes className="h-4 w-4 text-muted-foreground" />
+                  <span>All Workspaces</span>
                 </Link>
                 {workspaces?.map((ws: WorkspaceInfo) => (
                   <Link
                     key={ws.name}
                     to={`/workspaces/${ws.name}`}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-                      location.pathname === `/workspaces/${ws.name}` && 'bg-accent'
+                      'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent group',
+                      location.pathname === `/workspaces/${ws.name}` && 'nav-active'
                     )}
                     onClick={() => isOpen && onToggle()}
                   >
-                    <Circle
+                    <span
                       className={cn(
-                        'h-2 w-2',
+                        'h-1.5 w-1.5 rounded-full flex-shrink-0',
                         ws.status === 'running'
-                          ? 'fill-green-500 text-green-500'
-                          : 'fill-muted-foreground text-muted-foreground'
+                          ? 'status-online status-online-pulse'
+                          : 'bg-muted-foreground/40'
                       )}
                     />
-                    <span className="truncate">{ws.name}</span>
+                    <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                      {ws.name}
+                    </span>
                   </Link>
                 ))}
               </div>
             </div>
 
+            {/* Settings Section - Always visible */}
             <div>
-              <button
-                onClick={() => setSettingsExpanded(!settingsExpanded)}
-                className="mb-2 flex w-full items-center justify-between px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-              >
-                <span>Settings</span>
-                {settingsExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </button>
-              {settingsExpanded && (
-                <div className="space-y-1">
-                  {settingsLinks.map((link) => (
-                    <Link
-                      key={link.to}
-                      to={link.to}
-                      className={cn(
-                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-                        location.pathname === link.to && 'bg-accent'
-                      )}
-                      onClick={() => isOpen && onToggle()}
-                    >
-                      <link.icon className="h-4 w-4" />
-                      {link.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
+              <div className="section-header">Settings</div>
+              <div className="space-y-0.5">
+                {settingsLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                      location.pathname === link.to && 'nav-active'
+                    )}
+                    onClick={() => isOpen && onToggle()}
+                  >
+                    <link.icon className="h-4 w-4 text-muted-foreground" />
+                    <span>{link.label}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </nav>
+
+        <div className="border-t p-3 flex-shrink-0">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+            Workspace v0.1.0
+          </div>
+        </div>
       </aside>
     </>
   )
@@ -152,7 +144,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
 export function SidebarTrigger({ onClick }: { onClick: () => void }) {
   return (
-    <Button variant="ghost" size="icon" className="lg:hidden" onClick={onClick}>
+    <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9" onClick={onClick}>
       <Menu className="h-5 w-5" />
     </Button>
   )

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { Command } from 'commander';
 import pkg from '../package.json';
@@ -62,12 +62,30 @@ agentCmd
     await showStatus();
   });
 
-async function getClient() {
-  const worker = await getWorker();
-  if (!worker) {
-    console.error('No worker configured. Run: workspace config worker <hostname>');
-    process.exit(1);
+async function checkLocalAgent(): Promise<boolean> {
+  try {
+    const response = await fetch('http://localhost:7391/health', {
+      signal: AbortSignal.timeout(1000),
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
+}
+
+async function getClient() {
+  let worker = await getWorker();
+
+  if (!worker) {
+    const localRunning = await checkLocalAgent();
+    if (localRunning) {
+      worker = 'localhost:7391';
+    } else {
+      console.error('No worker configured. Run: workspace config worker <hostname>');
+      process.exit(1);
+    }
+  }
+
   return createApiClient(worker);
 }
 
@@ -244,17 +262,26 @@ program
     }
   });
 
+async function getWorkerWithFallback(): Promise<string> {
+  let worker = await getWorker();
+  if (!worker) {
+    const localRunning = await checkLocalAgent();
+    if (localRunning) {
+      worker = 'localhost:7391';
+    } else {
+      console.error('No worker configured. Run: workspace config worker <hostname>');
+      process.exit(1);
+    }
+  }
+  return worker;
+}
+
 program
   .command('proxy <name> [ports...]')
   .description('Forward ports from workspace to local machine')
   .action(async (name, ports: string[]) => {
     try {
-      const worker = await getWorker();
-      if (!worker) {
-        console.error('No worker configured. Run: workspace config worker <hostname>');
-        process.exit(1);
-      }
-
+      const worker = await getWorkerWithFallback();
       const client = await getClient();
 
       const workspace = await client.getWorkspace(name);

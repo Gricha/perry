@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, Check, ExternalLink } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Sparkles, Github, Bot, Code2 } from 'lucide-react'
 import { api, type CodingAgents } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+
+function StatusIndicator({ configured }: { configured: boolean }) {
+  if (!configured) return null
+  return (
+    <span className="status-configured text-xs font-medium">
+      Configured
+    </span>
+  )
+}
 
 export function AgentsSettings() {
   const queryClient = useQueryClient()
@@ -17,7 +24,8 @@ export function AgentsSettings() {
 
   const [openaiKey, setOpenaiKey] = useState('')
   const [githubToken, setGithubToken] = useState('')
-  const [claudeToken, setClaudeToken] = useState('')
+  const [claudeCredsPath, setClaudeCredsPath] = useState('')
+  const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
   const [openaiHasChanges, setOpenaiHasChanges] = useState(false)
   const [githubHasChanges, setGithubHasChanges] = useState(false)
   const [claudeHasChanges, setClaudeHasChanges] = useState(false)
@@ -27,7 +35,8 @@ export function AgentsSettings() {
     if (agents && !initialized) {
       setOpenaiKey(agents.opencode?.api_key || '')
       setGithubToken(agents.github?.token || '')
-      setClaudeToken(agents.claude_code?.oauth_token || '')
+      setClaudeCredsPath(agents.claude_code?.credentials_path || '')
+      setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
       setInitialized(true)
     }
   }, [agents, initialized])
@@ -59,15 +68,21 @@ export function AgentsSettings() {
   const handleSaveClaude = () => {
     mutation.mutate({
       ...agents,
-      claude_code: { oauth_token: claudeToken.trim() || undefined },
+      claude_code: {
+        credentials_path: claudeCredsPath.trim() || undefined,
+        oauth_token: claudeOAuthToken.trim() || undefined,
+      },
     })
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <p className="text-destructive mb-4">Failed to load settings</p>
-        <Button onClick={() => refetch()} variant="outline">
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="text-destructive mb-4 text-center">
+          <p className="font-medium">Failed to load settings</p>
+          <p className="text-sm text-muted-foreground mt-1">Please check your connection</p>
+        </div>
+        <Button onClick={() => refetch()} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
@@ -75,217 +90,204 @@ export function AgentsSettings() {
     )
   }
 
-  const openaiConfigured = agents?.opencode?.api_key
-  const githubConfigured = agents?.github?.token
-  const claudeConfigured = agents?.claude_code?.oauth_token
+  const openaiConfigured = !!agents?.opencode?.api_key
+  const githubConfigured = !!agents?.github?.token
+  const claudeConfigured = !!agents?.claude_code?.credentials_path || !!agents?.claude_code?.oauth_token
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Coding Agents</h1>
-        <p className="text-muted-foreground">
-          Configure AI coding assistants for your workspaces
-        </p>
-      </div>
-
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader>
-                <div className="h-6 w-32 bg-muted rounded" />
-                <div className="h-4 w-48 bg-muted rounded mt-2" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-10 bg-muted rounded" />
-              </CardContent>
-            </Card>
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="page-header">
+          <h1 className="page-title">Coding Agents</h1>
+          <p className="page-description">Configure AI assistants for your workspaces</p>
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="agent-row animate-pulse">
+              <div className="agent-icon bg-secondary" />
+              <div className="agent-info space-y-2">
+                <div className="h-4 w-24 bg-secondary rounded" />
+                <div className="h-3 w-48 bg-secondary rounded" />
+              </div>
+            </div>
           ))}
         </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">OpenCode</CardTitle>
-                {openaiConfigured ? (
-                  <Badge variant="default" className="bg-green-600">
-                    <Check className="mr-1 h-3 w-3" />
-                    Configured
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Not Configured</Badge>
-                )}
-              </div>
-              <CardDescription>
-                Configure your OpenAI API key for OpenCode integration
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  value={openaiKey}
-                  onChange={(e) => {
-                    setOpenaiKey(e.target.value)
-                    setOpenaiHasChanges(true)
-                  }}
-                  placeholder="sk-..."
-                  className="flex-1 font-mono"
-                />
-                <Button
-                  onClick={handleSaveOpenai}
-                  disabled={mutation.isPending || !openaiHasChanges}
-                  size="sm"
-                >
-                  <Save className="mr-1 h-4 w-4" />
-                  {mutation.isPending ? 'Saving...' : 'Save'}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Your API key will be injected as OPENAI_API_KEY into all new workspaces.
-              </p>
-              {mutation.error && (
-                <p className="text-sm text-destructive">
-                  {(mutation.error as Error).message}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+      </div>
+    )
+  }
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">GitHub</CardTitle>
-                {githubConfigured ? (
-                  <Badge variant="default" className="bg-green-600">
-                    <Check className="mr-1 h-3 w-3" />
-                    Configured
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Not Configured</Badge>
-                )}
-              </div>
-              <CardDescription>
-                Configure GitHub Personal Access Token for git operations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => {
-                    setGithubToken(e.target.value)
-                    setGithubHasChanges(true)
-                  }}
-                  placeholder="ghp_..."
-                  className="flex-1 font-mono"
-                />
-                <Button
-                  onClick={handleSaveGithub}
-                  disabled={mutation.isPending || !githubHasChanges}
-                  size="sm"
-                >
-                  <Save className="mr-1 h-4 w-4" />
-                  {mutation.isPending ? 'Saving...' : 'Save'}
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground">
-                  Your token will be injected as GITHUB_TOKEN into all new workspaces.
-                </p>
-                <a
-                  href="https://github.com/settings/tokens/new?scopes=repo,read:org"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  Create token
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-              {mutation.error && (
-                <p className="text-sm text-destructive">
-                  {(mutation.error as Error).message}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+  return (
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="page-title">Coding Agents</h1>
+        <p className="page-description">Configure AI assistants for your workspaces</p>
+      </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Claude Code</CardTitle>
-                {claudeConfigured ? (
-                  <Badge variant="default" className="bg-green-600">
-                    <Check className="mr-1 h-3 w-3" />
-                    Configured
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Not Configured</Badge>
-                )}
-              </div>
-              <CardDescription>
-                Configure Claude Code token for AI-assisted coding
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
+      {/* AI Assistants Section */}
+      <div>
+        <div className="section-header">AI Assistants</div>
+
+        {/* OpenCode */}
+        <div className="agent-row">
+          <div className="agent-icon">
+            <Code2 className="h-5 w-5" />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">
+              OpenCode
+              <StatusIndicator configured={openaiConfigured} />
+            </div>
+            <p className="agent-description">
+              OpenAI API key for AI-assisted coding. Injected as <code className="text-xs bg-secondary px-1 py-0.5 rounded">OPENAI_API_KEY</code>
+            </p>
+            <div className="agent-input flex gap-2">
+              <Input
+                type="password"
+                value={openaiKey}
+                onChange={(e) => {
+                  setOpenaiKey(e.target.value)
+                  setOpenaiHasChanges(true)
+                }}
+                placeholder="sk-..."
+                className="flex-1 font-mono text-sm h-9"
+              />
+              <Button
+                onClick={handleSaveOpenai}
+                disabled={mutation.isPending || !openaiHasChanges}
+                size="sm"
+                className="h-9"
+              >
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Claude Code */}
+        <div className="agent-row">
+          <div className="agent-icon">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">
+              Claude Code
+              <StatusIndicator configured={claudeConfigured} />
+            </div>
+            <p className="agent-description">
+              Credentials directory for interactive mode. OAuth token for <code className="text-xs bg-secondary px-1 py-0.5 rounded">--print</code> mode.
+            </p>
+            <div className="space-y-2 mt-2">
+              <div className="agent-input flex gap-2">
                 <Input
-                  type="password"
-                  value={claudeToken}
+                  type="text"
+                  value={claudeCredsPath}
                   onChange={(e) => {
-                    setClaudeToken(e.target.value)
+                    setClaudeCredsPath(e.target.value)
                     setClaudeHasChanges(true)
                   }}
-                  placeholder="sk-ant-oat01-..."
-                  className="flex-1 font-mono"
+                  placeholder="~/.claude (credentials directory)"
+                  className="flex-1 font-mono text-sm h-9"
+                />
+              </div>
+              <div className="agent-input flex gap-2">
+                <Input
+                  type="password"
+                  value={claudeOAuthToken}
+                  onChange={(e) => {
+                    setClaudeOAuthToken(e.target.value)
+                    setClaudeHasChanges(true)
+                  }}
+                  placeholder="sk-ant-oat01-... (OAuth token)"
+                  className="flex-1 font-mono text-sm h-9"
                 />
                 <Button
                   onClick={handleSaveClaude}
                   disabled={mutation.isPending || !claudeHasChanges}
                   size="sm"
+                  className="h-9"
                 >
-                  <Save className="mr-1 h-4 w-4" />
-                  {mutation.isPending ? 'Saving...' : 'Save'}
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                  Save
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Run <code className="bg-muted px-1 rounded">claude setup-token</code> in your terminal to generate a token.
-                It will be injected as CLAUDE_CODE_OAUTH_TOKEN into all new workspaces.
-              </p>
-              {mutation.error && (
-                <p className="text-sm text-destructive">
-                  {(mutation.error as Error).message}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Codex CLI</CardTitle>
-                {openaiConfigured ? (
-                  <Badge variant="default" className="bg-green-600">
-                    <Check className="mr-1 h-3 w-3" />
-                    Configured
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Not Configured</Badge>
-                )}
-              </div>
-              <CardDescription>
-                OpenAI Codex CLI for AI-assisted coding
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Codex CLI uses the same OPENAI_API_KEY as OpenCode. Configure your OpenAI API key above to enable Codex CLI in all workspaces.
-              </p>
-            </CardContent>
-          </Card>
+        {/* Codex CLI */}
+        <div className="agent-row">
+          <div className="agent-icon">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">
+              Codex CLI
+              <StatusIndicator configured={openaiConfigured} />
+            </div>
+            <p className="agent-description">
+              Uses the same <code className="text-xs bg-secondary px-1 py-0.5 rounded">OPENAI_API_KEY</code> as OpenCode. Configure OpenAI above to enable.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Version Control Section */}
+      <div>
+        <div className="section-header">Version Control</div>
+
+        {/* GitHub */}
+        <div className="agent-row">
+          <div className="agent-icon">
+            <Github className="h-5 w-5" />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">
+              GitHub
+              <StatusIndicator configured={githubConfigured} />
+            </div>
+            <p className="agent-description">
+              Personal Access Token for git operations. Injected as <code className="text-xs bg-secondary px-1 py-0.5 rounded">GITHUB_TOKEN</code>
+              <a
+                href="https://github.com/settings/tokens/new?scopes=repo,read:org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Create token
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </p>
+            <div className="agent-input flex gap-2">
+              <Input
+                type="password"
+                value={githubToken}
+                onChange={(e) => {
+                  setGithubToken(e.target.value)
+                  setGithubHasChanges(true)
+                }}
+                placeholder="ghp_..."
+                className="flex-1 font-mono text-sm h-9"
+              />
+              <Button
+                onClick={handleSaveGithub}
+                disabled={mutation.isPending || !githubHasChanges}
+                size="sm"
+                className="h-9"
+              >
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {mutation.error && (
+        <div className="rounded border border-destructive/50 bg-destructive/10 p-3">
+          <p className="text-sm text-destructive">
+            {(mutation.error as Error).message}
+          </p>
         </div>
       )}
     </div>
