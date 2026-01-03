@@ -2,30 +2,6 @@
 
 > **Important**: Remove tasks from this list when completed. Do not add new tasks without discussing with the project owner first - add them to "Considerations" section instead.
 
-## Phase 7: Code Quality
-
-(Completed)
-
-## Phase 8: Code Deduplication
-
-(Completed)
-
-## Phase 9: Error Handling
-
-(Completed)
-
-## Phase 10: Web UI Improvements
-
-(Completed)
-
-## Phase 11: Documentation
-
-(Completed)
-
-## Phase 12: Testing
-
-(Completed)
-
 ## Phase 13: Polish (Future)
 
 - [ ] User documentation
@@ -50,12 +26,6 @@
 - **Port range discrepancy**: Design says "starts at 4200" but implementation uses 2200-2400
 - **SSE streaming not implemented**: Design specifies SSE for log streaming (`?follow=true`) but implementation uses simple request/response
 - **Config API is writable**: Design says read-only but implementation allows updates via API (this is better, just document it)
-
-### Test Coverage (Low Priority)
-
-- **TUI testing**: `src/tui/app.ts` would require mocking OpenTUI renderer - complex and low value
-- **Systemd testing**: `src/agent/systemd.ts` requires systemd present - not feasible in CI
-- **Shell/proxy testing**: `src/client/shell.ts` and `src/client/proxy.ts` require SSH - complex integration test
 
 ### Other
 
