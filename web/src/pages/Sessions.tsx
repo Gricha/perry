@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   MessageSquare,
@@ -9,27 +9,15 @@ import {
   Play,
   ChevronRight,
   Bot,
-  User,
-  Sparkles,
-  Calendar,
-  FolderOpen,
-  Wrench,
-  ChevronDown,
-  CheckCircle2,
-  ChevronLeft,
   Loader2,
   Copy,
   Check,
-  Pencil,
-  X,
   Settings,
 } from 'lucide-react'
-import Markdown from 'react-markdown'
-import { api, type SessionInfo, type SessionMessage, type AgentType } from '@/lib/api'
+import { api, type SessionInfo, type AgentType } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Chat } from '@/components/Chat'
 import { Terminal } from '@/components/Terminal'
 import { cn } from '@/lib/utils'
@@ -139,11 +127,9 @@ function CopyableSessionId({ sessionId, truncate = true }: { sessionId: string; 
 
 function SessionListItem({
   session,
-  isSelected,
   onClick,
 }: {
   session: SessionInfo
-  isSelected: boolean
   onClick: () => void
 }) {
   const isEmpty = session.messageCount === 0
@@ -156,7 +142,6 @@ function SessionListItem({
       data-testid="session-list-item"
       className={cn(
         'w-full text-left px-4 py-3 border-b border-border/50 transition-colors hover:bg-accent/50 flex items-center gap-4',
-        isSelected && 'bg-accent',
         isEmpty && 'opacity-60'
       )}
     >
@@ -201,279 +186,8 @@ function SessionListItem({
         <span>{formatTimeAgo(session.lastActivity)}</span>
       </div>
 
-      <ChevronRight
-        className={cn(
-          'h-4 w-4 text-muted-foreground shrink-0',
-          isSelected && 'text-primary'
-        )}
-      />
+      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
     </button>
-  )
-}
-
-function ToolCallBubble({ message }: { message: SessionMessage }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  if (message.type === 'tool_use') {
-    return (
-      <div className="flex gap-3">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
-          <Wrench className="h-3 w-3" />
-        </div>
-        <div className="flex-1">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown
-              className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
-            />
-            <span className="font-mono font-medium">{message.toolName}</span>
-          </button>
-          {isExpanded && message.toolInput && (
-            <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50">
-              {message.toolInput}
-            </pre>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (message.type === 'tool_result') {
-    return (
-      <div className="flex gap-3">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-          <CheckCircle2 className="h-3 w-3" />
-        </div>
-        <div className="flex-1">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown
-              className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
-            />
-            <span>Tool result</span>
-          </button>
-          {isExpanded && message.content && (
-            <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50 whitespace-pre-wrap">
-              {message.content.slice(0, 2000)}
-              {message.content.length > 2000 && '... (truncated)'}
-            </pre>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  return null
-}
-
-function MessageBubble({ message }: { message: SessionMessage }) {
-  if (message.type === 'tool_use' || message.type === 'tool_result') {
-    return <ToolCallBubble message={message} />
-  }
-
-  const isUser = message.type === 'user'
-
-  return (
-    <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      <div
-        className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-          isUser
-            ? 'bg-primary/10 text-primary'
-            : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600'
-        )}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-      </div>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3',
-          isUser
-            ? 'bg-primary text-primary-foreground rounded-tr-sm'
-            : 'bg-muted/50 border border-border/50 rounded-tl-sm'
-        )}
-      >
-        {isUser ? (
-          <p className="text-sm whitespace-pre-wrap">{message.content || '(empty)'}</p>
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
-            <Markdown>{message.content || '(empty)'}</Markdown>
-          </div>
-        )}
-        {message.timestamp && (
-          <p
-            className={cn('text-[10px] mt-2 opacity-60', isUser ? 'text-right' : 'text-left')}
-          >
-            {new Date(message.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SessionMetadataHeader({ session }: { session: SessionInfo }) {
-  const formattedDate = new Date(session.lastActivity).toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-  const formattedTime = new Date(session.lastActivity).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-
-  return (
-    <div className="flex items-center gap-4 flex-wrap text-sm">
-      <Badge
-        variant="outline"
-        className={cn('text-xs font-medium', AGENT_COLORS[session.agentType])}
-      >
-        {AGENT_LABELS[session.agentType]}
-      </Badge>
-      <CopyableSessionId sessionId={session.id} truncate={false} />
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <Hash className="h-3.5 w-3.5" />
-        <span>{session.messageCount} messages</span>
-      </div>
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <FolderOpen className="h-3.5 w-3.5" />
-        <span className="font-mono text-xs">{session.projectPath}</span>
-      </div>
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <Calendar className="h-3.5 w-3.5" />
-        <span>
-          {formattedDate} at {formattedTime}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function SessionDetailView({
-  workspaceName,
-  session,
-  onBack,
-  onResume,
-  onRename,
-}: {
-  workspaceName: string
-  session: SessionInfo
-  onBack: () => void
-  onResume: (sessionId: string, agentType: AgentType) => void
-  onRename: (sessionId: string, name: string) => void
-}) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editName, setEditName] = useState(session.name || '')
-
-  const { data: sessionDetail, isLoading } = useQuery({
-    queryKey: ['session', workspaceName, session.id],
-    queryFn: () => api.getSession(workspaceName, session.id),
-  })
-
-  const handleSave = () => {
-    if (editName.trim()) {
-      onRename(session.id, editName.trim())
-    }
-    setIsEditing(false)
-  }
-
-  const handleCancel = () => {
-    setEditName(session.name || '')
-    setIsEditing(false)
-  }
-
-  const displayTitle = session.name || session.firstPrompt?.slice(0, 80) || 'Untitled Session'
-
-  return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      <div className="flex items-center justify-between gap-4 px-6 py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back
-          </Button>
-          <div className="border-l pl-3">
-            {isEditing ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="h-8 w-64"
-                  placeholder="Session name"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSave()
-                    if (e.key === 'Escape') handleCancel()
-                  }}
-                  data-testid="session-name-input"
-                />
-                <Button variant="ghost" size="sm" onClick={handleSave}>
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancel}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-lg">
-                  {displayTitle}
-                  {!session.name && (session.firstPrompt?.length || 0) > 80 && '...'}
-                </h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setEditName(session.name || session.firstPrompt?.slice(0, 80) || '')
-                    setIsEditing(true)
-                  }}
-                  className="h-6 w-6 p-0"
-                  data-testid="rename-session-button"
-                >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </div>
-            )}
-            <SessionMetadataHeader session={session} />
-          </div>
-        </div>
-        <Button onClick={() => onResume(session.id, session.agentType)}>
-          <Play className="mr-2 h-4 w-4" />
-          Resume Session
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : sessionDetail?.messages && sessionDetail.messages.length > 0 ? (
-            <div className="space-y-6">
-              {sessionDetail.messages.map((msg, idx) => (
-                <MessageBubble key={idx} message={msg} />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-              <MessageSquare className="h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">No messages in this session</p>
-              <p className="text-sm mt-1">This session may have been created but not used</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -482,8 +196,6 @@ type ChatMode = { type: 'chat'; sessionId?: string } | { type: 'terminal'; comma
 export function Sessions() {
   const { name: workspaceName } = useParams<{ name: string }>()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
   const [chatMode, setChatMode] = useState<ChatMode | null>(null)
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
 
@@ -504,23 +216,8 @@ export function Sessions() {
     enabled: !!workspaceName && workspace?.status === 'running',
   })
 
-  const renameMutation = useMutation({
-    mutationFn: ({ sessionId, name }: { sessionId: string; name: string }) =>
-      api.renameSession(workspaceName!, sessionId, name),
-    onSuccess: (_, { sessionId, name }) => {
-      queryClient.invalidateQueries({ queryKey: ['sessions', workspaceName] })
-      if (selectedSession?.id === sessionId) {
-        setSelectedSession({ ...selectedSession, name })
-      }
-    },
-  })
-
   const sessions = sessionsData?.sessions || []
   const totalSessions = sessionsData?.total || 0
-
-  const handleRename = (sessionId: string, name: string) => {
-    renameMutation.mutate({ sessionId, name })
-  }
 
   const handleResume = (sessionId: string, agentType: AgentType) => {
     if (agentType === 'claude-code') {
@@ -622,18 +319,6 @@ export function Sessions() {
     )
   }
 
-  if (selectedSession) {
-    return (
-      <SessionDetailView
-        workspaceName={workspaceName}
-        session={selectedSession}
-        onBack={() => setSelectedSession(null)}
-        onResume={handleResume}
-        onRename={handleRename}
-      />
-    )
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -667,10 +352,7 @@ export function Sessions() {
             <DropdownMenuContent align="end">
               <DropdownMenuRadioGroup
                 value={agentFilter}
-                onValueChange={(value) => {
-                  setAgentFilter(value as AgentType | 'all')
-                  setSelectedSession(null)
-                }}
+                onValueChange={(value) => setAgentFilter(value as AgentType | 'all')}
               >
                 <DropdownMenuRadioItem value="all">All Agents</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="claude-code">Claude Code</DropdownMenuRadioItem>
@@ -765,8 +447,7 @@ export function Sessions() {
                     <SessionListItem
                       key={session.id}
                       session={session}
-                      isSelected={false}
-                      onClick={() => setSelectedSession(session)}
+                      onClick={() => handleResume(session.id, session.agentType)}
                     />
                   ))}
                 </div>

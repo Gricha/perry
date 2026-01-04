@@ -207,4 +207,54 @@ test.describe('Web UI - Sessions', () => {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
+
+  test('sessions list shows prompt and clicking opens chat directly', async ({ agent, page }) => {
+    const workspaceName = generateTestWorkspaceName();
+    const sessionId = `test-session-${Date.now()}`;
+    const filePath = `/home/workspace/.claude/projects/-home-workspace/${sessionId}.jsonl`;
+    const sessionContent = [
+      '{"type":"user","message":{"role":"user","content":"Hello from test"},"timestamp":"2026-01-01T00:00:00.000Z"}',
+      '{"type":"assistant","message":{"role":"assistant","content":"Hi there"},"timestamp":"2026-01-01T00:00:01.000Z"}',
+    ].join('\n');
+
+    await agent.api.createWorkspace({ name: workspaceName });
+    await agent.exec(
+      workspaceName,
+      `mkdir -p /home/workspace/.claude/projects/-home-workspace && cat <<'EOF' > "${filePath}"\n${sessionContent}\nEOF`
+    );
+
+    try {
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      const sessionItem = page
+        .getByTestId('session-list-item')
+        .filter({ hasText: 'Hello from test' })
+        .first();
+      await expect(sessionItem).toBeVisible({ timeout: 30000 });
+
+      await sessionItem.click();
+
+      await expect(page.getByText('Claude Code')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByText('Back to Sessions')).toBeVisible();
+      await expect(page.getByPlaceholder('Send a message...')).toBeVisible();
+    } finally {
+      await agent.api.deleteWorkspace(workspaceName);
+    }
+  }, 120000);
+
+  test('clicking new chat opens chat UI', async ({ agent, page }) => {
+    const workspaceName = generateTestWorkspaceName();
+    await agent.api.createWorkspace({ name: workspaceName });
+
+    try {
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+
+      await page.getByRole('button', { name: /new chat/i }).click();
+      await page.getByText('Claude Code').first().click();
+
+      await expect(page.getByText('Back to Sessions')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByPlaceholder('Send a message...')).toBeVisible();
+    } finally {
+      await agent.api.deleteWorkspace(workspaceName);
+    }
+  }, 120000);
 });

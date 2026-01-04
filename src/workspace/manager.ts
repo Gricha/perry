@@ -146,40 +146,42 @@ export class WorkspaceManager {
   }
 
   private async setupClaudeCodeConfig(containerName: string): Promise<void> {
-    const oauthToken = this.config.agents?.claude_code?.oauth_token;
-    if (!oauthToken) {
-      return;
-    }
-
-    const configContent = JSON.stringify({ hasCompletedOnboarding: true });
-    const tempFile = path.join(os.tmpdir(), `ws-claude-config-${Date.now()}.json`);
+    const localClaudeConfig = expandPath('~/.claude.json');
     try {
-      await fs.writeFile(tempFile, configContent);
-      await docker.copyToContainer(containerName, tempFile, '/home/workspace/.claude.json');
-      await docker.execInContainer(
+      await fs.access(localClaudeConfig);
+      await copyCredentialToContainer({
+        source: '~/.claude.json',
+        dest: '/home/workspace/.claude.json',
         containerName,
-        ['chown', 'workspace:workspace', '/home/workspace/.claude.json'],
-        { user: 'root' }
-      );
-      await docker.execInContainer(
-        containerName,
-        ['chmod', '644', '/home/workspace/.claude.json'],
-        {
-          user: 'workspace',
-        }
-      );
-    } finally {
-      await fs.unlink(tempFile).catch(() => {});
+        filePermissions: '644',
+        tempPrefix: 'ws-claude-config',
+      });
+    } catch {
+      const oauthToken = this.config.agents?.claude_code?.oauth_token;
+      if (!oauthToken) {
+        return;
+      }
+      const configContent = JSON.stringify({ hasCompletedOnboarding: true });
+      const tempFile = path.join(os.tmpdir(), `ws-claude-config-${Date.now()}.json`);
+      try {
+        await fs.writeFile(tempFile, configContent);
+        await docker.copyToContainer(containerName, tempFile, '/home/workspace/.claude.json');
+        await docker.execInContainer(
+          containerName,
+          ['chown', 'workspace:workspace', '/home/workspace/.claude.json'],
+          { user: 'root' }
+        );
+        await docker.execInContainer(
+          containerName,
+          ['chmod', '644', '/home/workspace/.claude.json'],
+          {
+            user: 'workspace',
+          }
+        );
+      } finally {
+        await fs.unlink(tempFile).catch(() => {});
+      }
     }
-  }
-
-  private async copyClaudeCredentials(containerName: string): Promise<void> {
-    await copyCredentialToContainer({
-      source: '~/.claude',
-      dest: '/home/workspace/.claude',
-      containerName,
-      tempPrefix: 'ws-claude',
-    });
   }
 
   private async copyCodexCredentials(containerName: string): Promise<void> {
@@ -335,7 +337,6 @@ export class WorkspaceManager {
       await docker.startContainer(containerName);
 
       await this.copyCredentialFiles(containerName);
-      await this.copyClaudeCredentials(containerName);
       await this.setupClaudeCodeConfig(containerName);
       await this.copyCodexCredentials(containerName);
 
@@ -372,7 +373,6 @@ export class WorkspaceManager {
     await docker.startContainer(containerName);
 
     await this.copyCredentialFiles(containerName);
-    await this.copyClaudeCredentials(containerName);
     await this.setupClaudeCodeConfig(containerName);
     await this.copyCodexCredentials(containerName);
 
