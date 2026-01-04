@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Send, StopCircle, Bot, Sparkles, Wrench, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { Send, StopCircle, Bot, Sparkles, Wrench, ChevronDown, CheckCircle2, Loader2 } from 'lucide-react'
 import Markdown from 'react-markdown'
-import { getChatUrl } from '@/lib/api'
+import { getChatUrl, api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -209,7 +209,33 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
   const [input, setInput] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(!!initialSessionId)
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId)
+
+  useEffect(() => {
+    if (!initialSessionId || !workspaceName) return
+
+    setIsLoadingHistory(true)
+    api.getSession(workspaceName, initialSessionId, 'claude-code')
+      .then((detail) => {
+        if (detail?.messages) {
+          const historicalMessages: ChatMessage[] = detail.messages
+            .filter(m => m.type === 'user' || m.type === 'assistant')
+            .map(m => ({
+              type: m.type as 'user' | 'assistant',
+              content: m.content || '',
+              timestamp: m.timestamp || new Date().toISOString(),
+            }))
+          setMessages(historicalMessages)
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load session history:', err)
+      })
+      .finally(() => {
+        setIsLoadingHistory(false)
+      })
+  }, [initialSessionId, workspaceName])
 
   const streamingPartsRef = useRef<ChatMessagePart[]>([])
   const [streamingParts, setStreamingParts] = useState<ChatMessagePart[]>([])
@@ -447,7 +473,14 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && !isStreaming && (
+        {isLoadingHistory && (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin mb-4" />
+            <p className="text-center">Loading conversation history...</p>
+          </div>
+        )}
+
+        {!isLoadingHistory && messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Sparkles className="h-12 w-12 mb-4 opacity-20" />
             <p className="text-center">

@@ -11,6 +11,8 @@ import {
   getSessionNamesForWorkspace,
   deleteSessionName,
 } from '../sessions/metadata';
+import { parseClaudeSessionContent } from '../sessions/parser';
+import type { SessionMessage } from '../sessions/types';
 
 const WorkspaceStatusSchema = z.enum(['running', 'stopped', 'creating', 'error']);
 
@@ -74,6 +76,41 @@ function mapErrorToORPC(err: unknown, defaultMessage: string): never {
     throw new ORPCError('CONFLICT', { message });
   }
   throw new ORPCError('INTERNAL_SERVER_ERROR', { message });
+}
+
+function decodeClaudeProjectPath(encoded: string): string {
+  return encoded.replace(/-/g, '/');
+}
+
+function extractFirstUserPrompt(messages: SessionMessage[]): string | null {
+  const firstPrompt = messages.find(
+    (msg) => msg.type === 'user' && msg.content && msg.content.trim().length > 0
+  );
+  return firstPrompt?.content ? firstPrompt.content.slice(0, 200) : null;
+}
+
+function extractClaudeSessionName(content: string): string | null {
+  const lines = content.split('\n').filter((line) => line.trim());
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line) as { type?: string; subtype?: string; name?: string };
+      if (obj.type === 'system' && obj.subtype === 'session_name') {
+        return obj.name || null;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function extractContent(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const text = content.find((c: { type: string; text?: string }) => c.type === 'text')?.text;
+    return typeof text === 'string' ? text : null;
+  }
+  return null;
 }
 
 export function createRouter(ctx: RouterContext) {
@@ -235,11 +272,10 @@ export function createRouter(ctx: RouterContext) {
 
     type RawSession = {
       id: string;
-      agentType: string;
+      agentType: 'claude-code' | 'opencode' | 'codex';
       projectPath: string;
-      messageCount: number;
       mtime: number;
-      prompt?: string;
+      filePath: string;
       name?: string;
     };
 
@@ -248,9 +284,9 @@ export function createRouter(ctx: RouterContext) {
     const claudeResult = await execInContainer(
       containerName,
       [
-        'sh',
+        'bash',
         '-c',
-        'find /home/workspace/.claude/projects -name "*.jsonl" -type f -printf "%p\\t%T@\\t" -exec wc -l {} \\; 2>/dev/null || true',
+        'find /home/workspace/.claude/projects -name "*.jsonl" -type f ! -name "agent-*.jsonl" -printf "%p\\t%T@\\t%s\\n" 2>/dev/null || true',
       ],
       { user: 'workspace' }
     );
@@ -259,21 +295,23 @@ export function createRouter(ctx: RouterContext) {
       const lines = claudeResult.stdout.trim().split('\n').filter(Boolean);
       for (const line of lines) {
         const parts = line.split('\t');
-        if (parts.length >= 2) {
+        if (parts.length >= 3) {
           const file = parts[0];
           const mtime = Math.floor(parseFloat(parts[1]) || 0);
-          const wcOutput = parts[2] || '0';
-          const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
+          const size = parseInt(parts[2], 10) || 0;
+          if (size === 0) continue;
 
           const id = file.split('/').pop()?.replace('.jsonl', '') || '';
           const projDir = file.split('/').slice(-2, -1)[0] || '';
+          const projectPath = decodeClaudeProjectPath(projDir);
+          if (!projectPath.startsWith('/workspace') && !projectPath.startsWith('/home/workspace')) continue;
 
           rawSessions.push({
             id,
             agentType: 'claude-code',
-            projectPath: projDir,
-            messageCount: count,
             mtime,
+            projectPath,
+            filePath: file,
           });
         }
       }
@@ -309,16 +347,16 @@ export function createRouter(ctx: RouterContext) {
           for (let i = 0; i < sessions.length; i++) {
             const data = sessions[i];
             const file = files[i];
-            const id = file.split('/').pop()?.replace('.json', '') || '';
+            const id = data.id || file.split('/').pop()?.replace('.json', '') || '';
             const mtime = Math.floor((data.time?.updated || 0) / 1000);
 
             rawSessions.push({
               id,
               agentType: 'opencode',
               projectPath: data.directory || '',
-              messageCount: 1,
               mtime,
               name: data.title || undefined,
+              filePath: file,
             });
           }
         } catch {
@@ -344,8 +382,6 @@ export function createRouter(ctx: RouterContext) {
         if (parts.length >= 2) {
           const file = parts[0];
           const mtime = Math.floor(parseFloat(parts[1]) || 0);
-          const wcOutput = parts[2] || '0';
-          const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
 
           const id = file.split('/').pop()?.replace('.jsonl', '') || '';
           const projPath = file
@@ -356,8 +392,8 @@ export function createRouter(ctx: RouterContext) {
             id,
             agentType: 'codex',
             projectPath: projPath,
-            messageCount: count,
             mtime,
+            filePath: file,
           });
         }
       }
@@ -365,42 +401,162 @@ export function createRouter(ctx: RouterContext) {
 
     const customNames = await getSessionNamesForWorkspace(ctx.stateDir, input.workspaceName);
 
-    const sessions = rawSessions
+    const filteredSessions = rawSessions
       .filter((s) => !input.agentType || s.agentType === input.agentType)
-      .filter((s) => s.messageCount > 0)
-      .map((s) => {
-        let firstPrompt: string | null = null;
-        if (s.prompt) {
-          try {
-            const line = JSON.parse(s.prompt);
-            if (line.content) {
-              const content = Array.isArray(line.content)
-                ? line.content.find((c: { type: string; text?: string }) => c.type === 'text')?.text
-                : line.content;
-              firstPrompt = typeof content === 'string' ? content.slice(0, 200) : null;
+      .sort((a, b) => b.mtime - a.mtime);
+
+    const paginatedRawSessions = filteredSessions.slice(offset, offset + limit);
+    const sessions = [];
+
+    for (const session of paginatedRawSessions) {
+      if (session.agentType === 'claude-code') {
+        const catResult = await execInContainer(containerName, ['cat', session.filePath], {
+          user: 'workspace',
+        });
+
+        if (catResult.exitCode !== 0) {
+          continue;
+        }
+
+        const messages = parseClaudeSessionContent(catResult.stdout).filter(
+          (msg) => msg.type !== 'system'
+        );
+        const firstPrompt = extractFirstUserPrompt(messages);
+        const name = extractClaudeSessionName(catResult.stdout);
+
+        if (messages.length === 0) {
+          continue;
+        }
+
+        sessions.push({
+          id: session.id,
+          name: customNames[session.id] || name || null,
+          agentType: session.agentType,
+          projectPath: session.projectPath,
+          messageCount: messages.length,
+          lastActivity: new Date(session.mtime * 1000).toISOString(),
+          firstPrompt,
+        });
+        continue;
+      }
+
+      if (session.agentType === 'opencode') {
+        const msgDir = `/home/workspace/.local/share/opencode/storage/message/${session.id}`;
+        const listMsgsResult = await execInContainer(
+          containerName,
+          ['bash', '-c', `ls -1 "${msgDir}"/msg_*.json 2>/dev/null | sort`],
+          { user: 'workspace' }
+        );
+
+        const messages: Array<{ type: 'user' | 'assistant'; content?: string }> = [];
+
+        if (listMsgsResult.exitCode === 0 && listMsgsResult.stdout.trim()) {
+          const msgFiles = listMsgsResult.stdout.trim().split('\n').filter(Boolean);
+          for (const msgFile of msgFiles) {
+            const msgResult = await execInContainer(containerName, ['cat', msgFile], {
+              user: 'workspace',
+            });
+            if (msgResult.exitCode !== 0) continue;
+            try {
+              const msg = JSON.parse(msgResult.stdout) as {
+                role?: 'user' | 'assistant';
+                content?: unknown;
+              };
+              if (msg.role === 'user' || msg.role === 'assistant') {
+                const content = extractContent(msg.content);
+                messages.push({ type: msg.role, content: content || undefined });
+              }
+            } catch {
+              continue;
             }
-          } catch {
-            firstPrompt = null;
           }
         }
-        return {
-          id: s.id,
-          name: customNames[s.id] || s.name || null,
-          agentType: s.agentType,
-          projectPath: s.projectPath,
-          messageCount: s.messageCount,
-          lastActivity: new Date(s.mtime * 1000).toISOString(),
-          firstPrompt,
-        };
-      })
-      .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
-    const paginatedSessions = sessions.slice(offset, offset + limit);
+        const firstPrompt = messages.find(
+          (msg) => msg.type === 'user' && msg.content && msg.content.trim().length > 0
+        )?.content;
+
+        if (messages.length === 0) {
+          continue;
+        }
+
+        sessions.push({
+          id: session.id,
+          name: customNames[session.id] || session.name || null,
+          agentType: session.agentType,
+          projectPath: session.projectPath,
+          messageCount: messages.length,
+          lastActivity: new Date(session.mtime * 1000).toISOString(),
+          firstPrompt: firstPrompt ? firstPrompt.slice(0, 200) : null,
+        });
+        continue;
+      }
+
+      const catResult = await execInContainer(containerName, ['cat', session.filePath], {
+        user: 'workspace',
+      });
+
+      if (catResult.exitCode !== 0) {
+        continue;
+      }
+
+      const lines = catResult.stdout.split('\n').filter(Boolean);
+      let sessionId = session.id;
+      if (lines.length > 0) {
+        try {
+          const meta = JSON.parse(lines[0]) as { session_id?: string };
+          if (meta.session_id) {
+            sessionId = meta.session_id;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const messages: Array<{ type: 'user' | 'assistant'; content?: string }> = [];
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const event = JSON.parse(lines[i]) as {
+            payload?: {
+              role?: 'user' | 'assistant';
+              content?: unknown;
+              message?: { role?: 'user' | 'assistant'; content?: unknown };
+            };
+          };
+          const role = event.payload?.role || event.payload?.message?.role;
+          const content = event.payload?.content || event.payload?.message?.content;
+          if (role === 'user' || role === 'assistant') {
+            const textContent = extractContent(content);
+            messages.push({ type: role, content: textContent || undefined });
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      const firstPrompt = messages.find(
+        (msg) => msg.type === 'user' && msg.content && msg.content.trim().length > 0
+      )?.content;
+
+      if (messages.length === 0) {
+        continue;
+      }
+
+      sessions.push({
+        id: sessionId,
+        name: customNames[sessionId] || null,
+        agentType: session.agentType,
+        projectPath: session.projectPath,
+        messageCount: messages.length,
+        lastActivity: new Date(session.mtime * 1000).toISOString(),
+        firstPrompt: firstPrompt ? firstPrompt.slice(0, 200) : null,
+      });
+    }
 
     return {
-      sessions: paginatedSessions,
-      total: sessions.length,
-      hasMore: offset + limit < sessions.length,
+      sessions,
+      total: filteredSessions.length,
+      hasMore: offset + limit < filteredSessions.length,
     };
   }
 
@@ -435,22 +591,7 @@ export function createRouter(ctx: RouterContext) {
       }
 
       const containerName = `workspace-${input.workspaceName}`;
-      const messages: Array<{
-        type: string;
-        content: string | null;
-        timestamp: string | null;
-      }> = [];
-
-      const parseContent = (content: unknown): string | null => {
-        if (typeof content === 'string') return content;
-        if (Array.isArray(content)) {
-          const text = content.find(
-            (c: { type: string; text?: string }) => c.type === 'text'
-          )?.text;
-          return typeof text === 'string' ? text : null;
-        }
-        return null;
-      };
+      const messages: SessionMessage[] = [];
 
       if (!input.agentType || input.agentType === 'claude-code') {
         const safeSessionId = input.sessionId.replace(/[^a-zA-Z0-9_-]/g, '');
@@ -475,28 +616,15 @@ export function createRouter(ctx: RouterContext) {
           });
 
           if (catResult.exitCode === 0) {
-            const lines = catResult.stdout.split('\n').filter(Boolean);
-            for (const line of lines) {
-              try {
-                const obj = JSON.parse(line);
-                if (obj.role === 'user' || obj.type === 'user') {
-                  messages.push({
-                    type: 'user',
-                    content: parseContent(obj.content ?? obj.message?.content),
-                    timestamp: obj.timestamp || null,
-                  });
-                } else if (obj.role === 'assistant' || obj.type === 'assistant') {
-                  messages.push({
-                    type: 'assistant',
-                    content: parseContent(obj.content ?? obj.message?.content),
-                    timestamp: obj.timestamp || null,
-                  });
-                }
-              } catch {
-                continue;
-              }
-            }
-            return { id: input.sessionId, agentType: 'claude-code', messages };
+            const parsed = parseClaudeSessionContent(catResult.stdout)
+              .filter((msg) => msg.type !== 'system')
+              .filter(
+                (msg) =>
+                  msg.type === 'tool_use' ||
+                  msg.type === 'tool_result' ||
+                  (msg.content && msg.content.trim().length > 0)
+              );
+            return { id: input.sessionId, agentType: 'claude-code', messages: parsed };
           }
         }
       }
@@ -543,12 +671,13 @@ export function createRouter(ctx: RouterContext) {
                         time?: { created?: number };
                       };
                       if (msg.role === 'user' || msg.role === 'assistant') {
+                        const parsedContent = extractContent(msg.content);
                         messages.push({
                           type: msg.role,
-                          content: parseContent(msg.content),
+                          content: parsedContent || undefined,
                           timestamp: msg.time?.created
                             ? new Date(msg.time.created).toISOString()
-                            : null,
+                            : undefined,
                         });
                       }
                     } catch {
@@ -615,10 +744,13 @@ export function createRouter(ctx: RouterContext) {
                     const role = event.payload?.role || event.payload?.message?.role;
                     const content = event.payload?.content || event.payload?.message?.content;
                     if (role === 'user' || role === 'assistant') {
+                      const parsedContent = extractContent(content);
                       messages.push({
                         type: role,
-                        content: parseContent(content),
-                        timestamp: event.timestamp ? new Date(event.timestamp).toISOString() : null,
+                        content: parsedContent || undefined,
+                        timestamp: event.timestamp
+                          ? new Date(event.timestamp).toISOString()
+                          : undefined,
                       });
                     }
                   } catch {

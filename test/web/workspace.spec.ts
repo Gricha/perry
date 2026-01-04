@@ -211,7 +211,7 @@ test.describe('Web UI - Sessions', () => {
   test('sessions list shows prompt and clicking opens chat directly', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     const sessionId = `test-session-${Date.now()}`;
-    const filePath = `/home/workspace/.claude/projects/-home-workspace/${sessionId}.jsonl`;
+    const filePath = `/home/workspace/.claude/projects/-workspace/${sessionId}.jsonl`;
     const sessionContent = [
       '{"type":"user","message":{"role":"user","content":"Hello from test"},"timestamp":"2026-01-01T00:00:00.000Z"}',
       '{"type":"assistant","message":{"role":"assistant","content":"Hi there"},"timestamp":"2026-01-01T00:00:01.000Z"}',
@@ -220,7 +220,7 @@ test.describe('Web UI - Sessions', () => {
     await agent.api.createWorkspace({ name: workspaceName });
     await agent.exec(
       workspaceName,
-      `mkdir -p /home/workspace/.claude/projects/-home-workspace && cat <<'EOF' > "${filePath}"\n${sessionContent}\nEOF`
+      `mkdir -p /home/workspace/.claude/projects/-workspace && cat <<'EOF' > "${filePath}"\n${sessionContent}\nEOF`
     );
 
     try {
@@ -236,6 +236,42 @@ test.describe('Web UI - Sessions', () => {
       await expect(page.getByText('Claude Code')).toBeVisible({ timeout: 30000 });
       await expect(page.getByText('Back to Sessions')).toBeVisible();
       await expect(page.getByPlaceholder('Send a message...')).toBeVisible();
+    } finally {
+      await agent.api.deleteWorkspace(workspaceName);
+    }
+  }, 120000);
+
+  test('clicking session loads conversation history', async ({ agent, page }) => {
+    const workspaceName = generateTestWorkspaceName();
+    const sessionId = `history-test-${Date.now()}`;
+    const filePath = `/home/workspace/.claude/projects/-workspace/${sessionId}.jsonl`;
+    const sessionContent = [
+      '{"type":"user","message":{"role":"user","content":"What is 2+2?"},"timestamp":"2026-01-01T00:00:00.000Z"}',
+      '{"type":"assistant","message":{"role":"assistant","content":"2+2 equals 4"},"timestamp":"2026-01-01T00:00:01.000Z"}',
+      '{"type":"user","message":{"role":"user","content":"Thanks!"},"timestamp":"2026-01-01T00:00:02.000Z"}',
+      '{"type":"assistant","message":{"role":"assistant","content":"You are welcome!"},"timestamp":"2026-01-01T00:00:03.000Z"}',
+    ].join('\n');
+
+    await agent.api.createWorkspace({ name: workspaceName });
+    await agent.exec(
+      workspaceName,
+      `mkdir -p /home/workspace/.claude/projects/-workspace && cat <<'EOF' > "${filePath}"\n${sessionContent}\nEOF`
+    );
+
+    try {
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      const sessionItem = page
+        .getByTestId('session-list-item')
+        .filter({ hasText: 'What is 2+2?' })
+        .first();
+      await expect(sessionItem).toBeVisible({ timeout: 30000 });
+
+      await sessionItem.click();
+
+      await expect(page.getByText('Claude Code')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByText('2+2 equals 4')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Thanks!')).toBeVisible();
+      await expect(page.getByText('You are welcome!')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }

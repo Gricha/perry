@@ -24,6 +24,7 @@ type ContentPart = { type: string; text?: string } | ToolUseContent | ToolResult
 interface JsonlMessage {
   type?: string;
   subtype?: string;
+  name?: string;
   message?: {
     role?: string;
     content?: string | Array<ContentPart>;
@@ -37,6 +38,7 @@ interface JsonlMessage {
   num_turns?: number;
   duration_ms?: number;
   duration_api_ms?: number;
+  isMeta?: boolean;
 }
 
 function extractContent(
@@ -93,6 +95,9 @@ function extractInterleavedContent(content: Array<ContentPart>): SessionMessage[
 function parseJsonlLine(line: string): SessionMessage[] {
   try {
     const obj = JSON.parse(line) as JsonlMessage;
+    if (obj.isMeta) {
+      return [];
+    }
     const messages: SessionMessage[] = [];
     const timestamp = obj.timestamp || (obj.ts ? new Date(obj.ts * 1000).toISOString() : undefined);
 
@@ -170,8 +175,7 @@ function parseJsonlLine(line: string): SessionMessage[] {
   }
 }
 
-export async function parseSessionFile(filePath: string): Promise<SessionMessage[]> {
-  const content = await readFile(filePath, 'utf-8');
+export function parseClaudeSessionContent(content: string): SessionMessage[] {
   const lines = content.split('\n').filter((line) => line.trim());
   const messages: SessionMessage[] = [];
 
@@ -181,6 +185,11 @@ export async function parseSessionFile(filePath: string): Promise<SessionMessage
   }
 
   return messages;
+}
+
+export async function parseSessionFile(filePath: string): Promise<SessionMessage[]> {
+  const content = await readFile(filePath, 'utf-8');
+  return parseClaudeSessionContent(content);
 }
 
 export async function getSessionMetadata(
