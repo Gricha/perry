@@ -20,8 +20,6 @@
 
 #### Nice to Have
 
-- [ ] Add test for terminal URL param mode (`?terminal=true` full-screen view)
-- [ ] Add Playwright fixture for agent lifecycle instead of manual beforeAll/afterAll
 - [ ] Mock Claude API responses in chat integration tests to avoid real API calls
 - [ ] Use unique run ID in container names for parallel test safety
 
