@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   MessageSquare,
@@ -18,12 +18,17 @@ import {
   CheckCircle2,
   ChevronLeft,
   Loader2,
+  Copy,
+  Check,
+  Pencil,
+  X,
 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { api, type SessionInfo, type SessionMessage, type AgentType } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Chat } from '@/components/Chat'
 import { Terminal } from '@/components/Terminal'
 import { cn } from '@/lib/utils'
@@ -62,6 +67,34 @@ function formatTimeAgo(dateString: string): string {
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString()
+}
+
+function CopyableSessionId({ sessionId, truncate = true }: { sessionId: string; truncate?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  const displayId = truncate ? sessionId.slice(0, 8) : sessionId
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await navigator.clipboard.writeText(sessionId)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+      title={`Click to copy: ${sessionId}`}
+      data-testid="session-id"
+    >
+      <span>{displayId}</span>
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
+    </button>
+  )
 }
 
 function SessionListItem({
@@ -111,9 +144,10 @@ function SessionListItem({
             {hasPrompt ? session.firstPrompt : 'No prompt recorded'}
           </p>
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+            <CopyableSessionId sessionId={session.id} />
             <span className="flex items-center gap-1">
               <Hash className="h-3 w-3" />
-              {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}
+              {session.messageCount}
             </span>
             <span className="truncate font-mono text-[11px]">{session.projectPath}</span>
           </div>
@@ -257,6 +291,7 @@ function SessionMetadataHeader({ session }: { session: SessionInfo }) {
       >
         {AGENT_LABELS[session.agentType]}
       </Badge>
+      <CopyableSessionId sessionId={session.id} truncate={false} />
       <div className="flex items-center gap-1 text-muted-foreground">
         <Hash className="h-3.5 w-3.5" />
         <span>{session.messageCount} messages</span>
@@ -280,16 +315,35 @@ function SessionDetailView({
   session,
   onBack,
   onResume,
+  onRename,
 }: {
   workspaceName: string
   session: SessionInfo
   onBack: () => void
   onResume: (sessionId: string, agentType: AgentType) => void
+  onRename: (sessionId: string, name: string) => void
 }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(session.name || '')
+
   const { data: sessionDetail, isLoading } = useQuery({
     queryKey: ['session', workspaceName, session.id],
     queryFn: () => api.getSession(workspaceName, session.id),
   })
+
+  const handleSave = () => {
+    if (editName.trim()) {
+      onRename(session.id, editName.trim())
+    }
+    setIsEditing(false)
+  }
+
+  const handleCancel = () => {
+    setEditName(session.name || '')
+    setIsEditing(false)
+  }
+
+  const displayTitle = session.name || session.firstPrompt?.slice(0, 80) || 'Untitled Session'
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -300,10 +354,47 @@ function SessionDetailView({
             Back
           </Button>
           <div className="border-l pl-3">
-            <h2 className="font-semibold text-lg">
-              {session.firstPrompt?.slice(0, 80) || 'Untitled Session'}
-              {(session.firstPrompt?.length || 0) > 80 && '...'}
-            </h2>
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-8 w-64"
+                  placeholder="Session name"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSave()
+                    if (e.key === 'Escape') handleCancel()
+                  }}
+                  data-testid="session-name-input"
+                />
+                <Button variant="ghost" size="sm" onClick={handleSave}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleCancel}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-lg">
+                  {displayTitle}
+                  {!session.name && (session.firstPrompt?.length || 0) > 80 && '...'}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditName(session.name || session.firstPrompt?.slice(0, 80) || '')
+                    setIsEditing(true)
+                  }}
+                  className="h-6 w-6 p-0"
+                  data-testid="rename-session-button"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
             <SessionMetadataHeader session={session} />
           </div>
         </div>
@@ -343,6 +434,7 @@ type ChatMode = { type: 'chat'; sessionId?: string } | { type: 'terminal'; comma
 export function Sessions() {
   const { name: workspaceName } = useParams<{ name: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
   const [chatMode, setChatMode] = useState<ChatMode | null>(null)
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
@@ -364,8 +456,23 @@ export function Sessions() {
     enabled: !!workspaceName && workspace?.status === 'running',
   })
 
+  const renameMutation = useMutation({
+    mutationFn: ({ sessionId, name }: { sessionId: string; name: string }) =>
+      api.renameSession(workspaceName!, sessionId, name),
+    onSuccess: (_, { sessionId, name }) => {
+      queryClient.invalidateQueries({ queryKey: ['sessions', workspaceName] })
+      if (selectedSession?.id === sessionId) {
+        setSelectedSession({ ...selectedSession, name })
+      }
+    },
+  })
+
   const sessions = sessionsData?.sessions || []
   const totalSessions = sessionsData?.total || 0
+
+  const handleRename = (sessionId: string, name: string) => {
+    renameMutation.mutate({ sessionId, name })
+  }
 
   const handleResume = (sessionId: string, agentType: AgentType) => {
     if (agentType === 'claude-code') {
@@ -474,6 +581,7 @@ export function Sessions() {
         session={selectedSession}
         onBack={() => setSelectedSession(null)}
         onResume={handleResume}
+        onRename={handleRename}
       />
     )
   }

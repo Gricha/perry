@@ -16,7 +16,29 @@
 
 ## Tasks
 
-*No remaining tasks.*
+### Sessions UI Redesign
+
+#### Phase 1: Parser Bug Fix
+(Completed - parser fixes and unit tests added)
+
+#### Phase 2: Session Identification
+- [ ] Add Playwright tests for session ID visibility in list and detail views
+- [ ] Add Playwright tests for session rename functionality
+
+#### Phase 3: Sessions List Redesign
+- [ ] Convert sessions from card grid to single-column list layout
+- [ ] Add date groupings (Today, Yesterday, This Week, Older)
+- [ ] Add compact agent indicator badges `[CC]` `[OC]` `[CX]`
+- [ ] Show: session ID, title/first prompt, workspace path, message count, relative time
+- [ ] Add unified sessions view across all workspaces (not just per-workspace)
+- [ ] Add Playwright tests for sessions list layout and grouping
+
+#### Phase 4: Tool Call Intertwining
+- [ ] Refactor Chat message rendering to show tool calls inline (not grouped at top)
+- [ ] Split assistant messages at tool call boundaries into separate bubbles
+- [ ] Add visual grouping (vertical connector line) for messages in same turn
+- [ ] Keep tool call details collapsible but inline
+- [ ] Add Playwright tests for tool call display order and intertwining
 
 ---
 

@@ -32,6 +32,11 @@ interface JsonlMessage {
   role?: string;
   timestamp?: string;
   ts?: number;
+  session_id?: string;
+  cost_usd?: number;
+  num_turns?: number;
+  duration_ms?: number;
+  duration_api_ms?: number;
 }
 
 function extractContent(
@@ -46,13 +51,16 @@ function extractContent(
   return null;
 }
 
-function extractToolMessages(content: Array<ContentPart> | undefined): SessionMessage[] {
-  if (!content || !Array.isArray(content)) return [];
-
+function extractInterleavedContent(content: Array<ContentPart>): SessionMessage[] {
   const messages: SessionMessage[] = [];
 
   for (const part of content) {
-    if (part.type === 'tool_use' && 'name' in part && 'id' in part) {
+    if (part.type === 'text' && 'text' in part && part.text) {
+      messages.push({
+        type: 'assistant',
+        content: part.text,
+      });
+    } else if (part.type === 'tool_use' && 'name' in part && 'id' in part) {
       const toolPart = part as ToolUseContent;
       messages.push({
         type: 'tool_use',
@@ -86,27 +94,67 @@ function parseJsonlLine(line: string): SessionMessage[] {
   try {
     const obj = JSON.parse(line) as JsonlMessage;
     const messages: SessionMessage[] = [];
-    const timestamp = obj.timestamp || (obj.ts ? new Date(obj.ts).toISOString() : undefined);
+    const timestamp = obj.timestamp || (obj.ts ? new Date(obj.ts * 1000).toISOString() : undefined);
 
     if (obj.type === 'user' || obj.role === 'user') {
-      const content = extractContent(obj.content || obj.message?.content);
-      messages.push({
-        type: 'user',
-        content: content || undefined,
-        timestamp,
-      });
-    } else if (obj.type === 'assistant' || obj.role === 'assistant') {
       const rawContent = obj.content || obj.message?.content;
-      const textContent = extractContent(rawContent);
-      if (textContent) {
+      if (Array.isArray(rawContent)) {
+        const hasToolResults = rawContent.some((p) => p.type === 'tool_result');
+        if (hasToolResults) {
+          const interleaved = extractInterleavedContent(rawContent);
+          for (const msg of interleaved) {
+            msg.timestamp = timestamp;
+            messages.push(msg);
+          }
+        } else {
+          const content = extractContent(rawContent);
+          messages.push({
+            type: 'user',
+            content: content || undefined,
+            timestamp,
+          });
+        }
+      } else {
+        const content = extractContent(rawContent);
         messages.push({
-          type: 'assistant',
-          content: textContent,
+          type: 'user',
+          content: content || undefined,
           timestamp,
         });
       }
+    } else if (obj.type === 'assistant' || obj.role === 'assistant') {
+      const rawContent = obj.content || obj.message?.content;
       if (Array.isArray(rawContent)) {
-        messages.push(...extractToolMessages(rawContent));
+        const interleaved = extractInterleavedContent(rawContent);
+        for (const msg of interleaved) {
+          msg.timestamp = timestamp;
+          messages.push(msg);
+        }
+      } else {
+        const textContent = extractContent(rawContent);
+        if (textContent) {
+          messages.push({
+            type: 'assistant',
+            content: textContent,
+            timestamp,
+          });
+        }
+      }
+    } else if (obj.type === 'result') {
+      if (
+        obj.subtype === 'success' ||
+        obj.subtype === 'error_max_turns' ||
+        obj.subtype === 'error_during_execution'
+      ) {
+        const summary =
+          obj.subtype === 'success'
+            ? `Session completed (${obj.num_turns || 0} turns, $${(obj.cost_usd || 0).toFixed(4)})`
+            : `Session ended: ${obj.subtype}`;
+        messages.push({
+          type: 'system',
+          content: summary,
+          timestamp,
+        });
       }
     } else if (obj.type === 'system' && obj.subtype !== 'init') {
       messages.push({

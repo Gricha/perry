@@ -6,6 +6,11 @@ import { getDockerVersion, execInContainer } from '../docker';
 import type { WorkspaceManager } from '../workspace/manager';
 import type { TerminalWebSocketServer } from '../terminal/websocket';
 import { saveAgentConfig } from '../config/loader';
+import {
+  setSessionName,
+  getSessionNamesForWorkspace,
+  deleteSessionName,
+} from '../sessions/metadata';
 
 const WorkspaceStatusSchema = z.enum(['running', 'stopped', 'creating', 'error']);
 
@@ -55,6 +60,7 @@ export interface RouterContext {
   workspaces: WorkspaceManager;
   config: { get: () => AgentConfig; set: (config: AgentConfig) => void };
   configDir: string;
+  stateDir: string;
   startTime: number;
   terminalServer: TerminalWebSocketServer;
 }
@@ -357,6 +363,8 @@ export function createRouter(ctx: RouterContext) {
         }
       }
 
+      const customNames = await getSessionNamesForWorkspace(ctx.stateDir, input.workspaceName);
+
       const sessions = rawSessions
         .filter((s) => !input.agentType || s.agentType === input.agentType)
         .filter((s) => s.messageCount > 0)
@@ -378,7 +386,7 @@ export function createRouter(ctx: RouterContext) {
           }
           return {
             id: s.id,
-            name: s.name || null,
+            name: customNames[s.id] || s.name || null,
             agentType: s.agentType,
             projectPath: s.projectPath,
             messageCount: s.messageCount,
@@ -615,6 +623,31 @@ export function createRouter(ctx: RouterContext) {
       throw new ORPCError('NOT_FOUND', { message: 'Session not found' });
     });
 
+  const renameSession = os
+    .input(
+      z.object({
+        workspaceName: z.string(),
+        sessionId: z.string(),
+        name: z.string().min(1).max(200),
+      })
+    )
+    .handler(async ({ input }) => {
+      await setSessionName(ctx.stateDir, input.workspaceName, input.sessionId, input.name);
+      return { success: true };
+    });
+
+  const clearSessionName = os
+    .input(
+      z.object({
+        workspaceName: z.string(),
+        sessionId: z.string(),
+      })
+    )
+    .handler(async ({ input }) => {
+      await deleteSessionName(ctx.stateDir, input.workspaceName, input.sessionId);
+      return { success: true };
+    });
+
   return {
     workspaces: {
       list: listWorkspaces,
@@ -628,6 +661,8 @@ export function createRouter(ctx: RouterContext) {
     sessions: {
       list: listSessions,
       get: getSession,
+      rename: renameSession,
+      clearName: clearSessionName,
     },
     info: getInfo,
     config: {

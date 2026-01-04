@@ -45,6 +45,7 @@ function createAgentServer(configDir: string, config: AgentConfig) {
       },
     },
     configDir,
+    stateDir: configDir,
     startTime,
     terminalServer,
   });

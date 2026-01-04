@@ -55,6 +55,8 @@ const client = createORPCClient<{
       offset?: number
     }) => Promise<{ sessions: SessionInfo[]; total: number; hasMore: boolean }>
     get: (input: { workspaceName: string; sessionId: string; agentType?: AgentType }) => Promise<SessionDetail>
+    rename: (input: { workspaceName: string; sessionId: string; name: string }) => Promise<{ success: boolean }>
+    clearName: (input: { workspaceName: string; sessionId: string }) => Promise<{ success: boolean }>
   }
   info: () => Promise<InfoResponse>
   config: {
@@ -85,6 +87,10 @@ export const api = {
     client.sessions.list({ workspaceName, agentType, limit, offset }),
   getSession: (workspaceName: string, sessionId: string, agentType?: AgentType) =>
     client.sessions.get({ workspaceName, sessionId, agentType }),
+  renameSession: (workspaceName: string, sessionId: string, name: string) =>
+    client.sessions.rename({ workspaceName, sessionId, name }),
+  clearSessionName: (workspaceName: string, sessionId: string) =>
+    client.sessions.clearName({ workspaceName, sessionId }),
   getInfo: () => client.info(),
   getCredentials: () => client.config.credentials.get(),
   updateCredentials: (data: Credentials) => client.config.credentials.update(data),
