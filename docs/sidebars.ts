@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
         'configuration/overview',
         'configuration/environment',
         'configuration/files',
+        'configuration/github',
         'configuration/ai-agents',
       ],
     },
