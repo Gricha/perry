@@ -16,6 +16,24 @@
 
 ## Tasks
 
+### Credential/File Sync to Existing Workspaces
+
+- [ ] **Add functionality to re-sync files from host to running workspaces**
+  - Currently, credential files (Claude OAuth token, GitHub PAT, SSH keys, etc.) are only copied during workspace creation
+  - When a user updates their host credentials, existing workspaces don't receive the updated files
+  - Need a way to trigger re-sync of configured files from host to container
+  - Potential approaches:
+    - Add a "Sync Files" button in workspace settings UI
+    - Add `workspace sync <name>` CLI command
+    - Automatically sync on workspace start if files have changed (compare mtimes/hashes)
+  - Should sync:
+    - Files configured in Settings > Files (source → dest mappings)
+    - Claude Code credentials (`~/.claude/.credentials.json`)
+    - Codex credentials (`~/.codex/auth.json`, `~/.codex/config.toml`)
+    - GitHub token from agent config (as `GITHUB_TOKEN` env var or gitconfig)
+    - Any custom environment variables from Settings > Environment
+  - Consider showing a "Files outdated" indicator if host files are newer than container copies
+
 ### UI Feedback Round 1
 
 #### Agent Terminal Integration (Research Required)

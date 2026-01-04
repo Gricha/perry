@@ -35,64 +35,91 @@ interface ChatProps {
   onSessionId?: (sessionId: string) => void
 }
 
-function ToolUseBubble({
+function getToolSummary(toolName: string, content: string): string | null {
+  try {
+    const parsed = JSON.parse(content)
+    if (toolName === 'Bash' && parsed.command) {
+      const cmd = parsed.command.length > 60 ? parsed.command.slice(0, 60) + '...' : parsed.command
+      return cmd
+    }
+    if (toolName === 'Read' && parsed.file_path) {
+      return parsed.file_path
+    }
+    if (toolName === 'Write' && parsed.file_path) {
+      return parsed.file_path
+    }
+    if (toolName === 'Edit' && parsed.file_path) {
+      return parsed.file_path
+    }
+    if (toolName === 'Glob' && parsed.pattern) {
+      return parsed.pattern
+    }
+    if (toolName === 'Grep' && parsed.pattern) {
+      return parsed.pattern
+    }
+    if (toolName === 'Task' && parsed.description) {
+      return parsed.description
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function ToolBubble({
   toolName,
-  content
+  input,
+  result
 }: {
   toolName: string
-  content: string
+  input: string
+  result?: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const summary = getToolSummary(toolName, input)
+  const hasResult = result && result.length > 0
 
   return (
     <div className="ml-0">
       <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors w-full"
+          className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors w-full text-left"
         >
           <ChevronDown
-            className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
+            className={cn('h-3 w-3 transition-transform flex-shrink-0', isExpanded && 'rotate-180')}
           />
-          <Wrench className="h-3 w-3" />
-          <span className="font-mono font-medium">{toolName}</span>
+          {hasResult ? (
+            <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Wrench className="h-3 w-3 flex-shrink-0" />
+          )}
+          <span className="font-mono font-medium flex-shrink-0">{toolName}</span>
+          {summary && !isExpanded && (
+            <span className="font-mono text-amber-600/70 dark:text-amber-500/70 truncate">{summary}</span>
+          )}
         </button>
-        {isExpanded && content && (
-          <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50">
-            {content.slice(0, 500)}
-            {content.length > 500 && '... (truncated)'}
-          </pre>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ToolResultBubble({
-  content
-}: {
-  content: string
-}) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  return (
-    <div className="ml-0">
-      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors w-full"
-        >
-          <ChevronDown
-            className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
-          />
-          <CheckCircle2 className="h-3 w-3" />
-          <span className="font-medium">Tool result</span>
-        </button>
-        {isExpanded && content && (
-          <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50 whitespace-pre-wrap">
-            {content.slice(0, 2000)}
-            {content.length > 2000 && '... (truncated)'}
-          </pre>
+        {isExpanded && (
+          <div className="mt-2 space-y-2">
+            {input && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Input</div>
+                <pre className="p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-border/50">
+                  {input.slice(0, 500)}
+                  {input.length > 500 && '... (truncated)'}
+                </pre>
+              </div>
+            )}
+            {hasResult && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Result</div>
+                <pre className="p-2 bg-emerald-500/5 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-emerald-500/20 whitespace-pre-wrap">
+                  {result.slice(0, 1000)}
+                  {result.length > 1000 && '... (truncated)'}
+                </pre>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -115,6 +142,42 @@ function AssistantText({ content }: { content: string }) {
       <Markdown>{content}</Markdown>
     </div>
   )
+}
+
+function renderPartsWithPairedTools(parts: ChatMessagePart[]) {
+  const elements: React.ReactNode[] = []
+  const resultsByToolId = new Map<string, string>()
+
+  for (const part of parts) {
+    if (part.type === 'tool_result' && part.toolId) {
+      resultsByToolId.set(part.toolId, part.content)
+    }
+  }
+
+  const renderedToolIds = new Set<string>()
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    if (part.type === 'text' && part.content) {
+      elements.push(<AssistantText key={i} content={part.content} />)
+    } else if (part.type === 'tool_use') {
+      const toolId = part.toolId || `tool-${i}`
+      if (!renderedToolIds.has(toolId)) {
+        renderedToolIds.add(toolId)
+        const result = part.toolId ? resultsByToolId.get(part.toolId) : undefined
+        elements.push(
+          <ToolBubble
+            key={i}
+            toolName={part.toolName || 'unknown'}
+            input={part.content}
+            result={result}
+          />
+        )
+      }
+    }
+  }
+
+  return elements
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -145,24 +208,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.parts && message.parts.length > 0) {
     return (
       <div className="space-y-3">
-        {message.parts.map((part, idx) => {
-          if (part.type === 'text' && part.content) {
-            return <AssistantText key={idx} content={part.content} />
-          }
-          if (part.type === 'tool_use') {
-            return (
-              <ToolUseBubble
-                key={idx}
-                toolName={part.toolName || 'unknown'}
-                content={part.content}
-              />
-            )
-          }
-          if (part.type === 'tool_result') {
-            return <ToolResultBubble key={idx} content={part.content} />
-          }
-          return null
-        })}
+        {renderPartsWithPairedTools(message.parts)}
       </div>
     )
   }
@@ -175,24 +221,7 @@ function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
 
   return (
     <div className="space-y-3">
-      {parts.map((part, idx) => {
-        if (part.type === 'text' && part.content) {
-          return <AssistantText key={idx} content={part.content} />
-        }
-        if (part.type === 'tool_use') {
-          return (
-            <ToolUseBubble
-              key={idx}
-              toolName={part.toolName || 'unknown'}
-              content={part.content}
-            />
-          )
-        }
-        if (part.type === 'tool_result') {
-          return <ToolResultBubble key={idx} content={part.content} />
-        }
-        return null
-      })}
+      {renderPartsWithPairedTools(parts)}
       {!hasContent && (
         <div className="flex gap-1">
           <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -219,13 +248,55 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
     api.getSession(workspaceName, initialSessionId, 'claude-code')
       .then((detail) => {
         if (detail?.messages) {
-          const historicalMessages: ChatMessage[] = detail.messages
-            .filter(m => m.type === 'user' || m.type === 'assistant')
-            .map(m => ({
-              type: m.type as 'user' | 'assistant',
-              content: m.content || '',
-              timestamp: m.timestamp || new Date().toISOString(),
-            }))
+          const historicalMessages: ChatMessage[] = []
+          let currentAssistantParts: ChatMessagePart[] = []
+
+          const flushAssistantParts = () => {
+            if (currentAssistantParts.length > 0) {
+              const textContent = currentAssistantParts
+                .filter(p => p.type === 'text')
+                .map(p => p.content)
+                .join('')
+              historicalMessages.push({
+                type: 'assistant',
+                content: textContent || '',
+                timestamp: new Date().toISOString(),
+                parts: [...currentAssistantParts],
+              })
+              currentAssistantParts = []
+            }
+          }
+
+          for (const m of detail.messages) {
+            if (m.type === 'user') {
+              flushAssistantParts()
+              historicalMessages.push({
+                type: 'user',
+                content: m.content || '',
+                timestamp: m.timestamp || new Date().toISOString(),
+              })
+            } else if (m.type === 'assistant') {
+              currentAssistantParts.push({
+                type: 'text',
+                content: m.content || '',
+              })
+            } else if (m.type === 'tool_use') {
+              currentAssistantParts.push({
+                type: 'tool_use',
+                content: m.toolInput || '',
+                toolName: m.toolName,
+                toolId: m.toolId,
+              })
+            } else if (m.type === 'tool_result') {
+              currentAssistantParts.push({
+                type: 'tool_result',
+                content: m.content || '',
+                toolId: m.toolId,
+              })
+            }
+          }
+          flushAssistantParts()
+
           setMessages(historicalMessages)
         }
       })

@@ -76,10 +76,10 @@ export function EnvironmentSettings() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-2xl mx-auto">
         <div className="page-header">
-          <h1 className="page-title">Environment Variables</h1>
-          <p className="page-description">Variables injected into all new workspaces</p>
+          <h1 className="page-title">Environment</h1>
+          <p className="page-description">Variables injected into all workspaces</p>
         </div>
         <div className="space-y-2">
           {[1, 2].map((i) => (
@@ -91,10 +91,10 @@ export function EnvironmentSettings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl mx-auto">
       <div className="page-header">
-        <h1 className="page-title">Environment Variables</h1>
-        <p className="page-description">Variables injected into all new workspaces</p>
+        <h1 className="page-title">Environment</h1>
+        <p className="page-description">Variables injected into all workspaces</p>
       </div>
 
       <div>
@@ -123,29 +123,29 @@ export function EnvironmentSettings() {
             <p className="text-xs text-muted-foreground/60 mt-1">Click "Add" to create your first variable</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {envVars.map((env, index) => (
-              <div key={index} className="flex gap-2 items-center group">
+              <div key={index} className="flex flex-col sm:flex-row gap-2 sm:items-center group p-3 sm:p-0 bg-muted/30 sm:bg-transparent rounded-lg sm:rounded-none">
                 <Input
                   type="text"
                   value={env.key}
                   onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
                   placeholder="NAME"
-                  className="flex-1 font-mono text-sm h-9"
+                  className="flex-1 font-mono text-sm h-11 sm:h-9"
                 />
-                <span className="text-muted-foreground/40">=</span>
+                <span className="text-muted-foreground/40 hidden sm:block">=</span>
                 <Input
                   type="password"
                   value={env.value}
                   onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
                   placeholder="value"
-                  className="flex-[2] font-mono text-sm h-9"
+                  className="flex-1 sm:flex-[2] font-mono text-sm h-11 sm:h-9"
                 />
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => removeEnvVar(index)}
-                  className="opacity-40 group-hover:opacity-100 transition-opacity h-9 w-9"
+                  className="self-end sm:self-auto opacity-70 sm:opacity-40 group-hover:opacity-100 transition-opacity h-11 w-11 sm:h-9 sm:w-9"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

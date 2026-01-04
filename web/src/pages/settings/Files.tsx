@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Save, RefreshCw, FileKey, ArrowRight } from 'lucide-react'
+import { Plus, Trash2, Save, RefreshCw, FolderSync, ArrowRight } from 'lucide-react'
 import { api, type Credentials } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,10 +76,10 @@ export function FilesSettings() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-2xl mx-auto">
         <div className="page-header">
-          <h1 className="page-title">Credential Files</h1>
-          <p className="page-description">Files copied into all new workspaces</p>
+          <h1 className="page-title">Files</h1>
+          <p className="page-description">Files synced from host to workspaces</p>
         </div>
         <div className="space-y-2">
           {[1, 2].map((i) => (
@@ -91,10 +91,10 @@ export function FilesSettings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl mx-auto">
       <div className="page-header">
-        <h1 className="page-title">Credential Files</h1>
-        <p className="page-description">Files copied into all new workspaces (e.g., SSH keys)</p>
+        <h1 className="page-title">Files</h1>
+        <p className="page-description">Files synced from host to workspaces (e.g., SSH keys, config files)</p>
       </div>
 
       <div>
@@ -118,34 +118,34 @@ export function FilesSettings() {
 
         {files.length === 0 ? (
           <div className="border border-dashed border-muted-foreground/20 rounded-lg p-8 text-center">
-            <FileKey className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">No credential files configured</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Click "Add" to configure file copying</p>
+            <FolderSync className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">No files configured</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Click "Add" to sync files from host to workspaces</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {files.map((file, index) => (
-              <div key={index} className="flex gap-2 items-center group">
+              <div key={index} className="flex flex-col sm:flex-row gap-2 sm:items-center group p-3 sm:p-0 bg-muted/30 sm:bg-transparent rounded-lg sm:rounded-none">
                 <Input
                   type="text"
                   value={file.source}
                   onChange={(e) => updateFile(index, 'source', e.target.value)}
                   placeholder="~/.ssh/id_rsa (source)"
-                  className="flex-1 font-mono text-sm h-9"
+                  className="flex-1 font-mono text-sm h-11 sm:h-9"
                 />
-                <ArrowRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0 rotate-90 sm:rotate-0 self-center" />
                 <Input
                   type="text"
                   value={file.dest}
                   onChange={(e) => updateFile(index, 'dest', e.target.value)}
                   placeholder="~/.ssh/id_rsa (dest)"
-                  className="flex-1 font-mono text-sm h-9"
+                  className="flex-1 font-mono text-sm h-11 sm:h-9"
                 />
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => removeFile(index)}
-                  className="opacity-40 group-hover:opacity-100 transition-opacity h-9 w-9"
+                  className="self-end sm:self-auto opacity-70 sm:opacity-40 group-hover:opacity-100 transition-opacity h-11 w-11 sm:h-9 sm:w-9"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

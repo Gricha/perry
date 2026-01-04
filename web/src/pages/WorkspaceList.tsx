@@ -204,85 +204,152 @@ export function WorkspaceList() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Repository</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workspaces?.map((ws: WorkspaceInfo) => (
-                  <TableRow
-                    key={ws.name}
-                    data-testid="workspace-row"
-                    className="cursor-pointer"
-                    onClick={() => handleRowClick(ws)}
+        <>
+          {/* Mobile: Card layout */}
+          <div className="md:hidden space-y-3">
+            {workspaces?.map((ws: WorkspaceInfo) => (
+              <Card
+                key={ws.name}
+                data-testid="workspace-row"
+                className="cursor-pointer hover:bg-accent/50 transition-colors"
+                onClick={() => handleRowClick(ws)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium truncate">{ws.name}</span>
+                    <Badge variant={
+                      ws.status === 'running' ? 'success' :
+                      ws.status === 'error' ? 'destructive' : 'muted'
+                    }>
+                      {ws.status}
+                    </Badge>
+                  </div>
+                  {ws.repo && (
+                    <p className="text-sm text-muted-foreground truncate mb-3">{ws.repo}</p>
+                  )}
+                  <div
+                    className="flex gap-2 justify-end pt-2 border-t border-border/50"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <TableCell className="font-medium">{ws.name}</TableCell>
-                    <TableCell>
-                      <Badge variant={ws.status === 'running' ? 'success' : 'muted'}>
-                        {ws.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-xs truncate">
-                      {ws.repo || '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div
-                        className="flex items-center justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
+                    {ws.status === 'running' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => stopMutation.mutate(ws.name)}
+                        disabled={stopMutation.isPending}
                       >
-                        {ws.status === 'running' ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => stopMutation.mutate(ws.name)}
-                            disabled={stopMutation.isPending}
-                            title="Stop workspace"
-                          >
-                            <Square className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => startMutation.mutate(ws.name)}
-                            disabled={startMutation.isPending}
-                            title="Start workspace"
-                          >
-                            <Play className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => navigate(`/workspaces/${ws.name}`)}
-                          title="Workspace settings"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteClick(ws.name)}
-                          disabled={deleteMutation.isPending}
-                          title="Delete workspace"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                        <Square className="h-4 w-4 mr-1.5" />
+                        Stop
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startMutation.mutate(ws.name)}
+                        disabled={startMutation.isPending}
+                      >
+                        <Play className="h-4 w-4 mr-1.5" />
+                        Start
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteClick(ws.name)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: Table layout */}
+          <Card className="hidden md:block">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Repository</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {workspaces?.map((ws: WorkspaceInfo) => (
+                    <TableRow
+                      key={ws.name}
+                      data-testid="workspace-row"
+                      className="cursor-pointer"
+                      onClick={() => handleRowClick(ws)}
+                    >
+                      <TableCell className="font-medium">{ws.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          ws.status === 'running' ? 'success' :
+                          ws.status === 'error' ? 'destructive' : 'muted'
+                        }>
+                          {ws.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground max-w-xs truncate">
+                        {ws.repo || '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div
+                          className="flex items-center justify-end gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {ws.status === 'running' ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => stopMutation.mutate(ws.name)}
+                              disabled={stopMutation.isPending}
+                              title="Stop workspace"
+                            >
+                              <Square className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startMutation.mutate(ws.name)}
+                              disabled={startMutation.isPending}
+                              title="Start workspace"
+                            >
+                              <Play className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => navigate(`/workspaces/${ws.name}`)}
+                            title="Workspace settings"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteClick(ws.name)}
+                            disabled={deleteMutation.isPending}
+                            title="Delete workspace"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && handleDeleteCancel()}>

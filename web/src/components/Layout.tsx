@@ -6,9 +6,8 @@ import { Boxes } from 'lucide-react'
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
-
-  const isWideLayout = location.pathname.includes('/sessions')
   const isTerminalView = location.search.includes('terminal=true')
+  const isWorkspaceDetail = /^\/workspaces\/[^/]+$/.test(location.pathname)
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -25,13 +24,11 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <main className="flex-1 overflow-hidden flex flex-col">
           <div className={
-            isTerminalView
-              ? "flex-1 flex flex-col p-2"
-              : isWideLayout
-                ? "px-6 py-8"
-                : "mx-auto max-w-3xl px-6 py-8"
+            isTerminalView || isWorkspaceDetail
+              ? "flex-1 flex flex-col h-full"
+              : "flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 w-full"
           }>
             <Outlet />
           </div>

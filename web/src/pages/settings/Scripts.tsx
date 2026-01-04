@@ -55,7 +55,7 @@ export function ScriptsSettings() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-2xl mx-auto">
         <div className="page-header">
           <h1 className="page-title">Scripts</h1>
           <p className="page-description">Custom scripts executed during workspace lifecycle</p>
@@ -66,7 +66,7 @@ export function ScriptsSettings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl mx-auto">
       <div className="page-header">
         <h1 className="page-title">Scripts</h1>
         <p className="page-description">Custom scripts executed during workspace lifecycle</p>
@@ -94,7 +94,7 @@ export function ScriptsSettings() {
               setHasChanges(true)
             }}
             placeholder="~/scripts/post-start.sh"
-            className="font-mono text-sm h-9"
+            className="font-mono text-sm h-11 sm:h-9"
           />
           <p className="text-xs text-muted-foreground">
             Path to script on worker machine. Executed after each workspace starts as the workspace user.

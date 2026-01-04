@@ -15,7 +15,7 @@ test.describe('Web UI', () => {
 
   test('can navigate to settings', async ({ agent, page }) => {
     await page.goto(`http://127.0.0.1:${agent.port}/settings`);
-    await expect(page.locator('h1')).toContainText('Settings', { timeout: 15000 });
+    await expect(page.locator('h1')).toContainText('Environment', { timeout: 15000 });
   });
 });
 
@@ -38,7 +38,8 @@ test.describe('Web UI - Workspace Operations', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}`);
-      await expect(page.locator('h1')).toContainText(workspaceName, { timeout: 30000 });
+      await expect(page.getByText(workspaceName).first()).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('button', { name: /sessions/i })).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -63,7 +64,7 @@ test.describe('Web UI - Workspace Operations', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}`);
-      await expect(page.locator('h1')).toContainText(workspaceName, { timeout: 30000 });
+      await expect(page.getByText(workspaceName).first()).toBeVisible({ timeout: 30000 });
 
       const stopButton = page.getByRole('button', { name: /stop/i });
       await stopButton.click();
@@ -98,16 +99,16 @@ test.describe('Web UI - Settings Pages', () => {
 });
 
 test.describe('Web UI - Terminal', () => {
-  test('can open terminal and type commands', async ({ agent, page }) => {
+  test('can open terminal tab and type commands', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}`);
-      await expect(page.locator('h1')).toContainText(workspaceName, { timeout: 30000 });
+      await expect(page.getByText(workspaceName).first()).toBeVisible({ timeout: 30000 });
 
-      const terminalButton = page.getByRole('button', { name: /terminal/i });
-      await terminalButton.click();
+      const terminalTab = page.getByRole('button', { name: /terminal/i });
+      await terminalTab.click();
 
       const terminalScreen = page.locator('[data-testid="terminal-screen"]');
       await expect(terminalScreen).toBeVisible({ timeout: 15000 });
@@ -127,26 +128,20 @@ test.describe('Web UI - Terminal', () => {
     }
   }, 120000);
 
-  test('can navigate directly to terminal via URL param', async ({ agent, page }) => {
+  test('can navigate directly to terminal via tab param', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?terminal=true`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=terminal`);
 
       const terminalScreen = page.locator('[data-testid="terminal-screen"]');
       await expect(terminalScreen).toBeVisible({ timeout: 15000 });
 
-      const terminalContainer = page.locator('[data-testid="terminal-container"]');
-      await expect(terminalContainer).toBeVisible();
+      const sessionsTab = page.getByRole('button', { name: /sessions/i });
+      await sessionsTab.click();
 
-      const backButton = page.getByRole('button', { name: /back/i });
-      await expect(backButton).toBeVisible();
-
-      await backButton.click();
-
-      await expect(page.locator('h1')).toContainText(workspaceName, { timeout: 10000 });
-      expect(page.url()).not.toContain('terminal=true');
+      await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 10000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -154,7 +149,7 @@ test.describe('Web UI - Terminal', () => {
 });
 
 test.describe('Web UI - Sessions', () => {
-  test('sessions page shows workspace not running message when stopped', async ({
+  test('workspace shows stopped state message when not running', async ({
     agent,
     page,
   }) => {
@@ -163,31 +158,31 @@ test.describe('Web UI - Sessions', () => {
     await agent.api.stopWorkspace(workspaceName);
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
-      await expect(page.getByText('Workspace is not running')).toBeVisible({ timeout: 30000 });
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}`);
+      await expect(page.getByText('Workspace is stopped')).toBeVisible({ timeout: 30000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('sessions page loads for running workspace', async ({ agent, page }) => {
+  test('sessions tab loads for running workspace', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
-      await expect(page.locator('h1')).toContainText('Sessions', { timeout: 30000 });
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
+      await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 30000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('sessions page has agent filter dropdown', async ({ agent, page }) => {
+  test('sessions tab has agent filter dropdown', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
       await expect(page.getByRole('button', { name: /all agents/i })).toBeVisible({
         timeout: 30000,
       });
@@ -196,12 +191,12 @@ test.describe('Web UI - Sessions', () => {
     }
   }, 120000);
 
-  test('sessions page has new chat dropdown', async ({ agent, page }) => {
+  test('sessions tab has new chat dropdown', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
       await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 30000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
@@ -224,7 +219,7 @@ test.describe('Web UI - Sessions', () => {
     );
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
       const sessionItem = page
         .getByTestId('session-list-item')
         .filter({ hasText: 'Hello from test' })
@@ -259,7 +254,7 @@ test.describe('Web UI - Sessions', () => {
     );
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
       const sessionItem = page
         .getByTestId('session-list-item')
         .filter({ hasText: 'What is 2+2?' })
@@ -282,7 +277,7 @@ test.describe('Web UI - Sessions', () => {
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
-      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}/sessions`);
+      await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
 
       await page.getByRole('button', { name: /new chat/i }).click();
       await page.getByText('Claude Code').first().click();

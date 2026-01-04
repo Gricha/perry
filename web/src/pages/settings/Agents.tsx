@@ -98,9 +98,9 @@ export function AgentsSettings() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-2xl mx-auto">
         <div className="page-header">
-          <h1 className="page-title">Coding Agents</h1>
+          <h1 className="page-title">Configuration</h1>
           <p className="page-description">Configure AI assistants for your workspaces</p>
         </div>
         <div className="space-y-4">
@@ -119,9 +119,9 @@ export function AgentsSettings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl mx-auto">
       <div className="page-header">
-        <h1 className="page-title">Coding Agents</h1>
+        <h1 className="page-title">Configuration</h1>
         <p className="page-description">Configure AI assistants for your workspaces</p>
       </div>
 
@@ -143,7 +143,7 @@ export function AgentsSettings() {
               OpenAI-compatible API for AI-assisted coding. Injected as <code className="text-xs bg-secondary px-1 py-0.5 rounded">OPENAI_API_KEY</code> and <code className="text-xs bg-secondary px-1 py-0.5 rounded">OPENAI_BASE_URL</code>
             </p>
             <div className="space-y-2 mt-2">
-              <div className="agent-input flex gap-2">
+              <div className="agent-input">
                 <Input
                   type="password"
                   value={openaiKey}
@@ -152,10 +152,10 @@ export function AgentsSettings() {
                     setOpenaiHasChanges(true)
                   }}
                   placeholder="sk-... (API key)"
-                  className="flex-1 font-mono text-sm h-9"
+                  className="w-full font-mono text-sm h-11 sm:h-9"
                 />
               </div>
-              <div className="agent-input flex gap-2">
+              <div className="agent-input flex flex-col sm:flex-row gap-2">
                 <Input
                   type="text"
                   value={openaiBaseUrl}
@@ -163,14 +163,14 @@ export function AgentsSettings() {
                     setOpenaiBaseUrl(e.target.value)
                     setOpenaiHasChanges(true)
                   }}
-                  placeholder="https://api.openai.com/v1 (optional, for other providers)"
-                  className="flex-1 font-mono text-sm h-9"
+                  placeholder="https://api.openai.com/v1 (optional)"
+                  className="flex-1 font-mono text-sm h-11 sm:h-9"
                 />
                 <Button
                   onClick={handleSaveOpenai}
                   disabled={mutation.isPending || !openaiHasChanges}
                   size="sm"
-                  className="h-9"
+                  className="h-11 sm:h-9"
                 >
                   <Save className="mr-1.5 h-3.5 w-3.5" />
                   Save
@@ -193,7 +193,7 @@ export function AgentsSettings() {
             <p className="agent-description">
               OAuth token for headless operation. Run <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code> locally to generate.
             </p>
-            <div className="agent-input flex gap-2 mt-2">
+            <div className="agent-input flex flex-col sm:flex-row gap-2 mt-2">
               <Input
                 type="password"
                 value={claudeOAuthToken}
@@ -202,13 +202,13 @@ export function AgentsSettings() {
                   setClaudeHasChanges(true)
                 }}
                 placeholder="sk-ant-oat01-... (OAuth token)"
-                className="flex-1 font-mono text-sm h-9"
+                className="flex-1 font-mono text-sm h-11 sm:h-9"
               />
               <Button
                 onClick={handleSaveClaude}
                 disabled={mutation.isPending || !claudeHasChanges}
                 size="sm"
-                className="h-9"
+                className="h-11 sm:h-9"
               >
                 <Save className="mr-1.5 h-3.5 w-3.5" />
                 Save
@@ -247,7 +247,7 @@ export function AgentsSettings() {
             <p className="text-xs text-muted-foreground mt-1">
               Use a fine-grained PAT with repository access permissions.
             </p>
-            <div className="agent-input flex gap-2">
+            <div className="agent-input flex flex-col sm:flex-row gap-2">
               <Input
                 type="password"
                 value={githubToken}
@@ -256,13 +256,13 @@ export function AgentsSettings() {
                   setGithubHasChanges(true)
                 }}
                 placeholder="ghp_..."
-                className="flex-1 font-mono text-sm h-9"
+                className="flex-1 font-mono text-sm h-11 sm:h-9"
               />
               <Button
                 onClick={handleSaveGithub}
                 disabled={mutation.isPending || !githubHasChanges}
                 size="sm"
-                className="h-9"
+                className="h-11 sm:h-9"
               >
                 <Save className="mr-1.5 h-3.5 w-3.5" />
                 Save

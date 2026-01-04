@@ -5,14 +5,15 @@ import {
   X,
   Boxes,
   KeyRound,
-  FileKey,
+  FolderSync,
   Terminal,
-  Cpu,
+  Settings,
   MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 interface SidebarProps {
   isOpen: boolean
@@ -29,8 +30,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   const settingsLinks = [
     { to: '/settings/environment', label: 'Environment', icon: KeyRound },
-    { to: '/settings/agents', label: 'Coding Agents', icon: Cpu },
-    { to: '/settings/files', label: 'Credential Files', icon: FileKey },
+    { to: '/settings/agents', label: 'Configuration', icon: Settings },
+    { to: '/settings/files', label: 'Files', icon: FolderSync },
     { to: '/settings/scripts', label: 'Scripts', icon: Terminal },
   ]
 
@@ -76,7 +77,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 <Link
                   to="/workspaces"
                   className={cn(
-                    'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                    'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
                     location.pathname === '/workspaces' && 'nav-active'
                   )}
                   onClick={() => isOpen && onToggle()}
@@ -87,7 +88,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 <Link
                   to="/sessions"
                   className={cn(
-                    'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                    'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
                     location.pathname === '/sessions' && 'nav-active'
                   )}
                   onClick={() => isOpen && onToggle()}
@@ -100,7 +101,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     key={ws.name}
                     to={`/workspaces/${ws.name}`}
                     className={cn(
-                      'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent group',
+                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
                       (location.pathname === `/workspaces/${ws.name}` ||
                         location.pathname.startsWith(`/workspaces/${ws.name}/`)) && 'nav-active'
                     )}
@@ -131,7 +132,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     key={link.to}
                     to={link.to}
                     className={cn(
-                      'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
                       location.pathname === link.to && 'nav-active'
                     )}
                     onClick={() => isOpen && onToggle()}
@@ -145,8 +146,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </div>
         </nav>
 
-        <div className="border-t p-3 flex-shrink-0">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+        <div className="border-t p-3 flex-shrink-0 space-y-2">
+          <div className="section-header">Appearance</div>
+          <ThemeSwitcher />
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider pt-2">
             Workspace v0.1.0
           </div>
         </div>

@@ -146,42 +146,25 @@ export class WorkspaceManager {
   }
 
   private async setupClaudeCodeConfig(containerName: string): Promise<void> {
-    const localClaudeConfig = expandPath('~/.claude.json');
     const localClaudeCredentials = expandPath('~/.claude/.credentials.json');
 
+    const configContent = JSON.stringify({ hasCompletedOnboarding: true });
+    const tempFile = path.join(os.tmpdir(), `ws-claude-config-${Date.now()}.json`);
     try {
-      await fs.access(localClaudeConfig);
-      await copyCredentialToContainer({
-        source: '~/.claude.json',
-        dest: '/home/workspace/.claude.json',
+      await fs.writeFile(tempFile, configContent);
+      await docker.copyToContainer(containerName, tempFile, '/home/workspace/.claude.json');
+      await docker.execInContainer(
         containerName,
-        filePermissions: '644',
-        tempPrefix: 'ws-claude-config',
-      });
-    } catch {
-      const oauthToken = this.config.agents?.claude_code?.oauth_token;
-      if (oauthToken) {
-        const configContent = JSON.stringify({ hasCompletedOnboarding: true });
-        const tempFile = path.join(os.tmpdir(), `ws-claude-config-${Date.now()}.json`);
-        try {
-          await fs.writeFile(tempFile, configContent);
-          await docker.copyToContainer(containerName, tempFile, '/home/workspace/.claude.json');
-          await docker.execInContainer(
-            containerName,
-            ['chown', 'workspace:workspace', '/home/workspace/.claude.json'],
-            { user: 'root' }
-          );
-          await docker.execInContainer(
-            containerName,
-            ['chmod', '644', '/home/workspace/.claude.json'],
-            {
-              user: 'workspace',
-            }
-          );
-        } finally {
-          await fs.unlink(tempFile).catch(() => {});
-        }
-      }
+        ['chown', 'workspace:workspace', '/home/workspace/.claude.json'],
+        { user: 'root' }
+      );
+      await docker.execInContainer(
+        containerName,
+        ['chmod', '644', '/home/workspace/.claude.json'],
+        { user: 'workspace' }
+      );
+    } finally {
+      await fs.unlink(tempFile).catch(() => {});
     }
 
     try {
@@ -204,11 +187,43 @@ export class WorkspaceManager {
   }
 
   private async copyCodexCredentials(containerName: string): Promise<void> {
-    await copyCredentialToContainer({
-      source: '~/.codex',
-      dest: '/home/workspace/.codex',
+    const codexDir = expandPath('~/.codex');
+    try {
+      await fs.access(codexDir);
+    } catch {
+      return;
+    }
+
+    await docker.execInContainer(
       containerName,
-      tempPrefix: 'ws-codex',
+      ['mkdir', '-p', '/home/workspace/.codex'],
+      { user: 'workspace' }
+    );
+
+    await copyCredentialToContainer({
+      source: '~/.codex/auth.json',
+      dest: '/home/workspace/.codex/auth.json',
+      containerName,
+      filePermissions: '600',
+      tempPrefix: 'ws-codex-auth',
+    });
+
+    await copyCredentialToContainer({
+      source: '~/.codex/config.toml',
+      dest: '/home/workspace/.codex/config.toml',
+      containerName,
+      filePermissions: '600',
+      tempPrefix: 'ws-codex-config',
+    });
+  }
+
+  private async copyGitConfig(containerName: string): Promise<void> {
+    await copyCredentialToContainer({
+      source: '~/.gitconfig',
+      dest: '/home/workspace/.gitconfig',
+      containerName,
+      filePermissions: '644',
+      tempPrefix: 'ws-gitconfig',
     });
   }
 
@@ -243,12 +258,21 @@ export class WorkspaceManager {
 
   private async syncWorkspaceStatus(workspace: Workspace): Promise<void> {
     const containerName = getContainerName(workspace.name);
+
+    const exists = await docker.containerExists(containerName);
+    if (!exists) {
+      if (workspace.status !== 'error') {
+        workspace.status = 'error';
+        await this.state.setWorkspace(workspace);
+      }
+      return;
+    }
+
     const running = await docker.containerRunning(containerName);
     const newStatus = running ? 'running' : 'stopped';
     if (
       workspace.status !== newStatus &&
-      workspace.status !== 'creating' &&
-      workspace.status !== 'error'
+      workspace.status !== 'creating'
     ) {
       workspace.status = newStatus;
       await this.state.setWorkspace(workspace);
@@ -355,6 +379,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(containerName);
 
+      await this.copyGitConfig(containerName);
       await this.copyCredentialFiles(containerName);
       await this.setupClaudeCodeConfig(containerName);
       await this.copyCodexCredentials(containerName);
@@ -379,18 +404,71 @@ export class WorkspaceManager {
     }
 
     const containerName = getContainerName(name);
+    const volumeName = `${VOLUME_PREFIX}${name}`;
     const exists = await docker.containerExists(containerName);
+
     if (!exists) {
-      throw new Error(`Container for workspace '${name}' not found`);
+      const volumeExists = await docker.volumeExists(volumeName);
+      if (!volumeExists) {
+        throw new Error(
+          `Container and volume for workspace '${name}' were deleted. ` +
+            `Please delete this workspace and create a new one.`
+        );
+      }
+
+      const sshPort = await findAvailablePort(SSH_PORT_RANGE_START, SSH_PORT_RANGE_END);
+
+      const containerEnv: Record<string, string> = {
+        ...this.config.credentials.env,
+      };
+
+      if (this.config.agents?.opencode?.api_key) {
+        containerEnv.OPENAI_API_KEY = this.config.agents.opencode.api_key;
+      }
+      if (this.config.agents?.opencode?.api_base_url) {
+        containerEnv.OPENAI_BASE_URL = this.config.agents.opencode.api_base_url;
+      }
+      if (this.config.agents?.github?.token) {
+        containerEnv.GITHUB_TOKEN = this.config.agents.github.token;
+      }
+      if (this.config.agents?.claude_code?.oauth_token) {
+        containerEnv.CLAUDE_CODE_OAUTH_TOKEN = this.config.agents.claude_code.oauth_token;
+      }
+
+      if (workspace.repo) {
+        containerEnv.WORKSPACE_REPO_URL = workspace.repo;
+      }
+
+      const containerId = await docker.createContainer({
+        name: containerName,
+        image: WORKSPACE_IMAGE,
+        hostname: name,
+        privileged: true,
+        restartPolicy: 'unless-stopped',
+        env: containerEnv,
+        volumes: [{ source: volumeName, target: '/home/workspace', readonly: false }],
+        ports: [{ hostPort: sshPort, containerPort: 22, protocol: 'tcp' }],
+        labels: {
+          'workspace.name': name,
+          'workspace.managed': 'true',
+        },
+      });
+
+      workspace.containerId = containerId;
+      workspace.ports.ssh = sshPort;
+      await this.state.setWorkspace(workspace);
     }
 
     const running = await docker.containerRunning(containerName);
     if (running) {
+      workspace.status = 'running';
+      await this.state.setWorkspace(workspace);
       return workspace;
     }
 
     await docker.startContainer(containerName);
 
+    await this.copyGitConfig(containerName);
     await this.copyCredentialFiles(containerName);
     await this.setupClaudeCodeConfig(containerName);
     await this.copyCodexCredentials(containerName);
