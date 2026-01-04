@@ -16,12 +16,7 @@
 
 ## Tasks
 
-### Test Infrastructure Fixes
-
-#### Nice to Have
-
-- [ ] Mock Claude API responses in chat integration tests to avoid real API calls
-- [ ] Use unique run ID in container names for parallel test safety
+*No remaining tasks.*
 
 ---
 
@@ -53,6 +48,13 @@ DESIGN.md mentions `ws agent install` for systemd service installation. Not curr
 ws agent install
 systemctl start workspace-agent
 ```
+
+### Mock Claude API in Chat Tests
+
+Consider adding MSW (Mock Service Worker) or similar to mock Claude API responses in chat integration tests. This would:
+- Avoid requiring real API keys in CI
+- Make tests faster and more reliable
+- Allow testing of specific response scenarios
 
 ### Large File Refactoring
 
