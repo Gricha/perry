@@ -3,3 +3,4 @@ flows:
   - navigation.yaml
   - settings.yaml
   - workspace-actions.yaml
+  - session-filter.yaml

@@ -12,7 +12,8 @@ import {
   Platform,
 } from 'react-native'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, CodingAgents, getBaseUrl, setBaseUrl, refreshClient } from '../lib/api'
+import { api, CodingAgents, Credentials, Scripts, getBaseUrl, setBaseUrl, refreshClient } from '../lib/api'
+import { useNetwork, parseNetworkError } from '../lib/network'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -86,7 +87,7 @@ function AgentsSettings() {
       Alert.alert('Success', 'Settings saved')
     },
     onError: (err) => {
-      Alert.alert('Error', (err as Error).message)
+      Alert.alert('Error', parseNetworkError(err))
     },
   })
 
@@ -172,6 +173,333 @@ function AgentsSettings() {
   )
 }
 
+function EnvironmentSettings() {
+  const queryClient = useQueryClient()
+
+  const { data: credentials, isLoading } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: api.getCredentials,
+  })
+
+  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([])
+  const [hasChanges, setHasChanges] = useState(false)
+  const [initialized, setInitialized] = useState(false)
+
+  useEffect(() => {
+    if (credentials && !initialized) {
+      const entries = Object.entries(credentials.env || {}).map(([key, value]) => ({ key, value }))
+      setEnvVars(entries.length > 0 ? entries : [{ key: '', value: '' }])
+      setInitialized(true)
+    }
+  }, [credentials, initialized])
+
+  const mutation = useMutation({
+    mutationFn: (data: Credentials) => api.updateCredentials(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credentials'] })
+      setHasChanges(false)
+      Alert.alert('Success', 'Environment variables saved')
+    },
+    onError: (err) => {
+      Alert.alert('Error', parseNetworkError(err))
+    },
+  })
+
+  const handleAddVar = () => {
+    setEnvVars([...envVars, { key: '', value: '' }])
+    setHasChanges(true)
+  }
+
+  const handleRemoveVar = (index: number) => {
+    setEnvVars(envVars.filter((_, i) => i !== index))
+    setHasChanges(true)
+  }
+
+  const handleUpdateVar = (index: number, field: 'key' | 'value', text: string) => {
+    const newVars = [...envVars]
+    newVars[index][field] = text
+    setEnvVars(newVars)
+    setHasChanges(true)
+  }
+
+  const handleSave = () => {
+    const env: Record<string, string> = {}
+    envVars.forEach(({ key, value }) => {
+      if (key.trim()) {
+        env[key.trim()] = value
+      }
+    })
+    mutation.mutate({
+      env,
+      files: credentials?.files || {},
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#0a84ff" />
+      </View>
+    )
+  }
+
+  return (
+    <Section title="Environment Variables">
+      <View style={styles.agentCard}>
+        <Text style={styles.agentDescription}>
+          Environment variables injected into all workspaces
+        </Text>
+        {envVars.map((envVar, index) => (
+          <View key={index} style={styles.envVarRow}>
+            <TextInput
+              style={[styles.input, styles.envKeyInput]}
+              value={envVar.key}
+              onChangeText={(t) => handleUpdateVar(index, 'key', t)}
+              placeholder="NAME"
+              placeholderTextColor="#666"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <TextInput
+              style={[styles.input, styles.envValueInput]}
+              value={envVar.value}
+              onChangeText={(t) => handleUpdateVar(index, 'value', t)}
+              placeholder="value"
+              placeholderTextColor="#666"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={() => handleRemoveVar(index)}
+            >
+              <Text style={styles.removeButtonText}>-</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addButton} onPress={handleAddVar}>
+          <Text style={styles.addButtonText}>+ Add Variable</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={!hasChanges || mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Section>
+  )
+}
+
+function FilesSettings() {
+  const queryClient = useQueryClient()
+
+  const { data: credentials, isLoading } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: api.getCredentials,
+  })
+
+  const [fileMappings, setFileMappings] = useState<Array<{ source: string; dest: string }>>([])
+  const [hasChanges, setHasChanges] = useState(false)
+  const [initialized, setInitialized] = useState(false)
+
+  useEffect(() => {
+    if (credentials && !initialized) {
+      const entries = Object.entries(credentials.files || {}).map(([dest, source]) => ({
+        source: source as string,
+        dest,
+      }))
+      setFileMappings(entries.length > 0 ? entries : [{ source: '', dest: '' }])
+      setInitialized(true)
+    }
+  }, [credentials, initialized])
+
+  const mutation = useMutation({
+    mutationFn: (data: Credentials) => api.updateCredentials(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credentials'] })
+      setHasChanges(false)
+      Alert.alert('Success', 'File mappings saved')
+    },
+    onError: (err) => {
+      Alert.alert('Error', parseNetworkError(err))
+    },
+  })
+
+  const handleAddMapping = () => {
+    setFileMappings([...fileMappings, { source: '', dest: '' }])
+    setHasChanges(true)
+  }
+
+  const handleRemoveMapping = (index: number) => {
+    setFileMappings(fileMappings.filter((_, i) => i !== index))
+    setHasChanges(true)
+  }
+
+  const handleUpdateMapping = (index: number, field: 'source' | 'dest', text: string) => {
+    const newMappings = [...fileMappings]
+    newMappings[index][field] = text
+    setFileMappings(newMappings)
+    setHasChanges(true)
+  }
+
+  const handleSave = () => {
+    const files: Record<string, string> = {}
+    fileMappings.forEach(({ source, dest }) => {
+      if (dest.trim() && source.trim()) {
+        files[dest.trim()] = source.trim()
+      }
+    })
+    mutation.mutate({
+      env: credentials?.env || {},
+      files,
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#0a84ff" />
+      </View>
+    )
+  }
+
+  return (
+    <Section title="File Mappings">
+      <View style={styles.agentCard}>
+        <Text style={styles.agentDescription}>
+          Copy files from host to workspace (e.g., SSH keys, configs)
+        </Text>
+        {fileMappings.map((mapping, index) => (
+          <View key={index} style={styles.fileMappingRow}>
+            <View style={styles.fileMappingInputs}>
+              <TextInput
+                style={[styles.input, styles.fileInput]}
+                value={mapping.source}
+                onChangeText={(t) => handleUpdateMapping(index, 'source', t)}
+                placeholder="~/.ssh/id_rsa"
+                placeholderTextColor="#666"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.arrowText}>{'->'}</Text>
+              <TextInput
+                style={[styles.input, styles.fileInput]}
+                value={mapping.dest}
+                onChangeText={(t) => handleUpdateMapping(index, 'dest', t)}
+                placeholder="~/.ssh/id_rsa"
+                placeholderTextColor="#666"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={() => handleRemoveMapping(index)}
+            >
+              <Text style={styles.removeButtonText}>-</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addButton} onPress={handleAddMapping}>
+          <Text style={styles.addButtonText}>+ Add Mapping</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={!hasChanges || mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Section>
+  )
+}
+
+function ScriptsSettings() {
+  const queryClient = useQueryClient()
+
+  const { data: scripts, isLoading } = useQuery({
+    queryKey: ['scripts'],
+    queryFn: api.getScripts,
+  })
+
+  const [postStartScript, setPostStartScript] = useState('')
+  const [hasChanges, setHasChanges] = useState(false)
+  const [initialized, setInitialized] = useState(false)
+
+  useEffect(() => {
+    if (scripts && !initialized) {
+      setPostStartScript(scripts.post_start || '')
+      setInitialized(true)
+    }
+  }, [scripts, initialized])
+
+  const mutation = useMutation({
+    mutationFn: (data: Scripts) => api.updateScripts(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scripts'] })
+      setHasChanges(false)
+      Alert.alert('Success', 'Scripts saved')
+    },
+    onError: (err) => {
+      Alert.alert('Error', parseNetworkError(err))
+    },
+  })
+
+  const handleSave = () => {
+    mutation.mutate({
+      post_start: postStartScript.trim() || undefined,
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#0a84ff" />
+      </View>
+    )
+  }
+
+  return (
+    <Section title="Scripts">
+      <View style={styles.agentCard}>
+        <Text style={styles.agentName}>Post-Start Script</Text>
+        <Text style={styles.agentDescription}>
+          Executed after each workspace starts as the workspace user
+        </Text>
+        <SettingRow
+          label="Script Path"
+          value={postStartScript}
+          placeholder="~/scripts/post-start.sh"
+          onChangeText={(t) => { setPostStartScript(t); setHasChanges(true) }}
+        />
+        <TouchableOpacity
+          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={!hasChanges || mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Section>
+  )
+}
+
 function ConnectionSettings() {
   const [serverUrl, setServerUrl] = useState(getBaseUrl())
   const [hasChanges, setHasChanges] = useState(false)
@@ -209,18 +537,21 @@ function ConnectionSettings() {
 }
 
 function AboutSection() {
+  const { status, serverHostname, checkConnection } = useNetwork()
   const { data: info, isLoading } = useQuery({
     queryKey: ['info'],
     queryFn: api.getInfo,
     retry: false,
   })
 
+  const isConnected = status === 'connected'
+
   return (
     <Section title="About">
       <View style={styles.aboutCard}>
-        {isLoading ? (
+        {isLoading && status === 'connecting' ? (
           <ActivityIndicator size="small" color="#0a84ff" />
-        ) : info ? (
+        ) : isConnected && info ? (
           <>
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Host</Text>
@@ -238,9 +569,29 @@ function AboutSection() {
               <Text style={styles.aboutLabel}>Uptime</Text>
               <Text style={styles.aboutValue}>{formatUptime(info.uptime)}</Text>
             </View>
+            <View style={[styles.aboutRow, styles.statusRow]}>
+              <Text style={styles.aboutLabel}>Status</Text>
+              <View style={styles.statusBadge}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>Connected</Text>
+              </View>
+            </View>
           </>
         ) : (
-          <Text style={styles.errorText}>Cannot connect to server</Text>
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorIcon}>⚠</Text>
+            <Text style={styles.errorTitle}>
+              {status === 'server-unreachable' ? 'Server Unreachable' : 'Connection Error'}
+            </Text>
+            <Text style={styles.errorText}>
+              {status === 'server-unreachable'
+                ? 'Cannot reach the workspace agent. Check your Tailscale VPN connection and server URL.'
+                : 'Unable to connect to the server.'}
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={checkConnection}>
+              <Text style={styles.retryButtonText}>Retry Connection</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </Section>
@@ -265,6 +616,9 @@ export function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <ConnectionSettings />
         <AgentsSettings />
+        <EnvironmentSettings />
+        <FilesSettings />
+        <ScriptsSettings />
         <AboutSection />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -362,9 +716,112 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
   },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  errorIcon: {
+    fontSize: 32,
+    marginBottom: 12,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
   errorText: {
     fontSize: 14,
-    color: '#ff3b30',
+    color: '#8e8e93',
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#0a84ff',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  statusRow: {
+    borderBottomWidth: 0,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#34c759',
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#34c759',
+    fontWeight: '500',
+  },
+  envVarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  envKeyInput: {
+    flex: 1,
+    minWidth: 80,
+  },
+  envValueInput: {
+    flex: 2,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ff3b30',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  addButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2c2c2e',
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    marginBottom: 8,
+  },
+  addButtonText: {
+    fontSize: 14,
+    color: '#0a84ff',
+    fontWeight: '500',
+  },
+  fileMappingRow: {
+    marginBottom: 12,
+  },
+  fileMappingInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  fileInput: {
+    flex: 1,
+  },
+  arrowText: {
+    fontSize: 14,
+    color: '#8e8e93',
+    fontFamily: 'monospace',
   },
 })

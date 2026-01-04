@@ -5,7 +5,7 @@ test.describe('Web UI', () => {
   test('loads dashboard page', async ({ agent, page }) => {
     await page.goto(`http://127.0.0.1:${agent.port}/workspaces`);
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('h1')).toContainText('Workspaces');
+    await expect(page.locator('h1')).toContainText('Dashboard');
   });
 
   test('shows empty workspace list', async ({ agent, page }) => {
@@ -52,7 +52,7 @@ test.describe('Web UI - Workspace Operations', () => {
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces`);
       await expect(page.getByText(workspaceName)).toBeVisible({ timeout: 30000 });
-      await expect(page.getByText('running')).toBeVisible();
+      await expect(page.getByText('Running')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -84,12 +84,12 @@ test.describe('Web UI - Settings Pages', () => {
 
   test('agents settings page loads', async ({ agent, page }) => {
     await page.goto(`http://127.0.0.1:${agent.port}/settings/agents`);
-    await expect(page.getByText('Coding Agents')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Configuration')).toBeVisible({ timeout: 15000 });
   });
 
   test('files settings page loads', async ({ agent, page }) => {
     await page.goto(`http://127.0.0.1:${agent.port}/settings/files`);
-    await expect(page.getByText('Credential Files')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Files')).toBeVisible({ timeout: 15000 });
   });
 
   test('scripts settings page loads', async ({ agent, page }) => {
@@ -149,10 +149,7 @@ test.describe('Web UI - Terminal', () => {
 });
 
 test.describe('Web UI - Sessions', () => {
-  test('workspace shows stopped state message when not running', async ({
-    agent,
-    page,
-  }) => {
+  test('workspace shows stopped state message when not running', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
     await agent.api.stopWorkspace(workspaceName);

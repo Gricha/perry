@@ -169,11 +169,9 @@ export class WorkspaceManager {
 
     try {
       await fs.access(localClaudeCredentials);
-      await docker.execInContainer(
-        containerName,
-        ['mkdir', '-p', '/home/workspace/.claude'],
-        { user: 'workspace' }
-      );
+      await docker.execInContainer(containerName, ['mkdir', '-p', '/home/workspace/.claude'], {
+        user: 'workspace',
+      });
       await copyCredentialToContainer({
         source: '~/.claude/.credentials.json',
         dest: '/home/workspace/.claude/.credentials.json',
@@ -194,11 +192,9 @@ export class WorkspaceManager {
       return;
     }
 
-    await docker.execInContainer(
-      containerName,
-      ['mkdir', '-p', '/home/workspace/.codex'],
-      { user: 'workspace' }
-    );
+    await docker.execInContainer(containerName, ['mkdir', '-p', '/home/workspace/.codex'], {
+      user: 'workspace',
+    });
 
     await copyCredentialToContainer({
       source: '~/.codex/auth.json',
@@ -270,10 +266,7 @@ export class WorkspaceManager {
 
     const running = await docker.containerRunning(containerName);
     const newStatus = running ? 'running' : 'stopped';
-    if (
-      workspace.status !== newStatus &&
-      workspace.status !== 'creating'
-    ) {
+    if (workspace.status !== newStatus && workspace.status !== 'creating') {
       workspace.status = newStatus;
       await this.state.setWorkspace(workspace);
     }

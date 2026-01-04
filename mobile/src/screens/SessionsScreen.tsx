@@ -12,6 +12,16 @@ import {
 } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { api, WorkspaceInfo, SessionInfo, SessionMessage, AgentType } from '../lib/api'
+import { useNetwork, parseNetworkError } from '../lib/network'
+
+type AgentFilter = AgentType | 'all'
+
+const AGENT_FILTERS: { value: AgentFilter; label: string }[] = [
+  { value: 'all', label: 'All Agents' },
+  { value: 'claude-code', label: 'Claude Code' },
+  { value: 'opencode', label: 'OpenCode' },
+  { value: 'codex', label: 'Codex' },
+]
 
 function AgentBadge({ type }: { type: AgentType }) {
   const labels: Record<AgentType, string> = {
@@ -149,12 +159,12 @@ function SessionDetailModal({
   )
 }
 
-function WorkspaceSessionsList({ workspace }: { workspace: WorkspaceInfo }) {
+function WorkspaceSessionsList({ workspace, agentFilter }: { workspace: WorkspaceInfo; agentFilter: AgentFilter }) {
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['sessions', workspace.name],
-    queryFn: () => api.listSessions(workspace.name, undefined, 50),
+    queryKey: ['sessions', workspace.name, agentFilter],
+    queryFn: () => api.listSessions(workspace.name, agentFilter === 'all' ? undefined : agentFilter, 50),
   })
 
   if (isLoading) {
@@ -197,8 +207,42 @@ function WorkspaceSessionsList({ workspace }: { workspace: WorkspaceInfo }) {
   )
 }
 
+function AgentFilterDropdown({ value, onChange }: { value: AgentFilter; onChange: (v: AgentFilter) => void }) {
+  const [showModal, setShowModal] = useState(false)
+  const currentLabel = AGENT_FILTERS.find((f) => f.value === value)?.label || 'All Agents'
+
+  return (
+    <>
+      <TouchableOpacity style={styles.filterButton} onPress={() => setShowModal(true)}>
+        <Text style={styles.filterButtonText}>{currentLabel}</Text>
+        <Text style={styles.filterButtonIcon}>▼</Text>
+      </TouchableOpacity>
+      <Modal visible={showModal} animationType="fade" transparent onRequestClose={() => setShowModal(false)}>
+        <TouchableOpacity style={styles.filterModalOverlay} activeOpacity={1} onPress={() => setShowModal(false)}>
+          <View style={styles.filterModalContent}>
+            {AGENT_FILTERS.map((filter) => (
+              <TouchableOpacity
+                key={filter.value}
+                style={[styles.filterOption, value === filter.value && styles.filterOptionSelected]}
+                onPress={() => { onChange(filter.value); setShowModal(false) }}
+              >
+                <Text style={[styles.filterOptionText, value === filter.value && styles.filterOptionTextSelected]}>
+                  {filter.label}
+                </Text>
+                {value === filter.value && <Text style={styles.filterOptionCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </>
+  )
+}
+
 export function SessionsScreen() {
-  const { data: workspaces, isLoading, refetch, isRefetching } = useQuery({
+  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all')
+  const { status } = useNetwork()
+  const { data: workspaces, isLoading, refetch, isRefetching, error } = useQuery({
     queryKey: ['workspaces'],
     queryFn: api.listWorkspaces,
   })
@@ -211,27 +255,46 @@ export function SessionsScreen() {
     )
   }
 
+  if (error && status !== 'connected') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorIcon}>⚠</Text>
+        <Text style={styles.errorTitle}>Cannot Load Sessions</Text>
+        <Text style={styles.errorText}>{parseNetworkError(error)}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
+
   const runningWorkspaces = (workspaces || []).filter((w) => w.status === 'running')
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
-    >
-      {runningWorkspaces.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No running workspaces</Text>
-          <Text style={styles.emptySubtext}>Start a workspace to see sessions</Text>
-        </View>
-      ) : (
-        runningWorkspaces.map((workspace) => (
-          <View key={workspace.name} style={styles.workspaceSection}>
-            <Text style={styles.workspaceName}>{workspace.name}</Text>
-            <WorkspaceSessionsList workspace={workspace} />
+    <View style={styles.container}>
+      <View style={styles.filterBar}>
+        <Text style={styles.filterLabel}>Filter by agent:</Text>
+        <AgentFilterDropdown value={agentFilter} onChange={setAgentFilter} />
+      </View>
+      <ScrollView
+        style={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
+      >
+        {runningWorkspaces.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>No running workspaces</Text>
+            <Text style={styles.emptySubtext}>Start a workspace to see sessions</Text>
           </View>
-        ))
-      )}
-    </ScrollView>
+        ) : (
+          runningWorkspaces.map((workspace) => (
+            <View key={workspace.name} style={styles.workspaceSection}>
+              <Text style={styles.workspaceName}>{workspace.name}</Text>
+              <WorkspaceSessionsList workspace={workspace} agentFilter={agentFilter} />
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
   )
 }
 
@@ -240,11 +303,110 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  scrollContent: {
+    flex: 1,
+  },
   center: {
     flex: 1,
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    backgroundColor: '#0a84ff',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
+  },
+  filterLabel: {
+    fontSize: 14,
+    color: '#8e8e93',
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1c1c1e',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  filterButtonIcon: {
+    fontSize: 10,
+    color: '#8e8e93',
+  },
+  filterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  filterModalContent: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2c2c2e',
+  },
+  filterOptionSelected: {
+    backgroundColor: '#2c2c2e',
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: '#fff',
+  },
+  filterOptionTextSelected: {
+    color: '#0a84ff',
+    fontWeight: '600',
+  },
+  filterOptionCheck: {
+    fontSize: 16,
+    color: '#0a84ff',
+    fontWeight: '600',
   },
   empty: {
     alignItems: 'center',

@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, ExternalLink, Sparkles, Github, Code2 } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Sparkles, Github, Code2, ChevronDown } from 'lucide-react'
 import { api, type CodingAgents } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+
+const MODEL_OPTIONS = [
+  { value: 'sonnet', label: 'Sonnet', description: 'Fast and cost-effective' },
+  { value: 'opus', label: 'Opus', description: 'Most capable' },
+  { value: 'haiku', label: 'Haiku', description: 'Fastest, lowest cost' },
+] as const
 
 function StatusIndicator({ configured }: { configured: boolean }) {
   if (!configured) return null
@@ -26,6 +39,7 @@ export function AgentsSettings() {
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState('')
   const [githubToken, setGithubToken] = useState('')
   const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
+  const [claudeModel, setClaudeModel] = useState('sonnet')
   const [openaiHasChanges, setOpenaiHasChanges] = useState(false)
   const [githubHasChanges, setGithubHasChanges] = useState(false)
   const [claudeHasChanges, setClaudeHasChanges] = useState(false)
@@ -37,6 +51,7 @@ export function AgentsSettings() {
       setOpenaiBaseUrl(agents.opencode?.api_base_url || '')
       setGithubToken(agents.github?.token || '')
       setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
+      setClaudeModel(agents.claude_code?.model || 'sonnet')
       setInitialized(true)
     }
   }, [agents, initialized])
@@ -73,6 +88,7 @@ export function AgentsSettings() {
       ...agents,
       claude_code: {
         oauth_token: claudeOAuthToken.trim() || undefined,
+        model: claudeModel,
       },
     })
   }
@@ -193,26 +209,55 @@ export function AgentsSettings() {
             <p className="agent-description">
               OAuth token for headless operation. Run <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code> locally to generate.
             </p>
-            <div className="agent-input flex flex-col sm:flex-row gap-2 mt-2">
-              <Input
-                type="password"
-                value={claudeOAuthToken}
-                onChange={(e) => {
-                  setClaudeOAuthToken(e.target.value)
-                  setClaudeHasChanges(true)
-                }}
-                placeholder="sk-ant-oat01-... (OAuth token)"
-                className="flex-1 font-mono text-sm h-11 sm:h-9"
-              />
-              <Button
-                onClick={handleSaveClaude}
-                disabled={mutation.isPending || !claudeHasChanges}
-                size="sm"
-                className="h-11 sm:h-9"
-              >
-                <Save className="mr-1.5 h-3.5 w-3.5" />
-                Save
-              </Button>
+            <div className="space-y-2 mt-2">
+              <div className="agent-input">
+                <Input
+                  type="password"
+                  value={claudeOAuthToken}
+                  onChange={(e) => {
+                    setClaudeOAuthToken(e.target.value)
+                    setClaudeHasChanges(true)
+                  }}
+                  placeholder="sk-ant-oat01-... (OAuth token)"
+                  className="w-full font-mono text-sm h-11 sm:h-9"
+                />
+              </div>
+              <div className="agent-input flex flex-col sm:flex-row gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="flex-1 justify-between h-11 sm:h-9">
+                      <span className="text-sm">
+                        Model: {MODEL_OPTIONS.find(m => m.value === claudeModel)?.label || 'Sonnet'}
+                      </span>
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuRadioGroup value={claudeModel} onValueChange={(value) => {
+                      setClaudeModel(value)
+                      setClaudeHasChanges(true)
+                    }}>
+                      {MODEL_OPTIONS.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          <div className="flex flex-col">
+                            <span>{option.label}</span>
+                            <span className="text-xs text-muted-foreground">{option.description}</span>
+                          </div>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  onClick={handleSaveClaude}
+                  disabled={mutation.isPending || !claudeHasChanges}
+                  size="sm"
+                  className="h-11 sm:h-9"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
         </div>

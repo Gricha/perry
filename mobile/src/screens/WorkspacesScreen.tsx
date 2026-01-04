@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, WorkspaceInfo } from '../lib/api'
+import { useNetwork, parseNetworkError } from '../lib/network'
 
 function StatusBadge({ status }: { status: WorkspaceInfo['status'] }) {
   const colors = {
@@ -33,15 +34,19 @@ function WorkspaceItem({
   onPress,
   onStart,
   onStop,
+  onRecover,
   onDelete,
 }: {
   workspace: WorkspaceInfo
   onPress: () => void
   onStart: () => void
   onStop: () => void
+  onRecover: () => void
   onDelete: () => void
 }) {
   const isRunning = workspace.status === 'running'
+  const isError = workspace.status === 'error'
+  const isStopped = workspace.status === 'stopped'
 
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} testID={`workspace-item-${workspace.name}`}>
@@ -54,15 +59,19 @@ function WorkspaceItem({
         SSH: {workspace.ports.ssh} | Created: {new Date(workspace.created).toLocaleDateString()}
       </Text>
       <View style={styles.itemActions}>
-        {isRunning ? (
+        {isError ? (
+          <TouchableOpacity style={[styles.actionBtn, styles.recoverBtn]} onPress={onRecover}>
+            <Text style={styles.actionBtnText}>Recover</Text>
+          </TouchableOpacity>
+        ) : isRunning ? (
           <TouchableOpacity style={[styles.actionBtn, styles.stopBtn]} onPress={onStop}>
             <Text style={styles.actionBtnText}>Stop</Text>
           </TouchableOpacity>
-        ) : (
+        ) : isStopped ? (
           <TouchableOpacity style={[styles.actionBtn, styles.startBtn]} onPress={onStart}>
             <Text style={styles.actionBtnText}>Start</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
         <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={onDelete}>
           <Text style={styles.actionBtnText}>Delete</Text>
         </TouchableOpacity>
@@ -133,8 +142,9 @@ export function WorkspacesScreen() {
   const queryClient = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [selectedWorkspace, setSelectedWorkspace] = useState<WorkspaceInfo | null>(null)
+  const { status } = useNetwork()
 
-  const { data: workspaces, isLoading, refetch, isRefetching } = useQuery({
+  const { data: workspaces, isLoading, refetch, isRefetching, error } = useQuery({
     queryKey: ['workspaces'],
     queryFn: api.listWorkspaces,
   })
@@ -145,7 +155,7 @@ export function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
     },
     onError: (err) => {
-      Alert.alert('Error', (err as Error).message)
+      Alert.alert('Error', parseNetworkError(err))
     },
   })
 
@@ -155,7 +165,7 @@ export function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
     },
     onError: (err) => {
-      Alert.alert('Error', (err as Error).message)
+      Alert.alert('Error', parseNetworkError(err))
     },
   })
 
@@ -165,7 +175,18 @@ export function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
     },
     onError: (err) => {
-      Alert.alert('Error', (err as Error).message)
+      Alert.alert('Error', parseNetworkError(err))
+    },
+  })
+
+  const recoverMutation = useMutation({
+    mutationFn: (name: string) => api.startWorkspace(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      Alert.alert('Success', 'Workspace recovery started')
+    },
+    onError: (err) => {
+      Alert.alert('Recovery Failed', parseNetworkError(err))
     },
   })
 
@@ -175,7 +196,7 @@ export function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
     },
     onError: (err) => {
-      Alert.alert('Error', (err as Error).message)
+      Alert.alert('Error', parseNetworkError(err))
     },
   })
 
@@ -186,10 +207,30 @@ export function WorkspacesScreen() {
     ])
   }, [deleteMutation])
 
+  const handleRecover = useCallback((name: string) => {
+    Alert.alert('Recover Workspace', `Attempt to recover "${name}"? This will restart the workspace.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Recover', onPress: () => recoverMutation.mutate(name) },
+    ])
+  }, [recoverMutation])
+
   if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0a84ff" />
+      </View>
+    )
+  }
+
+  if (error && status !== 'connected') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorIcon}>⚠</Text>
+        <Text style={styles.errorTitle}>Cannot Load Workspaces</Text>
+        <Text style={styles.errorText}>{parseNetworkError(error)}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     )
   }
@@ -205,6 +246,7 @@ export function WorkspacesScreen() {
             onPress={() => setSelectedWorkspace(item)}
             onStart={() => startMutation.mutate(item.name)}
             onStop={() => stopMutation.mutate(item.name)}
+            onRecover={() => handleRecover(item.name)}
             onDelete={() => handleDelete(item.name)}
           />
         )}
@@ -295,6 +337,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    backgroundColor: '#0a84ff',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
   list: {
     padding: 16,
@@ -345,6 +416,9 @@ const styles = StyleSheet.create({
   },
   stopBtn: {
     backgroundColor: '#ff9f0a',
+  },
+  recoverBtn: {
+    backgroundColor: '#5856d6',
   },
   deleteBtn: {
     backgroundColor: '#ff3b30',

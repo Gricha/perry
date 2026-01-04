@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import { BaseWebSocketServer, type BaseConnection } from '../shared/base-websocket';
 import { createChatSession, type ChatSession, type ChatMessage } from './handler';
 import { getContainerName } from '../docker';
+import type { AgentConfig } from '../shared/types';
 
 interface ChatConnection extends BaseConnection {
   session: ChatSession | null;
@@ -13,9 +14,17 @@ interface IncomingChatMessage {
   sessionId?: string;
 }
 
+interface ChatWebSocketOptions {
+  isWorkspaceRunning: (workspaceName: string) => Promise<boolean>;
+  getConfig: () => AgentConfig;
+}
+
 export class ChatWebSocketServer extends BaseWebSocketServer<ChatConnection> {
-  constructor(options: { isWorkspaceRunning: (workspaceName: string) => Promise<boolean> }) {
+  private getConfig: () => AgentConfig;
+
+  constructor(options: ChatWebSocketOptions) {
     super(options);
+    this.getConfig = options.getConfig;
   }
 
   protected handleConnection(ws: WebSocket, workspaceName: string): void {
@@ -57,11 +66,14 @@ export class ChatWebSocketServer extends BaseWebSocketServer<ChatConnection> {
           };
 
           if (!connection.session) {
+            const config = this.getConfig();
+            const model = config.agents?.claude_code?.model;
             connection.session = createChatSession(
               {
                 containerName,
                 workDir: '/workspace',
                 sessionId: message.sessionId,
+                model,
               },
               onMessage
             );

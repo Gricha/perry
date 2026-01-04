@@ -41,6 +41,7 @@ export interface CodingAgents {
   };
   claude_code?: {
     oauth_token?: string;
+    model?: string;
   };
 }
 

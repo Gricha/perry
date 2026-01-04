@@ -7,13 +7,17 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
     "test:e2e": "maestro test .maestro/",
     "test:e2e:navigation": "maestro test .maestro/navigation.yaml",
     "test:e2e:settings": "maestro test .maestro/settings.yaml",
-    "test:e2e:workspaces": "maestro test .maestro/workspaces.yaml"
+    "test:e2e:workspaces": "maestro test .maestro/workspaces.yaml",
+    "test:e2e:sessions": "maestro test .maestro/session-filter.yaml",
+    "test:e2e:actions": "maestro test .maestro/workspace-actions.yaml"
   },
   "dependencies": {
     "@orpc/client": "^1.13.2",
+    "@react-native-community/netinfo": "^11.4.1",
     "@react-navigation/bottom-tabs": "^7.9.0",
     "@react-navigation/native": "^7.1.26",
     "@tanstack/react-query": "^5.90.16",

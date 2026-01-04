@@ -1,31 +1,74 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Play, Square, Trash2, RefreshCw, Settings } from 'lucide-react'
+import { Plus, RefreshCw, Boxes, ChevronRight, Sparkles } from 'lucide-react'
 import { api, type WorkspaceInfo, type CreateWorkspaceRequest } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { cn } from '@/lib/utils'
+
+function StatCard({ value, label, accent }: { value: number | string; label: string; accent?: boolean }) {
+  return (
+    <div className={cn(
+      "flex flex-col items-center justify-center p-4 rounded-lg border bg-card/50",
+      accent && "border-primary/30 bg-primary/5"
+    )}>
+      <span className={cn(
+        "text-2xl font-bold tabular-nums",
+        accent && "text-primary"
+      )}>{value}</span>
+      <span className="text-xs text-muted-foreground uppercase tracking-wider">{label}</span>
+    </div>
+  )
+}
+
+function WorkspaceRow({ workspace, onClick }: { workspace: WorkspaceInfo; onClick: () => void }) {
+  const isRunning = workspace.status === 'running'
+  const isError = workspace.status === 'error'
+
+  return (
+    <button
+      onClick={onClick}
+      data-testid="workspace-row"
+      className="w-full flex items-center gap-4 px-4 py-4 border-b border-border/50 hover:bg-accent/50 transition-colors text-left group"
+    >
+      <div className="relative">
+        <span className={cn(
+          "block h-2.5 w-2.5 rounded-full",
+          isRunning && "bg-emerald-500",
+          isError && "bg-destructive",
+          !isRunning && !isError && "bg-muted-foreground/40"
+        )} />
+        {isRunning && (
+          <span className="absolute inset-0 h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping opacity-75" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground">{workspace.name}</span>
+          {isRunning && (
+            <span className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-medium">
+              Running
+            </span>
+          )}
+          {isError && (
+            <span className="text-[10px] uppercase tracking-wider text-destructive font-medium">
+              Error
+            </span>
+          )}
+        </div>
+        {workspace.repo && (
+          <p className="text-sm text-muted-foreground truncate mt-0.5">{workspace.repo}</p>
+        )}
+      </div>
+
+      <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+    </button>
+  )
+}
 
 export function WorkspaceList() {
   const queryClient = useQueryClient()
@@ -33,8 +76,6 @@ export function WorkspaceList() {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newRepo, setNewRepo] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
-  const [deleteConfirmName, setDeleteConfirmName] = useState('')
 
   const { data: workspaces, isLoading, error, refetch } = useQuery({
     queryKey: ['workspaces'],
@@ -51,25 +92,6 @@ export function WorkspaceList() {
     },
   })
 
-  const startMutation = useMutation({
-    mutationFn: (name: string) => api.startWorkspace(name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
-  })
-
-  const stopMutation = useMutation({
-    mutationFn: (name: string) => api.stopWorkspace(name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (name: string) => api.deleteWorkspace(name),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
-      setDeleteTarget(null)
-      setDeleteConfirmName('')
-    },
-  })
-
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newName.trim()) return
@@ -83,25 +105,12 @@ export function WorkspaceList() {
     navigate(`/workspaces/${ws.name}/sessions`)
   }
 
-  const handleDeleteClick = (name: string) => {
-    setDeleteTarget(name)
-    setDeleteConfirmName('')
-  }
-
-  const handleDeleteConfirm = () => {
-    if (deleteTarget && deleteConfirmName === deleteTarget) {
-      deleteMutation.mutate(deleteTarget)
-    }
-  }
-
-  const handleDeleteCancel = () => {
-    setDeleteTarget(null)
-    setDeleteConfirmName('')
-  }
+  const totalCount = workspaces?.length || 0
+  const runningCount = workspaces?.filter(ws => ws.status === 'running').length || 0
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center py-16">
         <p className="text-destructive mb-4">Failed to load workspaces</p>
         <Button onClick={() => refetch()} variant="outline">
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -112,16 +121,17 @@ export function WorkspaceList() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Workspaces</h1>
-          <p className="text-muted-foreground">
-            Manage your development environments
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your development workspaces
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="icon">
+          <Button onClick={() => refetch()} variant="ghost" size="icon" className="text-muted-foreground">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button onClick={() => setShowCreate(true)}>
@@ -131,42 +141,55 @@ export function WorkspaceList() {
         </div>
       </div>
 
+      {/* Stats */}
+      {!isLoading && totalCount > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard value={totalCount} label="Workspaces" />
+          <StatCard value={runningCount} label="Running" accent={runningCount > 0} />
+          <StatCard value={totalCount - runningCount} label="Stopped" />
+          <StatCard value="—" label="Sessions" />
+        </div>
+      )}
+
+      {/* Create form */}
       {showCreate && (
         <Card>
-          <CardHeader>
-            <CardTitle>Create Workspace</CardTitle>
-            <CardDescription>Set up a new development environment</CardDescription>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg">Create Workspace</CardTitle>
+            <CardDescription>Set up a new isolated development environment</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="my-workspace"
-                  autoFocus
-                />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="my-project"
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="repo">Repository <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="repo"
+                    type="text"
+                    value={newRepo}
+                    onChange={(e) => setNewRepo(e.target.value)}
+                    placeholder="https://github.com/user/repo"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="repo">Repository (optional)</Label>
-                <Input
-                  id="repo"
-                  type="text"
-                  value={newRepo}
-                  onChange={(e) => setNewRepo(e.target.value)}
-                  placeholder="https://github.com/user/repo"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? 'Creating...' : 'Create'}
+              <div className="flex gap-2 pt-2">
+                <Button type="submit" disabled={createMutation.isPending || !newName.trim()}>
+                  {createMutation.isPending ? 'Creating...' : 'Create Workspace'}
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   onClick={() => setShowCreate(false)}
                 >
                   Cancel
@@ -182,212 +205,64 @@ export function WorkspaceList() {
         </Card>
       )}
 
+      {/* Workspace list */}
       {isLoading ? (
-        <Card>
-          <CardContent className="p-0">
-            <div className="animate-pulse">
-              <div className="h-12 border-b bg-muted/30" />
-              <div className="h-16 border-b bg-muted/10" />
-              <div className="h-16 border-b bg-muted/10" />
-              <div className="h-16 bg-muted/10" />
+        <div className="rounded-lg border bg-card/50">
+          <div className="animate-pulse">
+            <div className="h-16 border-b border-border/50 bg-muted/20" />
+            <div className="h-16 border-b border-border/50 bg-muted/10" />
+            <div className="h-16 bg-muted/5" />
+          </div>
+        </div>
+      ) : totalCount === 0 ? (
+        <div className="rounded-lg border border-dashed border-border/60 bg-card/30">
+          <div className="flex flex-col items-center justify-center py-16 px-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <Boxes className="h-6 w-6 text-primary" />
             </div>
-          </CardContent>
-        </Card>
-      ) : workspaces?.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground mb-4">No workspaces yet</p>
+            <h3 className="text-lg font-medium mb-1">No workspaces yet</h3>
+            <p className="text-muted-foreground text-center max-w-sm mb-6">
+              Create your first workspace to get started with an isolated development environment.
+            </p>
             <Button onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create your first workspace
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <>
-          {/* Mobile: Card layout */}
-          <div className="md:hidden space-y-3">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Workspaces
+            </h2>
+          </div>
+          <div className="rounded-lg border bg-card/50 overflow-hidden">
             {workspaces?.map((ws: WorkspaceInfo) => (
-              <Card
+              <WorkspaceRow
                 key={ws.name}
-                data-testid="workspace-row"
-                className="cursor-pointer hover:bg-accent/50 transition-colors"
+                workspace={ws}
                 onClick={() => handleRowClick(ws)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium truncate">{ws.name}</span>
-                    <Badge variant={
-                      ws.status === 'running' ? 'success' :
-                      ws.status === 'error' ? 'destructive' : 'muted'
-                    }>
-                      {ws.status}
-                    </Badge>
-                  </div>
-                  {ws.repo && (
-                    <p className="text-sm text-muted-foreground truncate mb-3">{ws.repo}</p>
-                  )}
-                  <div
-                    className="flex gap-2 justify-end pt-2 border-t border-border/50"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {ws.status === 'running' ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => stopMutation.mutate(ws.name)}
-                        disabled={stopMutation.isPending}
-                      >
-                        <Square className="h-4 w-4 mr-1.5" />
-                        Stop
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => startMutation.mutate(ws.name)}
-                        disabled={startMutation.isPending}
-                      >
-                        <Play className="h-4 w-4 mr-1.5" />
-                        Start
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteClick(ws.name)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              />
             ))}
           </div>
-
-          {/* Desktop: Table layout */}
-          <Card className="hidden md:block">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Repository</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workspaces?.map((ws: WorkspaceInfo) => (
-                    <TableRow
-                      key={ws.name}
-                      data-testid="workspace-row"
-                      className="cursor-pointer"
-                      onClick={() => handleRowClick(ws)}
-                    >
-                      <TableCell className="font-medium">{ws.name}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          ws.status === 'running' ? 'success' :
-                          ws.status === 'error' ? 'destructive' : 'muted'
-                        }>
-                          {ws.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-xs truncate">
-                        {ws.repo || '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div
-                          className="flex items-center justify-end gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {ws.status === 'running' ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => stopMutation.mutate(ws.name)}
-                              disabled={stopMutation.isPending}
-                              title="Stop workspace"
-                            >
-                              <Square className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startMutation.mutate(ws.name)}
-                              disabled={startMutation.isPending}
-                              title="Start workspace"
-                            >
-                              <Play className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => navigate(`/workspaces/${ws.name}`)}
-                            title="Workspace settings"
-                          >
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteClick(ws.name)}
-                            disabled={deleteMutation.isPending}
-                            title="Delete workspace"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
+        </div>
       )}
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && handleDeleteCancel()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the workspace
-              <span className="font-mono font-semibold text-foreground"> {deleteTarget}</span> and
-              all its data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <Label htmlFor="confirm-name" className="text-sm text-muted-foreground">
-              Type <span className="font-mono font-semibold text-foreground">{deleteTarget}</span> to confirm
-            </Label>
-            <Input
-              id="confirm-name"
-              value={deleteConfirmName}
-              onChange={(e) => setDeleteConfirmName(e.target.value)}
-              placeholder="Enter workspace name"
-              className="mt-2"
-              autoComplete="off"
-              data-testid="delete-confirm-input"
-            />
+      {/* Quick tips */}
+      {!isLoading && totalCount > 0 && (
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <span className="font-medium">Quick tip:</span>{' '}
+              <span className="text-muted-foreground">
+                Use <code className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs">workspace shell {'<name>'}</code> from your terminal to SSH directly into any workspace.
+              </span>
+            </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteCancel}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={deleteConfirmName !== deleteTarget || deleteMutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete Workspace'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </div>
+      )}
     </div>
   )
 }

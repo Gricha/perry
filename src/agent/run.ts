@@ -33,6 +33,7 @@ function createAgentServer(configDir: string, config: AgentConfig) {
     isWorkspaceRunning: async (name) => {
       return containerRunning(getContainerName(name));
     },
+    getConfig: () => currentConfig,
   });
 
   const router = createRouter({

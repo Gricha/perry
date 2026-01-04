@@ -304,7 +304,8 @@ export function createRouter(ctx: RouterContext) {
           const id = file.split('/').pop()?.replace('.jsonl', '') || '';
           const projDir = file.split('/').slice(-2, -1)[0] || '';
           const projectPath = decodeClaudeProjectPath(projDir);
-          if (!projectPath.startsWith('/workspace') && !projectPath.startsWith('/home/workspace')) continue;
+          if (!projectPath.startsWith('/workspace') && !projectPath.startsWith('/home/workspace'))
+            continue;
 
           rawSessions.push({
             id,

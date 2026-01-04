@@ -1,7 +1,7 @@
 appId: com.subroutine.workspace
 ---
 # Test: Settings Screen Visibility and Interactions
-# Verifies all settings sections are accessible
+# Verifies all settings sections are accessible including new features
 
 - launchApp:
     clearState: true
@@ -20,6 +20,34 @@ appId: com.subroutine.workspace
 - assertVisible: "Claude Code"
 - assertVisible: "GitHub"
 
+# Scroll to see Environment Variables section
+- scroll:
+    direction: DOWN
+
+# Environment Variables section
+- assertVisible: "Environment Variables"
+- assertVisible:
+    text: "injected into all workspaces"
+    optional: true
+
+# Scroll more to see File Mappings
+- scroll:
+    direction: DOWN
+
+# File Mappings section
+- assertVisible: "File Mappings"
+- assertVisible:
+    text: "Copy files from host"
+    optional: true
+
+# Scroll more to see Scripts section
+- scroll:
+    direction: DOWN
+
+# Scripts section
+- assertVisible: "Scripts"
+- assertVisible: "Post-Start Script"
+
 # Scroll to see About section
 - scroll:
     direction: DOWN
@@ -29,20 +57,35 @@ appId: com.subroutine.workspace
 # About section should show system info (when connected)
 - runFlow:
     when:
-      visible: "Host:"
+      visible: "Host"
     commands:
-      - assertVisible: "Docker:"
-      - assertVisible: "Workspaces:"
-      - assertVisible: "Uptime:"
+      - assertVisible: "Docker"
+      - assertVisible: "Workspaces"
+      - assertVisible: "Uptime"
+      - assertVisible: "Status"
 
-# Handle connection error state
+# Handle connection error state with retry button
 - runFlow:
     when:
-      visible: "Connection error"
+      visible: "Server Unreachable"
     commands:
-      - assertVisible: "Unable to connect"
+      - assertVisible: "Retry Connection"
+      - tapOn: "Retry Connection"
+
+# Handle other connection error states
+- runFlow:
+    when:
+      visible: "Connection Error"
+    commands:
+      - assertVisible: "Retry Connection"
 
 # Navigate back to Workspaces
+- scroll:
+    direction: UP
+
+- scroll:
+    direction: UP
+
 - scroll:
     direction: UP
 

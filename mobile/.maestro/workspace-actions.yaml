@@ -1,7 +1,7 @@
 appId: com.subroutine.workspace
 ---
-# Test: Workspace Start/Stop Operations
-# Verifies start and stop buttons work correctly for workspaces
+# Test: Workspace Start/Stop/Recover Operations
+# Verifies start, stop, and recover buttons work correctly for workspaces
 
 - launchApp:
     clearState: true
@@ -26,7 +26,7 @@ appId: com.subroutine.workspace
           text: "SSH:"
       # Should see workspace detail modal with logs
       - assertVisible:
-          text: "Container Logs"
+          text: "Logs"
           optional: true
       # Close modal if open
       - tapOn:
@@ -58,3 +58,16 @@ appId: com.subroutine.workspace
           visible:
             text: "stopped|Stopping"
           timeout: 5000
+
+# Test recover button if workspace is in error state
+- runFlow:
+    when:
+      visible:
+        text: "Recover"
+    commands:
+      - tapOn: "Recover"
+      # Verify recovery confirmation dialog appears
+      - assertVisible: "Recover Workspace"
+      - assertVisible: "Attempt to recover"
+      # Cancel the recovery for now
+      - tapOn: "Cancel"
