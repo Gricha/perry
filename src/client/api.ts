@@ -108,6 +108,14 @@ export class ApiClient {
     }
   }
 
+  async syncWorkspace(name: string): Promise<void> {
+    try {
+      await this.client.workspaces.sync({ name });
+    } catch (err) {
+      throw this.wrapError(err);
+    }
+  }
+
   getTerminalUrl(name: string): string {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws');
     return `${wsUrl}/rpc/terminal/${encodeURIComponent(name)}`;

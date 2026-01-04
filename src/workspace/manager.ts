@@ -539,4 +539,22 @@ export class WorkspaceManager {
     const containerName = getContainerName(name);
     return docker.getLogs(containerName, { tail });
   }
+
+  async sync(name: string): Promise<void> {
+    const workspace = await this.state.getWorkspace(name);
+    if (!workspace) {
+      throw new Error(`Workspace '${name}' not found`);
+    }
+
+    const containerName = getContainerName(name);
+    const running = await docker.containerRunning(containerName);
+    if (!running) {
+      throw new Error(`Workspace '${name}' is not running`);
+    }
+
+    await this.copyGitConfig(containerName);
+    await this.copyCredentialFiles(containerName);
+    await this.setupClaudeCodeConfig(containerName);
+    await this.copyCodexCredentials(containerName);
+  }
 }

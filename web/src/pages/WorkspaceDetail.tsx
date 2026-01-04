@@ -19,6 +19,7 @@ import {
   Check,
   Info,
   AlertTriangle,
+  FolderSync,
 } from 'lucide-react'
 import { api, type SessionInfo, type AgentType } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -257,6 +258,10 @@ export function WorkspaceDetail() {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       navigate('/workspaces')
     },
+  })
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.syncWorkspace(name!),
   })
 
   const handleResume = (sessionId: string, agentType: AgentType) => {
@@ -629,6 +634,56 @@ export function WorkspaceDetail() {
                     <span className="text-sm text-muted-foreground">Created</span>
                     <span className="text-sm">{new Date(workspace.created).toLocaleString()}</span>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FolderSync className="h-4 w-4 text-muted-foreground" />
+                    Sync Credentials
+                  </CardTitle>
+                  <CardDescription>
+                    Sync configuration files and credentials from host to workspace
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/30">
+                    <div>
+                      <p className="font-medium text-sm">Sync Files</p>
+                      <p className="text-sm text-muted-foreground">
+                        Copy .gitconfig, Claude credentials, Codex auth, and configured files
+                      </p>
+                      {syncMutation.isSuccess && (
+                        <p className="text-sm text-success mt-1 flex items-center gap-1">
+                          <Check className="h-3 w-3" />
+                          Synced successfully
+                        </p>
+                      )}
+                      {syncMutation.error && (
+                        <p className="text-sm text-destructive mt-1">
+                          {(syncMutation.error as Error).message || 'Sync failed'}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => syncMutation.mutate()}
+                      disabled={syncMutation.isPending || !isRunning}
+                    >
+                      {syncMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FolderSync className="mr-2 h-4 w-4" />
+                      )}
+                      {syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+                    </Button>
+                  </div>
+                  {!isRunning && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Start the workspace to sync files
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

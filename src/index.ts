@@ -252,6 +252,22 @@ program
   });
 
 program
+  .command('sync <name>')
+  .description('Sync credentials and files to a running workspace')
+  .action(async (name) => {
+    try {
+      const client = await getClient();
+      console.log(`Syncing credentials to workspace '${name}'...`);
+
+      await client.syncWorkspace(name);
+
+      console.log(`Workspace '${name}' synced.`);
+    } catch (err) {
+      handleError(err);
+    }
+  });
+
+program
   .command('shell <name>')
   .description('Open interactive terminal to workspace')
   .action(async (name) => {

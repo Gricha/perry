@@ -16,40 +16,24 @@
 
 ## Tasks
 
-### Credential/File Sync to Existing Workspaces
-
-- [ ] **Add functionality to re-sync files from host to running workspaces**
-  - Currently, credential files (Claude OAuth token, GitHub PAT, SSH keys, etc.) are only copied during workspace creation
-  - When a user updates their host credentials, existing workspaces don't receive the updated files
-  - Need a way to trigger re-sync of configured files from host to container
-  - Potential approaches:
-    - Add a "Sync Files" button in workspace settings UI
-    - Add `workspace sync <name>` CLI command
-    - Automatically sync on workspace start if files have changed (compare mtimes/hashes)
-  - Should sync:
-    - Files configured in Settings > Files (source → dest mappings)
-    - Claude Code credentials (`~/.claude/.credentials.json`)
-    - Codex credentials (`~/.codex/auth.json`, `~/.codex/config.toml`)
-    - GitHub token from agent config (as `GITHUB_TOKEN` env var or gitconfig)
-    - Any custom environment variables from Settings > Environment
-  - Consider showing a "Files outdated" indicator if host files are newer than container copies
-
-### UI Feedback Round 1
-
-#### Agent Terminal Integration (Research Required)
-- [ ] **Research: How OpenCode and Codex handle chat/terminal experience**
-  - Document findings in `docs/research/RESEARCH_AGENT_TERMINAL.md`
-  - Questions to answer:
-    - How does OpenCode display its TUI? Does it have a web-viewable terminal?
-    - How does Codex handle interactive terminal sessions?
-    - Can we capture/stream terminal output to web UI?
-    - What's the best UX for non-Claude-Code agents?
+_No active tasks. See Considerations for potential future work._
 
 ---
 
 ## Considerations
 
 > Add items here to discuss with project owner before promoting to tasks.
+
+### OpenCode Server Integration
+
+Research document: [docs/research/RESEARCH_AGENT_TERMINAL.md](./docs/research/RESEARCH_AGENT_TERMINAL.md)
+
+OpenCode has a built-in client/server architecture (`opencode serve`) that exposes an API. Could integrate:
+- Start `opencode serve` automatically in workspaces
+- Connect web UI to OpenCode's API via SSE streaming
+- Display structured messages like Claude Code integration
+
+Current approach (terminal PTY passthrough) works but lacks the rich UI of Claude Code chat.
 
 ### Design Document Updates (Pending Review)
 

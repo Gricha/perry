@@ -186,6 +186,15 @@ export function createRouter(ctx: RouterContext) {
       }
     });
 
+  const syncWorkspace = os.input(z.object({ name: z.string() })).handler(async ({ input }) => {
+    try {
+      await ctx.workspaces.sync(input.name);
+      return { success: true };
+    } catch (err) {
+      mapErrorToORPC(err, 'Failed to sync workspace');
+    }
+  });
+
   const getInfo = os.handler(async () => {
     let dockerVersion = 'unknown';
     try {
@@ -859,6 +868,7 @@ export function createRouter(ctx: RouterContext) {
       start: startWorkspace,
       stop: stopWorkspace,
       logs: getLogs,
+      sync: syncWorkspace,
     },
     sessions: {
       list: listSessions,

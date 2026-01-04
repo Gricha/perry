@@ -48,6 +48,7 @@ const client = createORPCClient<{
     start: (input: { name: string }) => Promise<WorkspaceInfo>
     stop: (input: { name: string }) => Promise<WorkspaceInfo>
     logs: (input: { name: string; tail?: number }) => Promise<string>
+    sync: (input: { name: string }) => Promise<{ success: boolean }>
   }
   sessions: {
     list: (input: {
@@ -90,6 +91,7 @@ export const api = {
   startWorkspace: (name: string) => client.workspaces.start({ name }),
   stopWorkspace: (name: string) => client.workspaces.stop({ name }),
   getLogs: (name: string, tail = 100) => client.workspaces.logs({ name, tail }),
+  syncWorkspace: (name: string) => client.workspaces.sync({ name }),
   listSessions: (workspaceName: string, agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.list({ workspaceName, agentType, limit, offset }),
   listAllSessions: (agentType?: AgentType, limit?: number, offset?: number) =>
