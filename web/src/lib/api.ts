@@ -9,6 +9,7 @@ import type {
   CodingAgents,
   AgentType,
   SessionInfo,
+  SessionInfoWithWorkspace,
   SessionMessage,
   SessionDetail,
 } from './types'
@@ -22,6 +23,7 @@ export type {
   CodingAgents,
   AgentType,
   SessionInfo,
+  SessionInfoWithWorkspace,
   SessionMessage,
   SessionDetail,
 }
@@ -54,6 +56,11 @@ const client = createORPCClient<{
       limit?: number
       offset?: number
     }) => Promise<{ sessions: SessionInfo[]; total: number; hasMore: boolean }>
+    listAll: (input: {
+      agentType?: AgentType
+      limit?: number
+      offset?: number
+    }) => Promise<{ sessions: SessionInfoWithWorkspace[]; total: number; hasMore: boolean }>
     get: (input: { workspaceName: string; sessionId: string; agentType?: AgentType }) => Promise<SessionDetail>
     rename: (input: { workspaceName: string; sessionId: string; name: string }) => Promise<{ success: boolean }>
     clearName: (input: { workspaceName: string; sessionId: string }) => Promise<{ success: boolean }>
@@ -85,6 +92,8 @@ export const api = {
   getLogs: (name: string, tail = 100) => client.workspaces.logs({ name, tail }),
   listSessions: (workspaceName: string, agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.list({ workspaceName, agentType, limit, offset }),
+  listAllSessions: (agentType?: AgentType, limit?: number, offset?: number) =>
+    client.sessions.listAll({ agentType, limit, offset }),
   getSession: (workspaceName: string, sessionId: string, agentType?: AgentType) =>
     client.sessions.get({ workspaceName, sessionId, agentType }),
   renameSession: (workspaceName: string, sessionId: string, name: string) =>

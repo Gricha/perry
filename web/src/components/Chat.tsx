@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Send, StopCircle, Bot, User, Sparkles, Wrench, ChevronDown, ChevronRight } from 'lucide-react'
+import { Send, StopCircle, Bot, User, Sparkles, Wrench, ChevronDown, CheckCircle2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { getChatUrl } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-interface ToolCall {
-  toolName: string
-  toolId: string
+interface ChatMessagePart {
+  type: 'text' | 'tool_use' | 'tool_result'
   content: string
+  toolName?: string
+  toolId?: string
 }
 
 interface ChatMessage {
   type: 'user' | 'assistant' | 'system' | 'error'
   content: string
   timestamp: string
-  toolCalls?: ToolCall[]
+  parts?: ChatMessagePart[]
+  turnId?: number
 }
 
 interface RawMessage {
@@ -33,41 +35,139 @@ interface ChatProps {
   onSessionId?: (sessionId: string) => void
 }
 
-function ToolCallsSection({ toolCalls }: { toolCalls: ToolCall[] }) {
-  const [expanded, setExpanded] = useState(false)
-
-  if (toolCalls.length === 0) return null
+function ToolUseBubble({
+  toolName,
+  content,
+  isInTurn
+}: {
+  toolName: string
+  content: string
+  isInTurn: boolean
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
 
   return (
-    <div className="mb-3">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-700 transition-colors"
-      >
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <Wrench className="h-3 w-3" />
-        <span>{toolCalls.length} tool call{toolCalls.length > 1 ? 's' : ''}</span>
-      </button>
-      {expanded && (
-        <div className="mt-2 space-y-2 pl-4 border-l-2 border-amber-500/20">
-          {toolCalls.map((tool, idx) => (
-            <div key={idx} className="text-xs">
-              <span className="font-mono font-medium text-amber-600">{tool.toolName}</span>
-              {tool.content && (
-                <pre className="mt-1 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-24 overflow-y-auto border border-border/50">
-                  {tool.content.slice(0, 300)}
-                  {tool.content.length > 300 && '...'}
-                </pre>
-              )}
-            </div>
-          ))}
+    <div className={cn('flex gap-3', isInTurn && 'ml-11')}>
+      {!isInTurn && (
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mt-1">
+          <Wrench className="h-3 w-3" />
         </div>
       )}
+      {isInTurn && (
+        <div className="w-0.5 bg-border/60 -ml-[22px] mr-5" />
+      )}
+      <div className="flex-1 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors w-full"
+        >
+          <ChevronDown
+            className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
+          />
+          <Wrench className="h-3 w-3" />
+          <span className="font-mono font-medium">{toolName}</span>
+        </button>
+        {isExpanded && content && (
+          <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50">
+            {content.slice(0, 500)}
+            {content.length > 500 && '... (truncated)'}
+          </pre>
+        )}
+      </div>
     </div>
   )
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function ToolResultBubble({
+  content,
+  isInTurn
+}: {
+  content: string
+  isInTurn: boolean
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className={cn('flex gap-3', isInTurn && 'ml-11')}>
+      {!isInTurn && (
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-1">
+          <CheckCircle2 className="h-3 w-3" />
+        </div>
+      )}
+      {isInTurn && (
+        <div className="w-0.5 bg-border/60 -ml-[22px] mr-5" />
+      )}
+      <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors w-full"
+        >
+          <ChevronDown
+            className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
+          />
+          <CheckCircle2 className="h-3 w-3" />
+          <span className="font-medium">Tool result</span>
+        </button>
+        {isExpanded && content && (
+          <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50 whitespace-pre-wrap">
+            {content.slice(0, 2000)}
+            {content.length > 2000 && '... (truncated)'}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TextBubble({
+  content,
+  isUser,
+  isInTurn,
+  showAvatar = true
+}: {
+  content: string
+  isUser: boolean
+  isInTurn: boolean
+  showAvatar?: boolean
+}) {
+  return (
+    <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      {showAvatar && !isInTurn ? (
+        <div
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+            isUser
+              ? 'bg-primary/10 text-primary'
+              : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600'
+          )}
+        >
+          {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        </div>
+      ) : !isUser && isInTurn ? (
+        <div className="w-0.5 bg-border/60 ml-[15px] mr-5" />
+      ) : null}
+      <div
+        className={cn(
+          'max-w-[85%] rounded-2xl px-4 py-3',
+          isUser
+            ? 'bg-primary text-primary-foreground rounded-tr-sm'
+            : 'bg-muted/50 border border-border/50 rounded-tl-sm',
+          isInTurn && !isUser && 'ml-0'
+        )}
+      >
+        {isUser ? (
+          <p className="text-sm whitespace-pre-wrap">{content}</p>
+        ) : (
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
+            <Markdown>{content}</Markdown>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MessageBubble({ message, isFirstInTurn }: { message: ChatMessage; isFirstInTurn: boolean }) {
   if (message.type === 'system') {
     return (
       <div className="flex justify-center">
@@ -89,64 +189,109 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   }
 
   const isUser = message.type === 'user'
+  const isInTurn = !isFirstInTurn
+
+  if (message.parts && message.parts.length > 0) {
+    return (
+      <div className="space-y-2">
+        {message.parts.map((part, idx) => {
+          const partIsFirstInTurn = idx === 0 && isFirstInTurn
+          if (part.type === 'text') {
+            return (
+              <TextBubble
+                key={idx}
+                content={part.content}
+                isUser={false}
+                isInTurn={!partIsFirstInTurn}
+              />
+            )
+          }
+          if (part.type === 'tool_use') {
+            return (
+              <ToolUseBubble
+                key={idx}
+                toolName={part.toolName || 'unknown'}
+                content={part.content}
+                isInTurn={!partIsFirstInTurn}
+              />
+            )
+          }
+          if (part.type === 'tool_result') {
+            return (
+              <ToolResultBubble
+                key={idx}
+                content={part.content}
+                isInTurn={!partIsFirstInTurn}
+              />
+            )
+          }
+          return null
+        })}
+      </div>
+    )
+  }
 
   return (
-    <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      <div
-        className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-          isUser
-            ? 'bg-primary/10 text-primary'
-            : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600'
-        )}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-      </div>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3',
-          isUser
-            ? 'bg-primary text-primary-foreground rounded-tr-sm'
-            : 'bg-muted/50 border border-border/50 rounded-tl-sm'
-        )}
-      >
-        {isUser ? (
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-        ) : (
-          <>
-            {message.toolCalls && message.toolCalls.length > 0 && (
-              <ToolCallsSection toolCalls={message.toolCalls} />
-            )}
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
-              <Markdown>{message.content}</Markdown>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <TextBubble
+      content={message.content}
+      isUser={isUser}
+      isInTurn={isInTurn}
+    />
   )
 }
 
-function StreamingMessage({ content, toolCalls }: { content: string; toolCalls: ToolCall[] }) {
+function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
+  const hasContent = parts.some(p => p.content.length > 0)
+
   return (
-    <div className="flex gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600">
-        <Sparkles className="h-4 w-4" />
-      </div>
-      <div className="max-w-[85%] bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
-        {toolCalls.length > 0 && <ToolCallsSection toolCalls={toolCalls} />}
-        {content ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
-            <Markdown>{content}</Markdown>
+    <div className="space-y-2">
+      {parts.map((part, idx) => {
+        const isFirst = idx === 0
+        if (part.type === 'text' && part.content) {
+          return (
+            <TextBubble
+              key={idx}
+              content={part.content}
+              isUser={false}
+              isInTurn={!isFirst}
+            />
+          )
+        }
+        if (part.type === 'tool_use') {
+          return (
+            <ToolUseBubble
+              key={idx}
+              toolName={part.toolName || 'unknown'}
+              content={part.content}
+              isInTurn={!isFirst}
+            />
+          )
+        }
+        if (part.type === 'tool_result') {
+          return (
+            <ToolResultBubble
+              key={idx}
+              content={part.content}
+              isInTurn={!isFirst}
+            />
+          )
+        }
+        return null
+      })}
+      {!hasContent && (
+        <div className="flex gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600">
+            <Sparkles className="h-4 w-4" />
           </div>
-        ) : (
-          <div className="flex gap-1">
-            <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -158,9 +303,9 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
   const [isStreaming, setIsStreaming] = useState(false)
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId)
 
-  const streamingContentRef = useRef('')
-  const streamingToolCallsRef = useRef<ToolCall[]>([])
-  const [streamingState, setStreamingState] = useState({ content: '', toolCalls: [] as ToolCall[] })
+  const streamingPartsRef = useRef<ChatMessagePart[]>([])
+  const [streamingParts, setStreamingParts] = useState<ChatMessagePart[]>([])
+  const turnIdRef = useRef(0)
 
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -172,24 +317,28 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, streamingState, scrollToBottom])
+  }, [messages, streamingParts, scrollToBottom])
 
   const finalizeStreaming = useCallback(() => {
-    const content = streamingContentRef.current
-    const toolCalls = [...streamingToolCallsRef.current]
+    const parts = [...streamingPartsRef.current]
 
-    if (content || toolCalls.length > 0) {
+    if (parts.length > 0) {
+      const textContent = parts
+        .filter(p => p.type === 'text')
+        .map(p => p.content)
+        .join('')
+
       setMessages(prev => [...prev, {
         type: 'assistant',
-        content: content || '(No text response)',
+        content: textContent || '(No text response)',
         timestamp: new Date().toISOString(),
-        toolCalls,
+        parts,
+        turnId: turnIdRef.current,
       }])
     }
 
-    streamingContentRef.current = ''
-    streamingToolCallsRef.current = []
-    setStreamingState({ content: '', toolCalls: [] })
+    streamingPartsRef.current = []
+    setStreamingParts([])
     setIsStreaming(false)
   }, [])
 
@@ -211,25 +360,47 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         }
 
         if (msg.type === 'tool_use') {
-          const toolCall: ToolCall = {
-            toolName: msg.toolName || 'unknown',
-            toolId: msg.toolId || '',
-            content: msg.content,
+          const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
+          if (lastPart?.type === 'text' && lastPart.content === '') {
+            streamingPartsRef.current.pop()
           }
-          streamingToolCallsRef.current = [...streamingToolCallsRef.current, toolCall]
-          setStreamingState(prev => ({
-            ...prev,
-            toolCalls: [...streamingToolCallsRef.current],
-          }))
+          streamingPartsRef.current.push({
+            type: 'tool_use',
+            content: msg.content,
+            toolName: msg.toolName,
+            toolId: msg.toolId,
+          })
+          streamingPartsRef.current.push({ type: 'text', content: '' })
+          setStreamingParts([...streamingPartsRef.current])
+          return
+        }
+
+        if (msg.type === 'tool_result') {
+          const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
+          if (lastPart?.type === 'text' && lastPart.content === '') {
+            streamingPartsRef.current.pop()
+          }
+          streamingPartsRef.current.push({
+            type: 'tool_result',
+            content: msg.content,
+            toolId: msg.toolId,
+          })
+          streamingPartsRef.current.push({ type: 'text', content: '' })
+          setStreamingParts([...streamingPartsRef.current])
           return
         }
 
         if (msg.type === 'assistant') {
-          streamingContentRef.current += msg.content
-          setStreamingState(prev => ({
-            ...prev,
-            content: streamingContentRef.current,
-          }))
+          if (streamingPartsRef.current.length === 0) {
+            streamingPartsRef.current.push({ type: 'text', content: '' })
+          }
+          const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
+          if (lastPart?.type === 'text') {
+            lastPart.content += msg.content
+          } else {
+            streamingPartsRef.current.push({ type: 'text', content: msg.content })
+          }
+          setStreamingParts([...streamingPartsRef.current])
           return
         }
 
@@ -304,10 +475,13 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
       return
     }
 
+    turnIdRef.current += 1
+
     const userMessage: ChatMessage = {
       type: 'user',
       content: input.trim(),
       timestamp: new Date().toISOString(),
+      turnId: turnIdRef.current,
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -320,9 +494,8 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
 
     setInput('')
     setIsStreaming(true)
-    streamingContentRef.current = ''
-    streamingToolCallsRef.current = []
-    setStreamingState({ content: '', toolCalls: [] })
+    streamingPartsRef.current = []
+    setStreamingParts([])
   }, [input, sessionId])
 
   const interrupt = useCallback(() => {
@@ -336,6 +509,15 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const getIsFirstInTurn = (index: number) => {
+    if (index === 0) return true
+    const currentMsg = messages[index]
+    const prevMsg = messages[index - 1]
+    if (currentMsg.type === 'assistant' && prevMsg.type === 'user') return true
+    if (currentMsg.type !== prevMsg.type) return true
+    return false
   }
 
   return (
@@ -365,7 +547,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Sparkles className="h-12 w-12 mb-4 opacity-20" />
@@ -379,14 +561,15 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         )}
 
         {messages.map((msg, idx) => (
-          <MessageBubble key={idx} message={msg} />
+          <MessageBubble
+            key={idx}
+            message={msg}
+            isFirstInTurn={getIsFirstInTurn(idx)}
+          />
         ))}
 
         {isStreaming && (
-          <StreamingMessage
-            content={streamingState.content}
-            toolCalls={streamingState.toolCalls}
-          />
+          <StreamingMessage parts={streamingParts} />
         )}
 
         <div ref={messagesEndRef} />

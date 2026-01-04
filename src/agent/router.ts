@@ -213,6 +213,198 @@ export function createRouter(ctx: RouterContext) {
       return input;
     });
 
+  type ListSessionsInput = {
+    workspaceName: string;
+    agentType?: 'claude-code' | 'opencode' | 'codex';
+    limit?: number;
+    offset?: number;
+  };
+
+  async function listSessionsCore(input: ListSessionsInput) {
+    const limit = input.limit ?? 50;
+    const offset = input.offset ?? 0;
+    const workspace = await ctx.workspaces.get(input.workspaceName);
+    if (!workspace) {
+      throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
+    }
+    if (workspace.status !== 'running') {
+      throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
+    }
+
+    const containerName = `workspace-${input.workspaceName}`;
+
+    type RawSession = {
+      id: string;
+      agentType: string;
+      projectPath: string;
+      messageCount: number;
+      mtime: number;
+      prompt?: string;
+      name?: string;
+    };
+
+    const rawSessions: RawSession[] = [];
+
+    const claudeResult = await execInContainer(
+      containerName,
+      [
+        'sh',
+        '-c',
+        'find /home/workspace/.claude/projects -name "*.jsonl" -type f -printf "%p\\t%T@\\t" -exec wc -l {} \\; 2>/dev/null || true',
+      ],
+      { user: 'workspace' }
+    );
+
+    if (claudeResult.exitCode === 0 && claudeResult.stdout.trim()) {
+      const lines = claudeResult.stdout.trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const file = parts[0];
+          const mtime = Math.floor(parseFloat(parts[1]) || 0);
+          const wcOutput = parts[2] || '0';
+          const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
+
+          const id = file.split('/').pop()?.replace('.jsonl', '') || '';
+          const projDir = file.split('/').slice(-2, -1)[0] || '';
+
+          rawSessions.push({
+            id,
+            agentType: 'claude-code',
+            projectPath: projDir,
+            messageCount: count,
+            mtime,
+          });
+        }
+      }
+    }
+
+    const opencodeResult = await execInContainer(
+      containerName,
+      [
+        'sh',
+        '-c',
+        'find /home/workspace/.local/share/opencode/storage/session -name "ses_*.json" -type f 2>/dev/null || true',
+      ],
+      { user: 'workspace' }
+    );
+
+    if (opencodeResult.exitCode === 0 && opencodeResult.stdout.trim()) {
+      const files = opencodeResult.stdout.trim().split('\n').filter(Boolean);
+      const catAll = await execInContainer(
+        containerName,
+        ['sh', '-c', `cat ${files.map((f) => `"${f}"`).join(' ')} 2>/dev/null | jq -s '.'`],
+        { user: 'workspace' }
+      );
+
+      if (catAll.exitCode === 0) {
+        try {
+          const sessions = JSON.parse(catAll.stdout) as Array<{
+            id?: string;
+            title?: string;
+            directory?: string;
+            time?: { updated?: number };
+          }>;
+
+          for (let i = 0; i < sessions.length; i++) {
+            const data = sessions[i];
+            const file = files[i];
+            const id = file.split('/').pop()?.replace('.json', '') || '';
+            const mtime = Math.floor((data.time?.updated || 0) / 1000);
+
+            rawSessions.push({
+              id,
+              agentType: 'opencode',
+              projectPath: data.directory || '',
+              messageCount: 1,
+              mtime,
+              name: data.title || undefined,
+            });
+          }
+        } catch {
+          // Skip on parse error
+        }
+      }
+    }
+
+    const codexResult = await execInContainer(
+      containerName,
+      [
+        'sh',
+        '-c',
+        'find /home/workspace/.codex/sessions -name "rollout-*.jsonl" -type f -printf "%p\\t%T@\\t" -exec wc -l {} \\; 2>/dev/null || true',
+      ],
+      { user: 'workspace' }
+    );
+
+    if (codexResult.exitCode === 0 && codexResult.stdout.trim()) {
+      const lines = codexResult.stdout.trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const file = parts[0];
+          const mtime = Math.floor(parseFloat(parts[1]) || 0);
+          const wcOutput = parts[2] || '0';
+          const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
+
+          const id = file.split('/').pop()?.replace('.jsonl', '') || '';
+          const projPath = file
+            .replace('/home/workspace/.codex/sessions/', '')
+            .replace(/\/[^/]+$/, '');
+
+          rawSessions.push({
+            id,
+            agentType: 'codex',
+            projectPath: projPath,
+            messageCount: count,
+            mtime,
+          });
+        }
+      }
+    }
+
+    const customNames = await getSessionNamesForWorkspace(ctx.stateDir, input.workspaceName);
+
+    const sessions = rawSessions
+      .filter((s) => !input.agentType || s.agentType === input.agentType)
+      .filter((s) => s.messageCount > 0)
+      .map((s) => {
+        let firstPrompt: string | null = null;
+        if (s.prompt) {
+          try {
+            const line = JSON.parse(s.prompt);
+            if (line.content) {
+              const content = Array.isArray(line.content)
+                ? line.content.find((c: { type: string; text?: string }) => c.type === 'text')
+                    ?.text
+                : line.content;
+              firstPrompt = typeof content === 'string' ? content.slice(0, 200) : null;
+            }
+          } catch {
+            firstPrompt = null;
+          }
+        }
+        return {
+          id: s.id,
+          name: customNames[s.id] || s.name || null,
+          agentType: s.agentType,
+          projectPath: s.projectPath,
+          messageCount: s.messageCount,
+          lastActivity: new Date(s.mtime * 1000).toISOString(),
+          firstPrompt,
+        };
+      })
+      .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+
+    const paginatedSessions = sessions.slice(offset, offset + limit);
+
+    return {
+      sessions: paginatedSessions,
+      total: sessions.length,
+      hasMore: offset + limit < sessions.length,
+    };
+  }
+
   const listSessions = os
     .input(
       z.object({
@@ -223,186 +415,7 @@ export function createRouter(ctx: RouterContext) {
       })
     )
     .handler(async ({ input }) => {
-      const workspace = await ctx.workspaces.get(input.workspaceName);
-      if (!workspace) {
-        throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-      }
-      if (workspace.status !== 'running') {
-        throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
-      }
-
-      const containerName = `workspace-${input.workspaceName}`;
-
-      type RawSession = {
-        id: string;
-        agentType: string;
-        projectPath: string;
-        messageCount: number;
-        mtime: number;
-        prompt?: string;
-        name?: string;
-      };
-
-      const rawSessions: RawSession[] = [];
-
-      const claudeResult = await execInContainer(
-        containerName,
-        [
-          'sh',
-          '-c',
-          'find /home/workspace/.claude/projects -name "*.jsonl" -type f -printf "%p\\t%T@\\t" -exec wc -l {} \\; 2>/dev/null || true',
-        ],
-        { user: 'workspace' }
-      );
-
-      if (claudeResult.exitCode === 0 && claudeResult.stdout.trim()) {
-        const lines = claudeResult.stdout.trim().split('\n').filter(Boolean);
-        for (const line of lines) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            const file = parts[0];
-            const mtime = Math.floor(parseFloat(parts[1]) || 0);
-            const wcOutput = parts[2] || '0';
-            const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
-
-            const id = file.split('/').pop()?.replace('.jsonl', '') || '';
-            const projDir = file.split('/').slice(-2, -1)[0] || '';
-
-            rawSessions.push({
-              id,
-              agentType: 'claude-code',
-              projectPath: projDir,
-              messageCount: count,
-              mtime,
-            });
-          }
-        }
-      }
-
-      const opencodeResult = await execInContainer(
-        containerName,
-        [
-          'sh',
-          '-c',
-          'find /home/workspace/.local/share/opencode/storage/session -name "ses_*.json" -type f 2>/dev/null || true',
-        ],
-        { user: 'workspace' }
-      );
-
-      if (opencodeResult.exitCode === 0 && opencodeResult.stdout.trim()) {
-        const files = opencodeResult.stdout.trim().split('\n').filter(Boolean);
-        const catAll = await execInContainer(
-          containerName,
-          ['sh', '-c', `cat ${files.map((f) => `"${f}"`).join(' ')} 2>/dev/null | jq -s '.'`],
-          { user: 'workspace' }
-        );
-
-        if (catAll.exitCode === 0) {
-          try {
-            const sessions = JSON.parse(catAll.stdout) as Array<{
-              id?: string;
-              title?: string;
-              directory?: string;
-              time?: { updated?: number };
-            }>;
-
-            for (let i = 0; i < sessions.length; i++) {
-              const data = sessions[i];
-              const file = files[i];
-              const id = file.split('/').pop()?.replace('.json', '') || '';
-              const mtime = Math.floor((data.time?.updated || 0) / 1000);
-
-              rawSessions.push({
-                id,
-                agentType: 'opencode',
-                projectPath: data.directory || '',
-                messageCount: 1,
-                mtime,
-                name: data.title || undefined,
-              });
-            }
-          } catch {
-            // Skip on parse error
-          }
-        }
-      }
-
-      const codexResult = await execInContainer(
-        containerName,
-        [
-          'sh',
-          '-c',
-          'find /home/workspace/.codex/sessions -name "rollout-*.jsonl" -type f -printf "%p\\t%T@\\t" -exec wc -l {} \\; 2>/dev/null || true',
-        ],
-        { user: 'workspace' }
-      );
-
-      if (codexResult.exitCode === 0 && codexResult.stdout.trim()) {
-        const lines = codexResult.stdout.trim().split('\n').filter(Boolean);
-        for (const line of lines) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            const file = parts[0];
-            const mtime = Math.floor(parseFloat(parts[1]) || 0);
-            const wcOutput = parts[2] || '0';
-            const count = parseInt(wcOutput.trim().split(' ')[0], 10) || 0;
-
-            const id = file.split('/').pop()?.replace('.jsonl', '') || '';
-            const projPath = file
-              .replace('/home/workspace/.codex/sessions/', '')
-              .replace(/\/[^/]+$/, '');
-
-            rawSessions.push({
-              id,
-              agentType: 'codex',
-              projectPath: projPath,
-              messageCount: count,
-              mtime,
-            });
-          }
-        }
-      }
-
-      const customNames = await getSessionNamesForWorkspace(ctx.stateDir, input.workspaceName);
-
-      const sessions = rawSessions
-        .filter((s) => !input.agentType || s.agentType === input.agentType)
-        .filter((s) => s.messageCount > 0)
-        .map((s) => {
-          let firstPrompt: string | null = null;
-          if (s.prompt) {
-            try {
-              const line = JSON.parse(s.prompt);
-              if (line.content) {
-                const content = Array.isArray(line.content)
-                  ? line.content.find((c: { type: string; text?: string }) => c.type === 'text')
-                      ?.text
-                  : line.content;
-                firstPrompt = typeof content === 'string' ? content.slice(0, 200) : null;
-              }
-            } catch {
-              firstPrompt = null;
-            }
-          }
-          return {
-            id: s.id,
-            name: customNames[s.id] || s.name || null,
-            agentType: s.agentType,
-            projectPath: s.projectPath,
-            messageCount: s.messageCount,
-            lastActivity: new Date(s.mtime * 1000).toISOString(),
-            firstPrompt,
-          };
-        })
-        .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
-
-      const paginatedSessions = sessions.slice(input.offset, input.offset + input.limit);
-
-      return {
-        sessions: paginatedSessions,
-        total: sessions.length,
-        hasMore: input.offset + input.limit < sessions.length,
-      };
+      return listSessionsCore(input);
     });
 
   const getSession = os
@@ -648,6 +661,63 @@ export function createRouter(ctx: RouterContext) {
       return { success: true };
     });
 
+  const listAllSessions = os
+    .input(
+      z.object({
+        agentType: z.enum(['claude-code', 'opencode', 'codex']).optional(),
+        limit: z.number().optional().default(100),
+        offset: z.number().optional().default(0),
+      })
+    )
+    .handler(async ({ input }) => {
+      const allWorkspaces = await ctx.workspaces.list();
+      const runningWorkspaces = allWorkspaces.filter((w) => w.status === 'running');
+
+      type SessionWithWorkspace = {
+        id: string;
+        name: string | null;
+        agentType: string;
+        projectPath: string;
+        messageCount: number;
+        lastActivity: string;
+        firstPrompt: string | null;
+        workspaceName: string;
+      };
+
+      const allSessions: SessionWithWorkspace[] = [];
+
+      for (const workspace of runningWorkspaces) {
+        try {
+          const result = await listSessionsCore({
+            workspaceName: workspace.name,
+            agentType: input.agentType,
+            limit: 1000,
+            offset: 0,
+          });
+          for (const session of result.sessions) {
+            allSessions.push({
+              ...session,
+              workspaceName: workspace.name,
+            });
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      allSessions.sort(
+        (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      );
+
+      const paginatedSessions = allSessions.slice(input.offset, input.offset + input.limit);
+
+      return {
+        sessions: paginatedSessions,
+        total: allSessions.length,
+        hasMore: input.offset + input.limit < allSessions.length,
+      };
+    });
+
   return {
     workspaces: {
       list: listWorkspaces,
@@ -660,6 +730,7 @@ export function createRouter(ctx: RouterContext) {
     },
     sessions: {
       list: listSessions,
+      listAll: listAllSessions,
       get: getSession,
       rename: renameSession,
       clearName: clearSessionName,

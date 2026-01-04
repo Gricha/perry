@@ -56,6 +56,10 @@ export interface SessionInfo {
   firstPrompt: string | null;
 }
 
+export interface SessionInfoWithWorkspace extends SessionInfo {
+  workspaceName: string;
+}
+
 export interface SessionMessage {
   type: 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result';
   content: string | null;

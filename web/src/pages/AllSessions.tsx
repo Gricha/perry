@@ -1,41 +1,32 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft,
   MessageSquare,
   Clock,
   Hash,
-  Play,
   ChevronRight,
   Bot,
-  User,
-  Sparkles,
-  Calendar,
-  FolderOpen,
-  Wrench,
-  ChevronDown,
-  CheckCircle2,
   ChevronLeft,
   Loader2,
   Copy,
   Check,
   Pencil,
   X,
+  FolderOpen,
+  Calendar,
+  Folder,
 } from 'lucide-react'
 import Markdown from 'react-markdown'
-import { api, type SessionInfo, type SessionMessage, type AgentType } from '@/lib/api'
+import { api, type SessionInfoWithWorkspace, type SessionMessage, type AgentType } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Chat } from '@/components/Chat'
-import { Terminal } from '@/components/Terminal'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -77,8 +68,8 @@ function getDateGroup(dateString: string): DateGroup {
   return 'Older'
 }
 
-function groupSessionsByDate(sessions: SessionInfo[]): Record<DateGroup, SessionInfo[]> {
-  const groups: Record<DateGroup, SessionInfo[]> = {
+function groupSessionsByDate(sessions: SessionInfoWithWorkspace[]): Record<DateGroup, SessionInfoWithWorkspace[]> {
+  const groups: Record<DateGroup, SessionInfoWithWorkspace[]> = {
     Today: [],
     Yesterday: [],
     'This Week': [],
@@ -141,7 +132,7 @@ function SessionListItem({
   isSelected,
   onClick,
 }: {
-  session: SessionInfo
+  session: SessionInfoWithWorkspace
   isSelected: boolean
   onClick: () => void
 }) {
@@ -186,6 +177,10 @@ function SessionListItem({
           )}
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Folder className="h-3 w-3" />
+            {session.workspaceName}
+          </span>
           <CopyableSessionId sessionId={session.id} />
           <span className="flex items-center gap-1">
             <Hash className="h-3 w-3" />
@@ -210,70 +205,50 @@ function SessionListItem({
   )
 }
 
-function ToolCallBubble({ message }: { message: SessionMessage }) {
-  const [isExpanded, setIsExpanded] = useState(false)
+function SessionMetadataHeader({ session }: { session: SessionInfoWithWorkspace }) {
+  const formattedDate = new Date(session.lastActivity).toLocaleDateString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+  const formattedTime = new Date(session.lastActivity).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
-  if (message.type === 'tool_use') {
-    return (
-      <div className="flex gap-3">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
-          <Wrench className="h-3 w-3" />
-        </div>
-        <div className="flex-1">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown
-              className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
-            />
-            <span className="font-mono font-medium">{message.toolName}</span>
-          </button>
-          {isExpanded && message.toolInput && (
-            <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50">
-              {message.toolInput}
-            </pre>
-          )}
-        </div>
+  return (
+    <div className="flex items-center gap-4 flex-wrap text-sm">
+      <Badge
+        variant="outline"
+        className={cn('text-xs font-medium', AGENT_COLORS[session.agentType])}
+      >
+        {AGENT_LABELS[session.agentType]}
+      </Badge>
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Folder className="h-3.5 w-3.5" />
+        <span>{session.workspaceName}</span>
       </div>
-    )
-  }
-
-  if (message.type === 'tool_result') {
-    return (
-      <div className="flex gap-3">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-          <CheckCircle2 className="h-3 w-3" />
-        </div>
-        <div className="flex-1">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown
-              className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
-            />
-            <span>Tool result</span>
-          </button>
-          {isExpanded && message.content && (
-            <pre className="mt-2 p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto border border-border/50 whitespace-pre-wrap">
-              {message.content.slice(0, 2000)}
-              {message.content.length > 2000 && '... (truncated)'}
-            </pre>
-          )}
-        </div>
+      <CopyableSessionId sessionId={session.id} truncate={false} />
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Hash className="h-3.5 w-3.5" />
+        <span>{session.messageCount} messages</span>
       </div>
-    )
-  }
-
-  return null
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <FolderOpen className="h-3.5 w-3.5" />
+        <span className="font-mono text-xs">{session.projectPath}</span>
+      </div>
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Calendar className="h-3.5 w-3.5" />
+        <span>
+          {formattedDate} at {formattedTime}
+        </span>
+      </div>
+    </div>
+  )
 }
 
 function MessageBubble({ message }: { message: SessionMessage }) {
-  if (message.type === 'tool_use' || message.type === 'tool_result') {
-    return <ToolCallBubble message={message} />
-  }
-
   const isUser = message.type === 'user'
 
   return (
@@ -286,7 +261,7 @@ function MessageBubble({ message }: { message: SessionMessage }) {
             : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600'
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        {isUser ? <span className="text-sm">👤</span> : <span className="text-sm">✨</span>}
       </div>
       <div
         className={cn(
@@ -318,69 +293,27 @@ function MessageBubble({ message }: { message: SessionMessage }) {
   )
 }
 
-function SessionMetadataHeader({ session }: { session: SessionInfo }) {
-  const formattedDate = new Date(session.lastActivity).toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-  const formattedTime = new Date(session.lastActivity).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-
-  return (
-    <div className="flex items-center gap-4 flex-wrap text-sm">
-      <Badge
-        variant="outline"
-        className={cn('text-xs font-medium', AGENT_COLORS[session.agentType])}
-      >
-        {AGENT_LABELS[session.agentType]}
-      </Badge>
-      <CopyableSessionId sessionId={session.id} truncate={false} />
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <Hash className="h-3.5 w-3.5" />
-        <span>{session.messageCount} messages</span>
-      </div>
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <FolderOpen className="h-3.5 w-3.5" />
-        <span className="font-mono text-xs">{session.projectPath}</span>
-      </div>
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <Calendar className="h-3.5 w-3.5" />
-        <span>
-          {formattedDate} at {formattedTime}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function SessionDetailView({
-  workspaceName,
   session,
   onBack,
-  onResume,
   onRename,
 }: {
-  workspaceName: string
-  session: SessionInfo
+  session: SessionInfoWithWorkspace
   onBack: () => void
-  onResume: (sessionId: string, agentType: AgentType) => void
-  onRename: (sessionId: string, name: string) => void
+  onRename: (workspaceName: string, sessionId: string, name: string) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(session.name || '')
+  const navigate = useNavigate()
 
   const { data: sessionDetail, isLoading } = useQuery({
-    queryKey: ['session', workspaceName, session.id],
-    queryFn: () => api.getSession(workspaceName, session.id),
+    queryKey: ['session', session.workspaceName, session.id],
+    queryFn: () => api.getSession(session.workspaceName, session.id),
   })
 
   const handleSave = () => {
     if (editName.trim()) {
-      onRename(session.id, editName.trim())
+      onRename(session.workspaceName, session.id, editName.trim())
     }
     setIsEditing(false)
   }
@@ -445,9 +378,8 @@ function SessionDetailView({
             <SessionMetadataHeader session={session} />
           </div>
         </div>
-        <Button onClick={() => onResume(session.id, session.agentType)}>
-          <Play className="mr-2 h-4 w-4" />
-          Resume Session
+        <Button onClick={() => navigate(`/workspaces/${session.workspaceName}/sessions`)}>
+          Open in Workspace
         </Button>
       </div>
 
@@ -459,9 +391,11 @@ function SessionDetailView({
             </div>
           ) : sessionDetail?.messages && sessionDetail.messages.length > 0 ? (
             <div className="space-y-6">
-              {sessionDetail.messages.map((msg, idx) => (
-                <MessageBubble key={idx} message={msg} />
-              ))}
+              {sessionDetail.messages
+                .filter((msg) => msg.type === 'user' || msg.type === 'assistant')
+                .map((msg, idx) => (
+                  <MessageBubble key={idx} message={msg} />
+                ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
@@ -476,38 +410,26 @@ function SessionDetailView({
   )
 }
 
-type ChatMode = { type: 'chat'; sessionId?: string } | { type: 'terminal'; command: string }
-
-export function Sessions() {
-  const { name: workspaceName } = useParams<{ name: string }>()
-  const navigate = useNavigate()
+export function AllSessions() {
   const queryClient = useQueryClient()
-  const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
-  const [chatMode, setChatMode] = useState<ChatMode | null>(null)
+  const [selectedSession, setSelectedSession] = useState<SessionInfoWithWorkspace | null>(null)
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
-
-  const { data: workspace } = useQuery({
-    queryKey: ['workspace', workspaceName],
-    queryFn: () => api.getWorkspace(workspaceName!),
-    enabled: !!workspaceName,
-  })
 
   const {
     data: sessionsData,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['sessions', workspaceName, agentFilter],
+    queryKey: ['allSessions', agentFilter],
     queryFn: () =>
-      api.listSessions(workspaceName!, agentFilter === 'all' ? undefined : agentFilter, 50, 0),
-    enabled: !!workspaceName && workspace?.status === 'running',
+      api.listAllSessions(agentFilter === 'all' ? undefined : agentFilter, 100, 0),
   })
 
   const renameMutation = useMutation({
-    mutationFn: ({ sessionId, name }: { sessionId: string; name: string }) =>
-      api.renameSession(workspaceName!, sessionId, name),
+    mutationFn: ({ workspaceName, sessionId, name }: { workspaceName: string; sessionId: string; name: string }) =>
+      api.renameSession(workspaceName, sessionId, name),
     onSuccess: (_, { sessionId, name }) => {
-      queryClient.invalidateQueries({ queryKey: ['sessions', workspaceName] })
+      queryClient.invalidateQueries({ queryKey: ['allSessions'] })
       if (selectedSession?.id === sessionId) {
         setSelectedSession({ ...selectedSession, name })
       }
@@ -517,117 +439,15 @@ export function Sessions() {
   const sessions = sessionsData?.sessions || []
   const totalSessions = sessionsData?.total || 0
 
-  const handleRename = (sessionId: string, name: string) => {
-    renameMutation.mutate({ sessionId, name })
-  }
-
-  const handleResume = (sessionId: string, agentType: AgentType) => {
-    if (agentType === 'claude-code') {
-      setChatMode({ type: 'chat', sessionId })
-    } else {
-      const commands: Record<AgentType, string> = {
-        'claude-code': `claude -r ${sessionId}`,
-        opencode: `opencode --resume ${sessionId}`,
-        codex: `codex resume ${sessionId}`,
-      }
-      setChatMode({ type: 'terminal', command: commands[agentType] })
-    }
-  }
-
-  const handleNewChat = (agentType: AgentType = 'claude-code') => {
-    if (agentType === 'claude-code') {
-      setChatMode({ type: 'chat' })
-    } else {
-      const commands: Record<AgentType, string> = {
-        'claude-code': 'claude',
-        opencode: 'opencode',
-        codex: 'codex',
-      }
-      setChatMode({ type: 'terminal', command: commands[agentType] })
-    }
-  }
-
-  if (!workspaceName) {
-    return null
-  }
-
-  if (workspace?.status !== 'running') {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate(`/workspaces/${workspaceName}`)}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Sessions</h1>
-            <p className="text-sm text-muted-foreground">{workspaceName}</p>
-          </div>
-        </div>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">Workspace is not running</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Start the workspace to view and create sessions
-            </p>
-            <Button onClick={() => navigate(`/workspaces/${workspaceName}`)}>
-              Go to Workspace
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (chatMode) {
-    if (chatMode.type === 'chat') {
-      return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col">
-          <div className="flex items-center gap-4 mb-4">
-            <Button variant="ghost" onClick={() => setChatMode(null)}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Sessions
-            </Button>
-            <h1 className="text-2xl font-bold">Claude Code</h1>
-          </div>
-          <Card className="flex-1 overflow-hidden">
-            <CardContent className="p-0 h-full">
-              <Chat
-                workspaceName={workspaceName}
-                sessionId={chatMode.sessionId}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => setChatMode(null)}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Sessions
-          </Button>
-          <h1 className="text-2xl font-bold">Agent Terminal</h1>
-        </div>
-        <Card>
-          <CardContent className="p-0">
-            <Terminal workspaceName={workspaceName} initialCommand={chatMode.command} />
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const handleRename = (workspaceName: string, sessionId: string, name: string) => {
+    renameMutation.mutate({ workspaceName, sessionId, name })
   }
 
   if (selectedSession) {
     return (
       <SessionDetailView
-        workspaceName={workspaceName}
         session={selectedSession}
         onBack={() => setSelectedSession(null)}
-        onResume={handleResume}
         onRename={handleRename}
       />
     )
@@ -636,62 +456,32 @@ export function Sessions() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate(`/workspaces/${workspaceName}`)}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Sessions</h1>
-            <p className="text-sm text-muted-foreground">{workspaceName}</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">All Sessions</h1>
+          <p className="text-sm text-muted-foreground">Sessions from all running workspaces</p>
         </div>
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Bot className="mr-2 h-4 w-4" />
-                {AGENT_LABELS[agentFilter]}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuRadioGroup
-                value={agentFilter}
-                onValueChange={(value) => {
-                  setAgentFilter(value as AgentType | 'all')
-                  setSelectedSession(null)
-                }}
-              >
-                <DropdownMenuRadioItem value="all">All Agents</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="claude-code">Claude Code</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="opencode">OpenCode</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="codex">Codex</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>
-                <Play className="mr-2 h-4 w-4" />
-                New Chat
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleNewChat('claude-code')}>
-                <span className="w-2 h-2 rounded-full bg-orange-500 mr-2" />
-                Claude Code
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleNewChat('opencode')}>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
-                OpenCode
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleNewChat('codex')}>
-                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
-                Codex
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Bot className="mr-2 h-4 w-4" />
+              {AGENT_LABELS[agentFilter]}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup
+              value={agentFilter}
+              onValueChange={(value) => {
+                setAgentFilter(value as AgentType | 'all')
+                setSelectedSession(null)
+              }}
+            >
+              <DropdownMenuRadioItem value="all">All Agents</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="claude-code">Claude Code</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="opencode">OpenCode</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="codex">Codex</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {isLoading ? (
@@ -708,29 +498,10 @@ export function Sessions() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">No sessions found</p>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button>
-                  <Play className="mr-2 h-4 w-4" />
-                  Start a new chat
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => handleNewChat('claude-code')}>
-                  <span className="w-2 h-2 rounded-full bg-orange-500 mr-2" />
-                  Claude Code
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleNewChat('opencode')}>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
-                  OpenCode
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleNewChat('codex')}>
-                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
-                  Codex
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <p className="text-muted-foreground">No sessions found</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sessions will appear here when you run coding agents in your workspaces
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -753,7 +524,7 @@ export function Sessions() {
                   </div>
                   {groupSessions.map((session) => (
                     <SessionListItem
-                      key={session.id}
+                      key={`${session.workspaceName}-${session.id}`}
                       session={session}
                       isSelected={false}
                       onClick={() => setSelectedSession(session)}

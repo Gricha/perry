@@ -8,6 +8,7 @@ import {
   FileKey,
   Terminal,
   Cpu,
+  MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
@@ -82,6 +83,17 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 >
                   <Boxes className="h-4 w-4 text-muted-foreground" />
                   <span>All Workspaces</span>
+                </Link>
+                <Link
+                  to="/sessions"
+                  className={cn(
+                    'flex items-center gap-2.5 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                    location.pathname === '/sessions' && 'nav-active'
+                  )}
+                  onClick={() => isOpen && onToggle()}
+                >
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <span>All Sessions</span>
                 </Link>
                 {workspaces?.map((ws: WorkspaceInfo) => (
                   <Link
