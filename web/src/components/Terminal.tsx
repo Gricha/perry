@@ -29,15 +29,27 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [hasReceivedData, setHasReceivedData] = useState(false)
 
   const connect = useCallback(async () => {
     if (!terminalRef.current) return
+
+    // Dispose any existing terminal and clear DOM
+    if (termRef.current) {
+      termRef.current.dispose()
+      termRef.current = null
+    }
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    terminalRef.current.innerHTML = ''
 
     await ensureGhosttyInit()
     setIsInitialized(true)
 
     const term = new GhosttyTerminal({
-      cursorBlink: true,
+      cursorBlink: false,
       cursorStyle: 'block',
       fontSize: 14,
       fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
@@ -75,9 +87,15 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
 
     term.open(terminalRef.current)
 
+    if (term.textarea) {
+      term.textarea.style.opacity = '0'
+      term.textarea.style.position = 'absolute'
+      term.textarea.style.left = '-9999px'
+      term.textarea.style.top = '-9999px'
+    }
+
     requestAnimationFrame(() => {
       fitAddon.fit()
-      term.clear()
     })
 
     const wsUrl = getTerminalUrl(workspaceName)
@@ -98,6 +116,7 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
     }
 
     ws.onmessage = (event) => {
+      setHasReceivedData(true)
       if (event.data instanceof Blob) {
         event.data.text().then((text) => {
           term.write(text)
@@ -179,11 +198,14 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
   }, [connect])
 
   return (
-    <div className="relative h-full w-full bg-[#0d1117] rounded-lg overflow-hidden">
+    <div className="relative h-full w-full bg-[#0d1117] rounded-lg overflow-hidden cursor-default">
       <div
         ref={terminalRef}
         className="absolute inset-0"
-        style={{ padding: '8px' }}
+        style={{
+          padding: '8px',
+          opacity: 1,
+        }}
         onClick={() => termRef.current?.focus()}
       />
       {!isInitialized && (
@@ -191,7 +213,7 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
           <span className="text-zinc-500 text-sm">Loading terminal...</span>
         </div>
       )}
-      {isInitialized && !isConnected && (
+      {isInitialized && !isConnected && hasReceivedData && (
         <div className="absolute bottom-3 right-3">
           <span className="text-xs text-zinc-500 bg-zinc-900/80 px-2 py-1 rounded">
             Disconnected

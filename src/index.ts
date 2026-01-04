@@ -6,7 +6,8 @@ import { startAgent } from './agent/run';
 import { installService, uninstallService, showStatus } from './agent/systemd';
 import { createApiClient, ApiClientError } from './client/api';
 import { loadClientConfig, getWorker, setWorker } from './client/config';
-import { openSSHShell } from './client/shell';
+import { openWSShell, openDockerExec, getTerminalWSUrl, isLocalWorker } from './client/ws-shell';
+import { getContainerName } from './docker';
 import { startProxy, parsePortForward, formatPortForwards } from './client/proxy';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from './config/loader';
 import { buildImage } from './docker';
@@ -264,13 +265,23 @@ program
         process.exit(1);
       }
 
-      await openSSHShell({
-        worker,
-        sshPort: workspace.ports.ssh,
-        onError: (err) => {
-          console.error(`\nConnection error: ${err.message}`);
-        },
-      });
+      if (isLocalWorker(worker)) {
+        const containerName = getContainerName(name);
+        await openDockerExec({
+          containerName,
+          onError: (err) => {
+            console.error(`\nConnection error: ${err.message}`);
+          },
+        });
+      } else {
+        const wsUrl = getTerminalWSUrl(worker, name);
+        await openWSShell({
+          url: wsUrl,
+          onError: (err) => {
+            console.error(`\nConnection error: ${err.message}`);
+          },
+        });
+      }
     } catch (err) {
       handleError(err);
     }

@@ -118,7 +118,7 @@ export function WorkspaceDetail() {
           </Button>
         </div>
         <div className="flex-1 min-h-0">
-          <Terminal workspaceName={workspace.name} />
+          <Terminal key={workspace.name} workspaceName={workspace.name} />
         </div>
       </div>
     )
