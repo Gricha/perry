@@ -16,6 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export function WorkspaceList() {
   const queryClient = useQueryClient()
@@ -23,6 +33,8 @@ export function WorkspaceList() {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newRepo, setNewRepo] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
 
   const { data: workspaces, isLoading, error, refetch } = useQuery({
     queryKey: ['workspaces'],
@@ -51,7 +63,11 @@ export function WorkspaceList() {
 
   const deleteMutation = useMutation({
     mutationFn: (name: string) => api.deleteWorkspace(name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      setDeleteTarget(null)
+      setDeleteConfirmName('')
+    },
   })
 
   const handleCreate = (e: React.FormEvent) => {
@@ -65,6 +81,22 @@ export function WorkspaceList() {
 
   const handleRowClick = (ws: WorkspaceInfo) => {
     navigate(`/workspaces/${ws.name}/sessions`)
+  }
+
+  const handleDeleteClick = (name: string) => {
+    setDeleteTarget(name)
+    setDeleteConfirmName('')
+  }
+
+  const handleDeleteConfirm = () => {
+    if (deleteTarget && deleteConfirmName === deleteTarget) {
+      deleteMutation.mutate(deleteTarget)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteTarget(null)
+    setDeleteConfirmName('')
   }
 
   if (error) {
@@ -237,11 +269,7 @@ export function WorkspaceList() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => {
-                            if (confirm(`Delete workspace "${ws.name}"?`)) {
-                              deleteMutation.mutate(ws.name)
-                            }
-                          }}
+                          onClick={() => handleDeleteClick(ws.name)}
                           disabled={deleteMutation.isPending}
                           title="Delete workspace"
                         >
@@ -256,6 +284,43 @@ export function WorkspaceList() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && handleDeleteCancel()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the workspace
+              <span className="font-mono font-semibold text-foreground"> {deleteTarget}</span> and
+              all its data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="confirm-name" className="text-sm text-muted-foreground">
+              Type <span className="font-mono font-semibold text-foreground">{deleteTarget}</span> to confirm
+            </Label>
+            <Input
+              id="confirm-name"
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder="Enter workspace name"
+              className="mt-2"
+              autoComplete="off"
+              data-testid="delete-confirm-input"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteCancel}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteConfirmName !== deleteTarget || deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Workspace'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

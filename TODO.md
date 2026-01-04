@@ -18,12 +18,6 @@
 
 ### UI Feedback Round 1
 
-#### Workspaces Page
-- [ ] **Add confirmation dialog for workspace deletion**
-  - File: `web/src/pages/WorkspaceDetails.tsx` (wherever delete button exists)
-  - Use shadcn AlertDialog component
-  - Require typing workspace name to confirm (prevents accidental deletion)
-
 #### Settings Pages
 - [ ] **Move delete/stop actions to a dedicated "Danger Zone" tab**
   - Files: Settings pages in `web/src/pages/settings/`
