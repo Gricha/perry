@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Send, StopCircle, Bot, User, Sparkles, Wrench, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { Send, StopCircle, Bot, Sparkles, Wrench, ChevronDown, CheckCircle2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { getChatUrl } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -37,26 +37,16 @@ interface ChatProps {
 
 function ToolUseBubble({
   toolName,
-  content,
-  isInTurn
+  content
 }: {
   toolName: string
   content: string
-  isInTurn: boolean
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   return (
-    <div className={cn('flex gap-3', isInTurn && 'ml-11')}>
-      {!isInTurn && (
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mt-1">
-          <Wrench className="h-3 w-3" />
-        </div>
-      )}
-      {isInTurn && (
-        <div className="w-0.5 bg-border/60 -ml-[22px] mr-5" />
-      )}
-      <div className="flex-1 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+    <div className="ml-0">
+      <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors w-full"
@@ -79,25 +69,15 @@ function ToolUseBubble({
 }
 
 function ToolResultBubble({
-  content,
-  isInTurn
+  content
 }: {
   content: string
-  isInTurn: boolean
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   return (
-    <div className={cn('flex gap-3', isInTurn && 'ml-11')}>
-      {!isInTurn && (
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-1">
-          <CheckCircle2 className="h-3 w-3" />
-        </div>
-      )}
-      {isInTurn && (
-        <div className="w-0.5 bg-border/60 -ml-[22px] mr-5" />
-      )}
-      <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+    <div className="ml-0">
+      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors w-full"
@@ -119,55 +99,25 @@ function ToolResultBubble({
   )
 }
 
-function TextBubble({
-  content,
-  isUser,
-  isInTurn,
-  showAvatar = true
-}: {
-  content: string
-  isUser: boolean
-  isInTurn: boolean
-  showAvatar?: boolean
-}) {
+function UserBubble({ content }: { content: string }) {
   return (
-    <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      {showAvatar && !isInTurn ? (
-        <div
-          className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-            isUser
-              ? 'bg-primary/10 text-primary'
-              : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600'
-          )}
-        >
-          {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-        </div>
-      ) : !isUser && isInTurn ? (
-        <div className="w-0.5 bg-border/60 ml-[15px] mr-5" />
-      ) : null}
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3',
-          isUser
-            ? 'bg-primary text-primary-foreground rounded-tr-sm'
-            : 'bg-muted/50 border border-border/50 rounded-tl-sm',
-          isInTurn && !isUser && 'ml-0'
-        )}
-      >
-        {isUser ? (
-          <p className="text-sm whitespace-pre-wrap">{content}</p>
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
-            <Markdown>{content}</Markdown>
-          </div>
-        )}
+    <div className="flex justify-end">
+      <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground rounded-tr-sm">
+        <p className="text-sm whitespace-pre-wrap">{content}</p>
       </div>
     </div>
   )
 }
 
-function MessageBubble({ message, isFirstInTurn }: { message: ChatMessage; isFirstInTurn: boolean }) {
+function AssistantText({ content }: { content: string }) {
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
+      <Markdown>{content}</Markdown>
+    </div>
+  )
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.type === 'system') {
     return (
       <div className="flex justify-center">
@@ -188,23 +138,16 @@ function MessageBubble({ message, isFirstInTurn }: { message: ChatMessage; isFir
     )
   }
 
-  const isUser = message.type === 'user'
-  const isInTurn = !isFirstInTurn
+  if (message.type === 'user') {
+    return <UserBubble content={message.content} />
+  }
 
   if (message.parts && message.parts.length > 0) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         {message.parts.map((part, idx) => {
-          const partIsFirstInTurn = idx === 0 && isFirstInTurn
-          if (part.type === 'text') {
-            return (
-              <TextBubble
-                key={idx}
-                content={part.content}
-                isUser={false}
-                isInTurn={!partIsFirstInTurn}
-              />
-            )
+          if (part.type === 'text' && part.content) {
+            return <AssistantText key={idx} content={part.content} />
           }
           if (part.type === 'tool_use') {
             return (
@@ -212,18 +155,11 @@ function MessageBubble({ message, isFirstInTurn }: { message: ChatMessage; isFir
                 key={idx}
                 toolName={part.toolName || 'unknown'}
                 content={part.content}
-                isInTurn={!partIsFirstInTurn}
               />
             )
           }
           if (part.type === 'tool_result') {
-            return (
-              <ToolResultBubble
-                key={idx}
-                content={part.content}
-                isInTurn={!partIsFirstInTurn}
-              />
-            )
+            return <ToolResultBubble key={idx} content={part.content} />
           }
           return null
         })}
@@ -231,31 +167,17 @@ function MessageBubble({ message, isFirstInTurn }: { message: ChatMessage; isFir
     )
   }
 
-  return (
-    <TextBubble
-      content={message.content}
-      isUser={isUser}
-      isInTurn={isInTurn}
-    />
-  )
+  return <AssistantText content={message.content} />
 }
 
 function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
   const hasContent = parts.some(p => p.content.length > 0)
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {parts.map((part, idx) => {
-        const isFirst = idx === 0
         if (part.type === 'text' && part.content) {
-          return (
-            <TextBubble
-              key={idx}
-              content={part.content}
-              isUser={false}
-              isInTurn={!isFirst}
-            />
-          )
+          return <AssistantText key={idx} content={part.content} />
         }
         if (part.type === 'tool_use') {
           return (
@@ -263,33 +185,19 @@ function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
               key={idx}
               toolName={part.toolName || 'unknown'}
               content={part.content}
-              isInTurn={!isFirst}
             />
           )
         }
         if (part.type === 'tool_result') {
-          return (
-            <ToolResultBubble
-              key={idx}
-              content={part.content}
-              isInTurn={!isFirst}
-            />
-          )
+          return <ToolResultBubble key={idx} content={part.content} />
         }
         return null
       })}
       {!hasContent && (
-        <div className="flex gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-600">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
-            <div className="flex gap-1">
-              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          </div>
+        <div className="flex gap-1">
+          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       )}
     </div>
@@ -511,15 +419,6 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
     }
   }
 
-  const getIsFirstInTurn = (index: number) => {
-    if (index === 0) return true
-    const currentMsg = messages[index]
-    const prevMsg = messages[index - 1]
-    if (currentMsg.type === 'assistant' && prevMsg.type === 'user') return true
-    if (currentMsg.type !== prevMsg.type) return true
-    return false
-  }
-
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center justify-between px-4 py-2 border-b">
@@ -547,7 +446,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Sparkles className="h-12 w-12 mb-4 opacity-20" />
@@ -561,11 +460,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         )}
 
         {messages.map((msg, idx) => (
-          <MessageBubble
-            key={idx}
-            message={msg}
-            isFirstInTurn={getIsFirstInTurn(idx)}
-          />
+          <MessageBubble key={idx} message={msg} />
         ))}
 
         {isStreaming && (
@@ -575,7 +470,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId }
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t p-4">
+      <div className="border-t p-4 pb-4">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}

@@ -18,12 +18,6 @@
 
 ### UI Feedback Round 1
 
-#### Settings Pages
-- [ ] **Standardize layout widths across all settings pages**
-  - Files: `web/src/pages/settings/Environment.tsx`, `Agents.tsx`, `Files.tsx`
-  - Currently env vars, coding agents, credential files pages have inconsistent widths
-  - Use same max-width container and card sizing across all
-
 #### Chat Component Cleanup
 - [ ] **Remove vertical connector lines from chat messages**
   - File: `web/src/components/Chat.tsx`
