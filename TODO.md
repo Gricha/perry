@@ -16,7 +16,104 @@
 
 ## Tasks
 
-_No active tasks. See Considerations for potential future work._
+### Race Conditions & Stability
+
+#### Add proper-lockfile to state file writes
+**File**: `src/workspace/state.ts`
+
+The `save()` method writes state to disk without locking. Multiple processes or rapid operations could corrupt the file. The `proper-lockfile` package is already in dependencies but not used here.
+
+**Fix**: Wrap `fs.writeFile()` in `withLock()` pattern used elsewhere in codebase.
+
+#### Fix WebSocket send-after-close race condition
+**File**: `src/shared/base-websocket.ts` (line ~76)
+
+Current code checks `ws.readyState === WebSocket.OPEN` then sends, but socket can close between check and send. Need to wrap in try-catch or use a queue pattern.
+
+**Fix**: Add try-catch around `ws.send()` calls and handle CLOSING/CLOSED states gracefully.
+
+#### Add container health check before exec operations
+**Files**: `src/workspace/manager.ts` (lines ~444-453, ~529-538)
+
+After `docker.startContainer()`, code immediately runs `docker exec` to copy credentials. Container may not be ready to accept exec commands. Add retry loop with exponential backoff or health check.
+
+**Fix**: Create `waitForContainer(name, timeout)` helper that polls container readiness before returning.
+
+---
+
+### Code Duplication
+
+#### Extract credential setup into single method
+**File**: `src/workspace/manager.ts`
+
+The `create()`, `start()`, and `sync()` methods all duplicate these 5 calls:
+```typescript
+await this.copyGitConfig(containerName);
+await this.copyCredentialFiles(containerName);
+await this.setupClaudeCodeConfig(containerName);
+await this.copyCodexCredentials(containerName);
+await this.setupOpencodeConfig(containerName);
+```
+
+**Fix**: Create `private async setupWorkspaceCredentials(containerName: string)` and call from all three methods.
+
+#### Create base class for chat WebSocket handlers
+**Files**: `src/chat/websocket.ts`, `src/chat/opencode-websocket.ts`
+
+These files are ~95% identical with same connection handling, message routing, and error handling. Only difference is which session factory they call.
+
+**Fix**: Create `src/chat/base-chat-websocket.ts` with shared logic, then have both handlers extend it and override only the session creation method.
+
+#### Abstract shared terminal handler logic
+**Files**: `src/terminal/handler.ts`, `src/terminal/host-handler.ts`
+
+Near-identical implementations of terminal session management. Only difference is whether it's container or host terminal.
+
+**Fix**: Create shared base class or extract common helper functions. Keep target-specific spawn logic separate.
+
+---
+
+### Code Bifurcation
+
+#### Refactor listSessionsCore() agent-specific logic
+**File**: `src/agent/router.ts` (lines ~533-835)
+
+Three divergent code paths for Claude/OpenCode/Codex session listing. Bug fixes in one don't propagate to others.
+
+**Fix**:
+1. Create `src/sessions/agents/` directory with `claude.ts`, `opencode.ts`, `codex.ts`
+2. Each exports `listSessions(container)` and `getSession(container, id)` functions
+3. `listSessionsCore()` becomes a dispatcher that calls agent-specific implementations
+4. Shared parsing/formatting stays in router or moves to `src/sessions/utils.ts`
+
+#### Refactor getSession() agent-specific logic
+**File**: `src/agent/router.ts` (lines ~850-1111)
+
+~250 lines across 4 bifurcated paths (host + 3 agent types). Same fix as above - extract agent-specific logic into dedicated modules.
+
+---
+
+### Type Safety
+
+#### Consolidate duplicate WorkspaceState type definitions
+**Files**: `src/workspace/types.ts`, `src/shared/types.ts`
+
+Two different `WorkspaceState` type definitions exist. Consolidate into single source of truth in `src/shared/types.ts` and update all imports.
+
+---
+
+### CI
+
+#### Add explicit typecheck step to test workflow
+**File**: `.github/workflows/test.yml`
+
+Build implies typecheck but doesn't make it explicit. Add separate step:
+```yaml
+- name: Typecheck
+  run: bun x tsc --noEmit
+```
+
+This makes typecheck failures more visible in CI output.
 
 ---
 
@@ -50,31 +147,9 @@ Track API token usage across workspaces to monitor costs. Approaches researched:
 - Per-agent and per-workspace breakdown
 - Cost estimation based on model pricing
 
-### systemd Service Installation
-
-DESIGN.md mentions `ws agent install` for systemd service installation. Not currently implemented. Would allow:
-```bash
-ws agent install
-systemctl start workspace-agent
-```
-
 ### Mock Claude API in Chat Tests
 
 Consider adding MSW (Mock Service Worker) or similar to mock Claude API responses in chat integration tests. This would:
 - Avoid requiring real API keys in CI
 - Make tests faster and more reliable
 - Allow testing of specific response scenarios
-
-### Large File Refactoring
-
-5 files exceed 500 lines and could be split for maintainability:
-
-| File | Lines | Suggested Split |
-|------|-------|-----------------|
-| `src/agent/router.ts` | 643 | → workspaces.ts, sessions.ts, config.ts |
-| `src/sessions/parser.ts` | 597 | → claude-parser.ts, opencode-parser.ts, codex-parser.ts |
-| `src/workspace/manager.ts` | 521 | → Extract credentials.ts, cleanup.ts |
-| `src/tui/app.ts` | 487 | → Extract views, handlers |
-| `src/index.ts` | 451 | → Split commands by domain |
-
-Lower priority than deduplication - consider after other cleanup.
