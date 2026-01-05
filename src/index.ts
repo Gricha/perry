@@ -31,10 +31,12 @@ agentCmd
   .description('Start the agent daemon')
   .option('-p, --port <port>', 'Port to listen on', parseInt)
   .option('-c, --config-dir <dir>', 'Configuration directory')
+  .option('--no-host-access', 'Disable direct host machine access')
   .action(async (options) => {
     await startAgent({
       port: options.port,
       configDir: options.configDir,
+      noHostAccess: options.hostAccess === false,
     });
   });
 
@@ -43,10 +45,12 @@ agentCmd
   .description('Install agent as systemd user service')
   .option('-p, --port <port>', 'Port to listen on', parseInt)
   .option('-c, --config-dir <dir>', 'Configuration directory')
+  .option('--no-host-access', 'Disable direct host machine access')
   .action(async (options) => {
     await installService({
       port: options.port,
       configDir: options.configDir,
+      noHostAccess: options.hostAccess === false,
     });
   });
 

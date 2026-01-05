@@ -21,6 +21,7 @@ export function createDefaultAgentConfig(): AgentConfig {
     },
     scripts: {},
     agents: {},
+    allowHostAccess: true,
   };
 }
 
@@ -39,7 +40,7 @@ export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> 
       },
       scripts: config.scripts || {},
       agents: config.agents || {},
-      allowHostAccess: config.allowHostAccess || false,
+      allowHostAccess: config.allowHostAccess ?? true,
     };
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {

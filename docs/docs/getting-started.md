@@ -7,23 +7,42 @@ sidebar_position: 3
 ## Start Agent
 
 ```bash
-ws agent start
+workspace agent run
 ```
 
 Web UI: `http://localhost:7391`
 
 Options:
 ```bash
-ws agent start --port 3000     # Custom port
-ws agent start --host 0.0.0.0  # Remote access
+workspace agent run --port 3000       # Custom port
+workspace agent run --no-host-access  # Disable direct host machine access
+```
+
+## Host Access
+
+By default, the agent enables direct access to your host machine. This allows running terminals and AI coding agents directly on your machine without Docker isolation.
+
+To disable host access (workspaces-only mode):
+```bash
+workspace agent run --no-host-access
+```
+
+Or via environment variable:
+```bash
+WS_NO_HOST_ACCESS=true workspace agent run
+```
+
+For systemd service installation:
+```bash
+workspace agent install --no-host-access
 ```
 
 ## Create Workspace
 
 CLI:
 ```bash
-ws create myproject
-ws create myproject --clone git@github.com:user/repo.git
+workspace create myproject
+workspace create myproject --clone git@github.com:user/repo.git
 ```
 
 Web UI:
@@ -36,7 +55,7 @@ Web UI:
 
 SSH:
 ```bash
-ws list  # Find port
+workspace list  # Find port
 ssh -p 2201 workspace@localhost
 ```
 
@@ -45,10 +64,9 @@ Web Terminal: Click workspace → Terminal
 ## Commands
 
 ```bash
-ws list              # List all
-ws start <name>      # Start
-ws stop <name>       # Stop
-ws delete <name>     # Delete
-ws logs <name>       # Logs
-ws agent stop        # Stop agent
+workspace list              # List all
+workspace start <name>      # Start
+workspace stop <name>       # Stop
+workspace delete <name>     # Delete
+workspace logs <name>       # Logs
 ```

@@ -130,6 +130,7 @@ function createAgentServer(configDir: string, config: AgentConfig) {
 export interface StartAgentOptions {
   port?: number;
   configDir?: string;
+  noHostAccess?: boolean;
 }
 
 async function getProcessUsingPort(port: number): Promise<string | null> {
@@ -159,6 +160,11 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
   await ensureConfigDir(configDir);
 
   const config = await loadAgentConfig(configDir);
+
+  if (options.noHostAccess || process.env.WS_NO_HOST_ACCESS === 'true') {
+    config.allowHostAccess = false;
+  }
+
   const port =
     options.port || parseInt(process.env.WS_PORT || '', 10) || config.port || DEFAULT_AGENT_PORT;
 

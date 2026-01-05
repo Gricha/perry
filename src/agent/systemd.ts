@@ -19,6 +19,7 @@ function getServicePath(): string {
 interface InstallOptions {
   port?: number;
   configDir?: string;
+  noHostAccess?: boolean;
 }
 
 export function generateServiceFile(options: InstallOptions = {}): string {
@@ -27,6 +28,16 @@ export function generateServiceFile(options: InstallOptions = {}): string {
 
   const nodePath = process.execPath;
   const agentPath = path.resolve(__dirname, 'index.js');
+
+  const envLines = [
+    `Environment=WS_PORT=${port}`,
+    `Environment=WS_CONFIG_DIR=${configDir}`,
+    `Environment=NODE_ENV=production`,
+  ];
+
+  if (options.noHostAccess) {
+    envLines.push(`Environment=WS_NO_HOST_ACCESS=true`);
+  }
 
   return `[Unit]
 Description=${SERVICE_DESCRIPTION}
@@ -38,9 +49,7 @@ Type=simple
 ExecStart=${nodePath} ${agentPath}
 Restart=on-failure
 RestartSec=5
-Environment=WS_PORT=${port}
-Environment=WS_CONFIG_DIR=${configDir}
-Environment=NODE_ENV=production
+${envLines.join('\n')}
 
 [Install]
 WantedBy=default.target
