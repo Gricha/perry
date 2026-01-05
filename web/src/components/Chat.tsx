@@ -82,22 +82,22 @@ function ToolBubble({
 
   return (
     <div className="ml-0">
-      <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+      <div className="bg-secondary/50 border border-border rounded-lg px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors w-full text-left"
+          className="flex items-center gap-2 text-xs text-foreground/80 hover:text-foreground transition-colors w-full text-left"
         >
           <ChevronDown
             className={cn('h-3 w-3 transition-transform flex-shrink-0', isExpanded && 'rotate-180')}
           />
           {hasResult ? (
-            <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-success" />
           ) : (
             <Wrench className="h-3 w-3 flex-shrink-0" />
           )}
           <span className="font-mono font-medium flex-shrink-0">{toolName}</span>
           {summary && !isExpanded && (
-            <span className="font-mono text-amber-600/70 dark:text-amber-500/70 truncate">{summary}</span>
+            <span className="font-mono text-muted-foreground truncate">{summary}</span>
           )}
         </button>
         {isExpanded && (
@@ -105,7 +105,7 @@ function ToolBubble({
             {input && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Input</div>
-                <pre className="p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-border/50">
+                <pre className="p-2 bg-muted/50 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-border/50 text-foreground/90">
                   {input.slice(0, 500)}
                   {input.length > 500 && '... (truncated)'}
                 </pre>
@@ -114,7 +114,7 @@ function ToolBubble({
             {hasResult && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Result</div>
-                <pre className="p-2 bg-emerald-500/5 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-emerald-500/20 whitespace-pre-wrap">
+                <pre className="p-2 bg-success/5 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto border border-success/20 whitespace-pre-wrap text-foreground/90">
                   {result.slice(0, 1000)}
                   {result.length > 1000 && '... (truncated)'}
                 </pre>
@@ -139,7 +139,7 @@ function UserBubble({ content }: { content: string }) {
 
 function AssistantText({ content }: { content: string }) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-pre:bg-background/50 prose-pre:border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
+    <div className="prose prose-sm max-w-none prose-p:my-1.5 prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-pre:text-foreground/90 prose-li:text-foreground prose-blockquote:text-muted-foreground prose-blockquote:border-border">
       <Markdown>{content}</Markdown>
     </div>
   )
@@ -537,8 +537,8 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
         </div>
         <div className="flex items-center gap-2">
           {isConnected ? (
-            <span className="flex items-center gap-1 text-xs text-emerald-600">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="flex items-center gap-1 text-xs text-success">
+              <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
               Connected
             </span>
           ) : (
