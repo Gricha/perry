@@ -18,13 +18,6 @@
 
 ### Race Conditions & Stability
 
-#### Add proper-lockfile to state file writes
-**File**: `src/workspace/state.ts`
-
-The `save()` method writes state to disk without locking. Multiple processes or rapid operations could corrupt the file. The `proper-lockfile` package is already in dependencies but not used here.
-
-**Fix**: Wrap `fs.writeFile()` in `withLock()` pattern used elsewhere in codebase.
-
 #### Fix WebSocket send-after-close race condition
 **File**: `src/shared/base-websocket.ts` (line ~76)
 

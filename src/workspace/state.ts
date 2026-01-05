@@ -1,14 +1,43 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import lockfile from 'proper-lockfile';
 import type { Workspace, WorkspaceState } from './types';
 import { STATE_FILE } from '../shared/types';
 
 export class StateManager {
   private statePath: string;
   private state: WorkspaceState | null = null;
+  private lockfilePath: string;
 
   constructor(configDir: string) {
     this.statePath = path.join(configDir, STATE_FILE);
+    this.lockfilePath = path.join(configDir, '.state.lock');
+  }
+
+  private async ensureLockfile(): Promise<void> {
+    try {
+      await fs.mkdir(path.dirname(this.lockfilePath), { recursive: true });
+      await fs.writeFile(this.lockfilePath, '', { flag: 'wx' });
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    await this.ensureLockfile();
+    let release: (() => Promise<void>) | undefined;
+    try {
+      release = await lockfile.lock(this.lockfilePath, {
+        retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+      });
+      return await fn();
+    } finally {
+      if (release) {
+        await release();
+      }
+    }
   }
 
   async load(): Promise<WorkspaceState> {
@@ -35,8 +64,10 @@ export class StateManager {
       return;
     }
 
-    await fs.mkdir(path.dirname(this.statePath), { recursive: true });
-    await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8');
+    await this.withLock(async () => {
+      await fs.mkdir(path.dirname(this.statePath), { recursive: true });
+      await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8');
+    });
   }
 
   async getWorkspace(name: string): Promise<Workspace | null> {
