@@ -2,32 +2,32 @@ import { useState } from 'react'
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Modal,
-  ScrollView,
+  SectionList,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useNavigation } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
-import { api, WorkspaceInfo, SessionInfo, SessionMessage, AgentType } from '../lib/api'
+import { api, SessionInfo, AgentType } from '../lib/api'
 import { useNetwork, parseNetworkError } from '../lib/network'
 
 type AgentFilter = AgentType | 'all'
 
 const AGENT_FILTERS: { value: AgentFilter; label: string }[] = [
-  { value: 'all', label: 'All Agents' },
-  { value: 'claude-code', label: 'Claude Code' },
+  { value: 'all', label: 'All' },
+  { value: 'claude-code', label: 'Claude' },
   { value: 'opencode', label: 'OpenCode' },
   { value: 'codex', label: 'Codex' },
 ]
 
 function AgentBadge({ type }: { type: AgentType }) {
   const labels: Record<AgentType, string> = {
-    'claude-code': 'Claude',
-    opencode: 'OpenCode',
-    codex: 'Codex',
+    'claude-code': 'CC',
+    opencode: 'OC',
+    codex: 'CX',
   }
   const colors: Record<AgentType, string> = {
     'claude-code': '#ff6b35',
@@ -38,33 +38,6 @@ function AgentBadge({ type }: { type: AgentType }) {
     <View style={[styles.agentBadge, { backgroundColor: colors[type] }]}>
       <Text style={styles.agentBadgeText}>{labels[type]}</Text>
     </View>
-  )
-}
-
-function SessionItem({
-  session,
-  onPress,
-}: {
-  session: SessionInfo
-  onPress: () => void
-}) {
-  const preview = session.firstPrompt?.slice(0, 80) || 'No messages'
-  const date = new Date(session.lastActivity)
-  const timeAgo = getTimeAgo(date)
-
-  return (
-    <TouchableOpacity style={styles.item} onPress={onPress}>
-      <View style={styles.itemHeader}>
-        <AgentBadge type={session.agentType} />
-        <Text style={styles.itemTime}>{timeAgo}</Text>
-      </View>
-      <Text style={styles.itemPreview} numberOfLines={2}>
-        {preview}
-      </Text>
-      <Text style={styles.itemMeta}>
-        {session.messageCount} messages
-      </Text>
-    </TouchableOpacity>
   )
 }
 
@@ -82,174 +55,91 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString()
 }
 
-function MessageBubble({ message }: { message: SessionMessage }) {
-  const isUser = message.type === 'user'
-  const isSystem = message.type === 'system'
-  const isTool = message.type === 'tool_use' || message.type === 'tool_result'
+function getDateGroup(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86400000)
+  const weekAgo = new Date(today.getTime() - 7 * 86400000)
 
-  if (isTool) {
-    return (
-      <View style={styles.toolMessage}>
-        <Text style={styles.toolLabel}>
-          {message.type === 'tool_use' ? `Using: ${message.toolName}` : 'Tool Result'}
-        </Text>
-        <Text style={styles.toolContent} numberOfLines={10}>
-          {message.content || message.toolInput || ''}
-        </Text>
-      </View>
-    )
-  }
-
-  if (isSystem) {
-    return (
-      <View style={styles.systemMessage}>
-        <Text style={styles.systemText}>{message.content}</Text>
-      </View>
-    )
-  }
-
-  return (
-    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-      <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{message.content}</Text>
-    </View>
-  )
+  if (date >= today) return 'Today'
+  if (date >= yesterday) return 'Yesterday'
+  if (date >= weekAgo) return 'This Week'
+  return 'Older'
 }
 
-function SessionDetailModal({
-  workspaceName,
-  session,
-  onClose,
-}: {
+interface SessionWithWorkspace extends SessionInfo {
   workspaceName: string
-  session: SessionInfo
-  onClose: () => void
+}
+
+function SessionItem({
+  session,
+  onPress,
+}: {
+  session: SessionWithWorkspace
+  onPress: () => void
 }) {
-  const { data: detail, isLoading } = useQuery({
-    queryKey: ['session', workspaceName, session.id],
-    queryFn: () => api.getSession(workspaceName, session.id),
-  })
+  const preview = session.firstPrompt?.slice(0, 100) || 'No messages'
+  const timeAgo = getTimeAgo(new Date(session.lastActivity))
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={styles.detailContainer}>
-        <View style={styles.detailHeader}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.detailClose}>Close</Text>
-          </TouchableOpacity>
-          <View style={styles.detailTitleContainer}>
-            <AgentBadge type={session.agentType} />
-          </View>
-          <View style={{ width: 50 }} />
+    <TouchableOpacity style={styles.sessionItem} onPress={onPress}>
+      <View style={styles.sessionHeader}>
+        <View style={styles.sessionHeaderLeft}>
+          <AgentBadge type={session.agentType} />
+          <Text style={styles.workspaceName}>{session.workspaceName}</Text>
         </View>
-        {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#0a84ff" />
-          </View>
-        ) : (
-          <FlatList
-            data={detail?.messages || []}
-            keyExtractor={(_, index) => index.toString()}
-            renderItem={({ item }) => <MessageBubble message={item} />}
-            contentContainerStyle={styles.messageList}
-            inverted={false}
-          />
-        )}
+        <Text style={styles.sessionTime}>{timeAgo}</Text>
       </View>
-    </Modal>
+      <Text style={styles.sessionPreview} numberOfLines={2}>
+        {preview}
+      </Text>
+      <Text style={styles.sessionMeta}>
+        {session.messageCount} messages · {session.projectPath}
+      </Text>
+    </TouchableOpacity>
   )
 }
 
-function WorkspaceSessionsList({ workspace, agentFilter }: { workspace: WorkspaceInfo; agentFilter: AgentFilter }) {
-  const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
-
-  const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['sessions', workspace.name, agentFilter],
-    queryFn: () => api.listSessions(workspace.name, agentFilter === 'all' ? undefined : agentFilter, 50),
-  })
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#0a84ff" />
-      </View>
-    )
-  }
-
-  const sessions = data?.sessions || []
-
-  if (sessions.length === 0) {
-    return (
-      <View style={styles.emptyWorkspace}>
-        <Text style={styles.emptyWorkspaceText}>No sessions</Text>
-      </View>
-    )
-  }
-
+function AgentFilterPicker({ value, onChange }: { value: AgentFilter; onChange: (v: AgentFilter) => void }) {
   return (
-    <View>
-      <FlatList
-        data={sessions}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <SessionItem session={item} onPress={() => setSelectedSession(item)} />
-        )}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
-        scrollEnabled={false}
-      />
-      {selectedSession && (
-        <SessionDetailModal
-          workspaceName={workspace.name}
-          session={selectedSession}
-          onClose={() => setSelectedSession(null)}
-        />
-      )}
-    </View>
-  )
-}
-
-function AgentFilterDropdown({ value, onChange }: { value: AgentFilter; onChange: (v: AgentFilter) => void }) {
-  const [showModal, setShowModal] = useState(false)
-  const currentLabel = AGENT_FILTERS.find((f) => f.value === value)?.label || 'All Agents'
-
-  return (
-    <>
-      <TouchableOpacity style={styles.filterButton} onPress={() => setShowModal(true)}>
-        <Text style={styles.filterButtonText}>{currentLabel}</Text>
-        <Text style={styles.filterButtonIcon}>▼</Text>
-      </TouchableOpacity>
-      <Modal visible={showModal} animationType="fade" transparent onRequestClose={() => setShowModal(false)}>
-        <TouchableOpacity style={styles.filterModalOverlay} activeOpacity={1} onPress={() => setShowModal(false)}>
-          <View style={styles.filterModalContent}>
-            {AGENT_FILTERS.map((filter) => (
-              <TouchableOpacity
-                key={filter.value}
-                style={[styles.filterOption, value === filter.value && styles.filterOptionSelected]}
-                onPress={() => { onChange(filter.value); setShowModal(false) }}
-              >
-                <Text style={[styles.filterOptionText, value === filter.value && styles.filterOptionTextSelected]}>
-                  {filter.label}
-                </Text>
-                {value === filter.value && <Text style={styles.filterOptionCheck}>✓</Text>}
-              </TouchableOpacity>
-            ))}
-          </View>
+    <View style={styles.filterPicker}>
+      {AGENT_FILTERS.map((filter) => (
+        <TouchableOpacity
+          key={filter.value}
+          style={[styles.filterChip, value === filter.value && styles.filterChipSelected]}
+          onPress={() => onChange(filter.value)}
+        >
+          <Text style={[styles.filterChipText, value === filter.value && styles.filterChipTextSelected]}>
+            {filter.label}
+          </Text>
         </TouchableOpacity>
-      </Modal>
-    </>
+      ))}
+    </View>
   )
 }
 
 export function SessionsScreen() {
+  const insets = useSafeAreaInsets()
+  const navigation = useNavigation<any>()
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all')
   const { status } = useNetwork()
-  const { data: workspaces, isLoading, refetch, isRefetching, error } = useQuery({
-    queryKey: ['workspaces'],
-    queryFn: api.listWorkspaces,
+
+  const { data, isLoading, refetch, isRefetching, error } = useQuery({
+    queryKey: ['allSessions', agentFilter],
+    queryFn: () => api.listAllSessions(agentFilter === 'all' ? undefined : agentFilter, 100),
   })
+
+  const handleSessionPress = (session: SessionWithWorkspace) => {
+    navigation.navigate('SessionDetail', {
+      workspaceName: session.workspaceName,
+      sessionId: session.id,
+      agentType: session.agentType,
+    })
+  }
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color="#0a84ff" />
       </View>
     )
@@ -257,7 +147,7 @@ export function SessionsScreen() {
 
   if (error && status !== 'connected') {
     return (
-      <View style={styles.center}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
         <Text style={styles.errorIcon}>⚠</Text>
         <Text style={styles.errorTitle}>Cannot Load Sessions</Text>
         <Text style={styles.errorText}>{parseNetworkError(error)}</Text>
@@ -268,32 +158,55 @@ export function SessionsScreen() {
     )
   }
 
-  const runningWorkspaces = (workspaces || []).filter((w) => w.status === 'running')
+  const sessions = (data?.sessions || []) as SessionWithWorkspace[]
+
+  const grouped = sessions.reduce((acc, session) => {
+    const group = getDateGroup(new Date(session.lastActivity))
+    if (!acc[group]) acc[group] = []
+    acc[group].push(session)
+    return acc
+  }, {} as Record<string, SessionWithWorkspace[]>)
+
+  const groupOrder = ['Today', 'Yesterday', 'This Week', 'Older']
+  const sections = groupOrder
+    .filter((group) => grouped[group]?.length > 0)
+    .map((group) => ({ title: group, data: grouped[group] }))
 
   return (
-    <View style={styles.container}>
-      <View style={styles.filterBar}>
-        <Text style={styles.filterLabel}>Filter by agent:</Text>
-        <AgentFilterDropdown value={agentFilter} onChange={setAgentFilter} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Sessions</Text>
       </View>
-      <ScrollView
-        style={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
-      >
-        {runningWorkspaces.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No running workspaces</Text>
-            <Text style={styles.emptySubtext}>Start a workspace to see sessions</Text>
-          </View>
-        ) : (
-          runningWorkspaces.map((workspace) => (
-            <View key={workspace.name} style={styles.workspaceSection}>
-              <Text style={styles.workspaceName}>{workspace.name}</Text>
-              <WorkspaceSessionsList workspace={workspace} agentFilter={agentFilter} />
-            </View>
-          ))
-        )}
-      </ScrollView>
+
+      <View style={styles.filterBar}>
+        <AgentFilterPicker value={agentFilter} onChange={setAgentFilter} />
+      </View>
+
+      {sessions.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyIcon}>💬</Text>
+          <Text style={styles.emptyText}>No sessions found</Text>
+          <Text style={styles.emptySubtext}>
+            {agentFilter === 'all'
+              ? 'Start a coding agent in a workspace'
+              : `No ${AGENT_FILTERS.find((f) => f.value === agentFilter)?.label} sessions`}
+          </Text>
+        </View>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => `${item.workspaceName}-${item.id}`}
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.sectionHeader}>{section.title}</Text>
+          )}
+          renderItem={({ item }) => (
+            <SessionItem session={item} onPress={() => handleSessionPress(item)} />
+          )}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 20 }]}
+          stickySectionHeadersEnabled={false}
+        />
+      )}
     </View>
   )
 }
@@ -303,15 +216,126 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  scrollContent: {
-    flex: 1,
-  },
   center: {
-    flex: 1,
-    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  filterBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
+  },
+  filterPicker: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#1c1c1e',
+  },
+  filterChipSelected: {
+    backgroundColor: '#0a84ff',
+  },
+  filterChipText: {
+    fontSize: 14,
+    color: '#8e8e93',
+    fontWeight: '500',
+  },
+  filterChipTextSelected: {
+    color: '#fff',
+  },
+  list: {
+    padding: 16,
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  sessionItem: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sessionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  workspaceName: {
+    fontSize: 13,
+    color: '#8e8e93',
+    fontWeight: '500',
+  },
+  sessionTime: {
+    fontSize: 12,
+    color: '#636366',
+  },
+  sessionPreview: {
+    fontSize: 14,
+    color: '#fff',
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  sessionMeta: {
+    fontSize: 12,
+    color: '#636366',
+  },
+  agentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  agentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#8e8e93',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#636366',
+    marginTop: 4,
+    textAlign: 'center',
   },
   errorIcon: {
     fontSize: 48,
@@ -340,220 +364,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
-  },
-  filterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c1c1e',
-  },
-  filterLabel: {
-    fontSize: 14,
-    color: '#8e8e93',
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1c1c1e',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  filterButtonIcon: {
-    fontSize: 10,
-    color: '#8e8e93',
-  },
-  filterModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  filterModalContent: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  filterOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2c2e',
-  },
-  filterOptionSelected: {
-    backgroundColor: '#2c2c2e',
-  },
-  filterOptionText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  filterOptionTextSelected: {
-    color: '#0a84ff',
-    fontWeight: '600',
-  },
-  filterOptionCheck: {
-    fontSize: 16,
-    color: '#0a84ff',
-    fontWeight: '600',
-  },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#8e8e93',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#636366',
-    marginTop: 4,
-  },
-  workspaceSection: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c1c1e',
-  },
-  workspaceName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#8e8e93',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyWorkspace: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  emptyWorkspaceText: {
-    fontSize: 14,
-    color: '#636366',
-  },
-  item: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  itemTime: {
-    fontSize: 12,
-    color: '#636366',
-  },
-  itemPreview: {
-    fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  itemMeta: {
-    fontSize: 12,
-    color: '#636366',
-  },
-  agentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  agentBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  detailContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c1c1e',
-  },
-  detailClose: {
-    fontSize: 16,
-    color: '#0a84ff',
-  },
-  detailTitleContainer: {
-    alignItems: 'center',
-  },
-  messageList: {
-    padding: 16,
-  },
-  bubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 8,
-  },
-  userBubble: {
-    backgroundColor: '#0a84ff',
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  assistantBubble: {
-    backgroundColor: '#2c2c2e',
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: '#fff',
-    lineHeight: 20,
-  },
-  userBubbleText: {
-    color: '#fff',
-  },
-  systemMessage: {
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  systemText: {
-    fontSize: 12,
-    color: '#636366',
-    fontStyle: 'italic',
-  },
-  toolMessage: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#ff9f0a',
-  },
-  toolLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#ff9f0a',
-    marginBottom: 4,
-  },
-  toolContent: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    color: '#8e8e93',
   },
 })

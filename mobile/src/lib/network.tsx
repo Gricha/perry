@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo'
-import { api, getBaseUrl } from './api'
+import { api, getBaseUrl, isConfigured } from './api'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'server-unreachable'
 
@@ -98,6 +99,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
 export function ConnectionBanner() {
   const { status, lastError, checkConnection } = useNetwork()
+  const insets = useSafeAreaInsets()
   const [fadeAnim] = useState(new Animated.Value(0))
   const [isRetrying, setIsRetrying] = useState(false)
 
@@ -123,7 +125,7 @@ export function ConnectionBanner() {
   const isServerUnreachable = status === 'server-unreachable'
 
   return (
-    <Animated.View style={[styles.banner, isServerUnreachable ? styles.bannerWarning : styles.bannerError, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.banner, isServerUnreachable ? styles.bannerWarning : styles.bannerError, { opacity: fadeAnim, paddingTop: insets.top + 12 }]}>
       <View style={styles.bannerContent}>
         <Text style={styles.bannerIcon}>{isServerUnreachable ? '⚠' : '✕'}</Text>
         <View style={styles.bannerTextContainer}>

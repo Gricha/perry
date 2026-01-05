@@ -23,14 +23,15 @@ appId: com.subroutine.workspace
 
 - runFlow:
     when:
-      visible: "Filter by agent:"
+      visible: "All"
     commands:
-      - assertVisible: "All Agents"
+      - assertVisible: "Claude"
+      - assertVisible: "OpenCode"
 
 # Navigate to Settings tab
 - tapOn: "Settings"
+- assertVisible: "Settings"
 - assertVisible: "Connection"
-- assertVisible: "Coding Agents"
 
 # Navigate back to Workspaces tab
 - tapOn: "Workspaces"

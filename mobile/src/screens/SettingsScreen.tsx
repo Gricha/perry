@@ -11,8 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, CodingAgents, Credentials, Scripts, getBaseUrl, setBaseUrl, refreshClient } from '../lib/api'
+import { api, CodingAgents, Credentials, Scripts, SyncResult, getBaseUrl, saveServerConfig, getDefaultPort, refreshClient } from '../lib/api'
 import { useNetwork, parseNetworkError } from '../lib/network'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -500,36 +501,127 @@ function ScriptsSettings() {
   )
 }
 
+function SyncSettings() {
+  const queryClient = useQueryClient()
+  const [lastResult, setLastResult] = useState<SyncResult | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: () => api.syncAllWorkspaces(),
+    onSuccess: (result) => {
+      setLastResult(result)
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      if (result.failed === 0) {
+        Alert.alert('Success', `Synced credentials to ${result.synced} workspace${result.synced !== 1 ? 's' : ''}`)
+      } else {
+        Alert.alert(
+          'Partial Success',
+          `Synced: ${result.synced}, Failed: ${result.failed}\n\n${result.results
+            .filter(r => !r.success)
+            .map(r => `${r.name}: ${r.error}`)
+            .join('\n')}`
+        )
+      }
+    },
+    onError: (err) => {
+      Alert.alert('Error', parseNetworkError(err))
+    },
+  })
+
+  return (
+    <Section title="Sync">
+      <View style={styles.agentCard}>
+        <Text style={styles.agentName}>Sync All Workspaces</Text>
+        <Text style={styles.agentDescription}>
+          Push environment variables, file mappings, and agent credentials to all running workspaces
+        </Text>
+        {lastResult && (
+          <View style={styles.syncResultContainer}>
+            <View style={styles.syncResultRow}>
+              <Text style={styles.syncResultLabel}>Last sync:</Text>
+              <Text style={[styles.syncResultValue, { color: lastResult.failed === 0 ? '#34c759' : '#ff9f0a' }]}>
+                {lastResult.synced} synced, {lastResult.failed} failed
+              </Text>
+            </View>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.syncButton}
+          onPress={() => mutation.mutate()}
+          disabled={mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.syncButtonText}>Sync Now</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Section>
+  )
+}
+
 function ConnectionSettings() {
-  const [serverUrl, setServerUrl] = useState(getBaseUrl())
+  const currentUrl = getBaseUrl()
+  const urlMatch = currentUrl.match(/^https?:\/\/([^:]+):(\d+)$/)
+  const [host, setHost] = useState(urlMatch?.[1] || '')
+  const [port, setPort] = useState(urlMatch?.[2] || String(getDefaultPort()))
   const [hasChanges, setHasChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const queryClient = useQueryClient()
 
-  const handleSave = () => {
-    setBaseUrl(serverUrl.trim())
-    refreshClient()
-    queryClient.invalidateQueries()
-    setHasChanges(false)
-    Alert.alert('Success', 'Server URL updated')
+  const handleSave = async () => {
+    const trimmedHost = host.trim()
+    if (!trimmedHost) {
+      Alert.alert('Error', 'Please enter a hostname')
+      return
+    }
+    const portNum = parseInt(port, 10)
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      Alert.alert('Error', 'Please enter a valid port number')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await saveServerConfig(trimmedHost, portNum)
+      refreshClient()
+      queryClient.invalidateQueries()
+      setHasChanges(false)
+      Alert.alert('Success', 'Server settings updated')
+    } catch (err) {
+      Alert.alert('Error', 'Failed to save settings')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
     <Section title="Connection">
       <View style={styles.agentCard}>
         <Text style={styles.agentName}>Agent Server</Text>
-        <Text style={styles.agentDescription}>URL of the workspace agent</Text>
+        <Text style={styles.agentDescription}>Hostname and port of the workspace agent</Text>
         <SettingRow
-          label="Server URL"
-          value={serverUrl}
-          placeholder="http://localhost:8420"
-          onChangeText={(t) => { setServerUrl(t); setHasChanges(true) }}
+          label="Hostname"
+          value={host}
+          placeholder="my-server.tailnet.ts.net"
+          onChangeText={(t) => { setHost(t); setHasChanges(true) }}
+        />
+        <SettingRow
+          label="Port"
+          value={port}
+          placeholder={String(getDefaultPort())}
+          onChangeText={(t) => { setPort(t); setHasChanges(true) }}
         />
         <TouchableOpacity
           style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={!hasChanges}
+          disabled={!hasChanges || isSaving}
         >
-          <Text style={styles.saveButtonText}>Update Server</Text>
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Update Server</Text>
+          )}
         </TouchableOpacity>
       </View>
     </Section>
@@ -608,13 +700,19 @@ function formatUptime(seconds: number): string {
 }
 
 export function SettingsScreen() {
+  const insets = useSafeAreaInsets()
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
+      </View>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}>
         <ConnectionSettings />
+        <SyncSettings />
         <AgentsSettings />
         <EnvironmentSettings />
         <FilesSettings />
@@ -629,6 +727,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
   },
   content: {
     padding: 16,
@@ -823,5 +932,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8e8e93',
     fontFamily: 'monospace',
+  },
+  syncButton: {
+    backgroundColor: '#34c759',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  syncButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  syncResultContainer: {
+    backgroundColor: '#2c2c2e',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  syncResultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  syncResultLabel: {
+    fontSize: 13,
+    color: '#8e8e93',
+  },
+  syncResultValue: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 })

@@ -1,5 +1,6 @@
 import { createORPCClient } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export interface WorkspaceInfo {
   name: string
@@ -74,7 +75,15 @@ export interface SessionDetail {
   messages: SessionMessage[]
 }
 
-let baseUrl = 'http://localhost:8420'
+const DEFAULT_PORT = 7391
+const STORAGE_KEY = 'perry_server_config'
+
+interface ServerConfig {
+  host: string
+  port: number
+}
+
+let baseUrl = ''
 
 export function setBaseUrl(url: string): void {
   baseUrl = url
@@ -82,6 +91,30 @@ export function setBaseUrl(url: string): void {
 
 export function getBaseUrl(): string {
   return baseUrl
+}
+
+export function isConfigured(): boolean {
+  return baseUrl.length > 0
+}
+
+export async function loadServerConfig(): Promise<ServerConfig | null> {
+  const stored = await AsyncStorage.getItem(STORAGE_KEY)
+  if (!stored) return null
+  const config = JSON.parse(stored) as ServerConfig
+  baseUrl = `http://${config.host}:${config.port}`
+  client = createClient()
+  return config
+}
+
+export async function saveServerConfig(host: string, port: number = DEFAULT_PORT): Promise<void> {
+  const config: ServerConfig = { host, port }
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+  baseUrl = `http://${host}:${port}`
+  client = createClient()
+}
+
+export function getDefaultPort(): number {
+  return DEFAULT_PORT
 }
 
 function createClient() {
@@ -98,6 +131,8 @@ function createClient() {
       start: (input: { name: string }) => Promise<WorkspaceInfo>
       stop: (input: { name: string }) => Promise<WorkspaceInfo>
       logs: (input: { name: string; tail?: number }) => Promise<string>
+      sync: (input: { name: string }) => Promise<{ success: boolean }>
+      syncAll: () => Promise<{ synced: number; failed: number; results: { name: string; success: boolean; error?: string }[] }>
     }
     sessions: {
       list: (input: {
@@ -106,6 +141,11 @@ function createClient() {
         limit?: number
         offset?: number
       }) => Promise<{ sessions: SessionInfo[]; total: number; hasMore: boolean }>
+      listAll: (input: {
+        agentType?: AgentType
+        limit?: number
+        offset?: number
+      }) => Promise<{ sessions: (SessionInfo & { workspaceName: string })[]; total: number; hasMore: boolean }>
       get: (input: { workspaceName: string; sessionId: string; agentType?: AgentType }) => Promise<SessionDetail>
     }
     info: () => Promise<InfoResponse>
@@ -132,6 +172,16 @@ export function refreshClient(): void {
   client = createClient()
 }
 
+export interface SyncResult {
+  synced: number
+  failed: number
+  results: { name: string; success: boolean; error?: string }[]
+}
+
+export interface SessionInfoWithWorkspace extends SessionInfo {
+  workspaceName: string
+}
+
 export const api = {
   listWorkspaces: () => client.workspaces.list(),
   getWorkspace: (name: string) => client.workspaces.get({ name }),
@@ -140,8 +190,12 @@ export const api = {
   startWorkspace: (name: string) => client.workspaces.start({ name }),
   stopWorkspace: (name: string) => client.workspaces.stop({ name }),
   getLogs: (name: string, tail = 100) => client.workspaces.logs({ name, tail }),
+  syncWorkspace: (name: string) => client.workspaces.sync({ name }),
+  syncAllWorkspaces: () => client.workspaces.syncAll(),
   listSessions: (workspaceName: string, agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.list({ workspaceName, agentType, limit, offset }),
+  listAllSessions: (agentType?: AgentType, limit?: number, offset?: number) =>
+    client.sessions.listAll({ agentType, limit, offset }),
   getSession: (workspaceName: string, sessionId: string, agentType?: AgentType) =>
     client.sessions.get({ workspaceName, sessionId, agentType }),
   getInfo: () => client.info(),

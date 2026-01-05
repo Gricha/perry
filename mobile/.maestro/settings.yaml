@@ -13,9 +13,15 @@ appId: com.subroutine.workspace
 
 - tapOn: "Settings"
 
-# Connection section (always visible at top)
+# Settings header and Connection section (always visible at top)
+- assertVisible: "Settings"
 - assertVisible: "Connection"
-- assertVisible: "Server URL"
+- assertVisible: "Agent Server"
+- assertVisible: "Hostname"
+
+# Sync section
+- assertVisible: "Sync"
+- assertVisible: "Sync All Workspaces"
 
 # Coding Agents section header
 - assertVisible: "Coding Agents"
@@ -41,7 +47,13 @@ appId: com.subroutine.workspace
     direction: UP
     duration: 300
 
-# Scripts and About sections
+# File Mappings and Scripts sections
+- assertVisible: "File Mappings"
+
+- swipe:
+    direction: UP
+    duration: 300
+
 - assertVisible: "Scripts"
 
 - swipe:

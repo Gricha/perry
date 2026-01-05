@@ -18,22 +18,23 @@ appId: com.subroutine.workspace
     commands:
       - assertVisible: "Tap + to create one"
 
-# If workspaces exist, test the start/stop buttons
+# If workspaces exist, test navigating to detail screen
 - runFlow:
     when:
-      visible:
-        text: "SSH:"
+      visible: "Details"
     commands:
-      # Tap on the workspace card to open detail modal
+      # Tap on the Details button to navigate to workspace detail
+      - tapOn: "Details"
+      # Should see workspace detail screen with Sessions and Settings tabs
+      - assertVisible: "Sessions"
+      - assertVisible: "Settings"
+      # Test switching to Settings tab
+      - tapOn: "Settings"
+      # Should see settings options
+      - assertVisible: "Workspace Info"
+      # Go back to workspaces list
       - tapOn:
-          text: "SSH:"
-      # Should see workspace detail modal with logs
-      - assertVisible:
-          text: "Logs"
-          optional: true
-      # Close modal if open
-      - tapOn:
-          text: "Close"
+          text: ".*←.*"
           optional: true
 
 # Test start button if workspace is stopped
@@ -46,7 +47,7 @@ appId: com.subroutine.workspace
       # Wait a moment for the action to register
       - extendedWaitUntil:
           visible:
-            text: "running|Starting"
+            text: "running|Stop"
           timeout: 5000
 
 # Test stop button if workspace is running
@@ -59,7 +60,7 @@ appId: com.subroutine.workspace
       # Wait a moment for the action to register
       - extendedWaitUntil:
           visible:
-            text: "stopped|Stopping"
+            text: "stopped|Start"
           timeout: 5000
 
 # Test recover button if workspace is in error state
@@ -69,8 +70,8 @@ appId: com.subroutine.workspace
         text: "Recover"
     commands:
       - tapOn: "Recover"
-      # Verify recovery confirmation dialog appears
-      - assertVisible: "Recover Workspace"
-      - assertVisible: "Attempt to recover"
-      # Cancel the recovery for now
-      - tapOn: "Cancel"
+      # Wait for recovery to attempt
+      - extendedWaitUntil:
+          visible:
+            text: "running|Start"
+          timeout: 5000

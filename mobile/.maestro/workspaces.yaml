@@ -27,3 +27,13 @@ appId: com.subroutine.workspace
       visible: "No workspaces yet"
     commands:
       - assertVisible: "Tap + to create one"
+
+# If workspaces exist, verify stats bar and workspace items
+- runFlow:
+    when:
+      visible: "Total"
+    commands:
+      - assertVisible: "Running"
+      - assertVisible: "Stopped"
+      # Verify workspace items have expected buttons
+      - assertVisible: "Details"

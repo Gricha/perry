@@ -1,7 +1,7 @@
 appId: com.subroutine.workspace
 ---
 # Test: Session Screen and Filter
-# Verifies sessions screen loads and filter works when connected
+# Verifies sessions screen loads and filter chips work when connected
 
 - launchApp:
     clearState: true
@@ -20,17 +20,25 @@ appId: com.subroutine.workspace
     commands:
       - assertVisible: "Retry"
 
-# Test filter when connected
+# Test filter chips when connected
 - runFlow:
     when:
-      visible: "Filter by agent:"
+      visible: "All"
     commands:
-      - assertVisible: "All Agents"
-      - tapOn: "All Agents"
-      - assertVisible: "Claude Code"
+      - assertVisible: "Claude"
       - assertVisible: "OpenCode"
-      - tapOn: "Claude Code"
-      - assertVisible: "Claude Code"
+      - assertVisible: "Codex"
+      # Test selecting Claude filter
+      - tapOn: "Claude"
+      # Test selecting All filter
+      - tapOn: "All"
+
+# Handle empty state
+- runFlow:
+    when:
+      visible: "No sessions found"
+    commands:
+      - assertVisible: "Start a coding agent in a workspace"
 
 # Navigate back to verify everything still works
 - tapOn: "Workspaces"
