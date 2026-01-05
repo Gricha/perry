@@ -119,6 +119,21 @@ export async function getContainer(name: string): Promise<ContainerInfo | null> 
   }
 }
 
+export async function getContainerIp(name: string): Promise<string | null> {
+  try {
+    const { stdout } = await docker([
+      'inspect',
+      '--format',
+      '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}',
+      name,
+    ]);
+    const ip = stdout.trim();
+    return ip || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function listContainers(prefix?: string): Promise<ContainerInfo[]> {
   const args = ['ps', '-a', '--format', '{{json .}}'];
   if (prefix) {

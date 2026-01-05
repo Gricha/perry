@@ -7,8 +7,13 @@ import { installService, uninstallService, showStatus } from './agent/systemd';
 import { createApiClient, ApiClientError } from './client/api';
 import { loadClientConfig, getWorker, setWorker } from './client/config';
 import { openWSShell, openDockerExec, getTerminalWSUrl, isLocalWorker } from './client/ws-shell';
-import { getContainerName } from './docker';
+import { getContainerName, getContainerIp } from './docker';
 import { startProxy, parsePortForward, formatPortForwards } from './client/proxy';
+import {
+  startDockerProxy,
+  parsePortForward as parseDockerPortForward,
+  formatPortForwards as formatDockerPortForwards,
+} from './client/docker-proxy';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from './config/loader';
 import { buildImage } from './docker';
 import { DEFAULT_AGENT_PORT, WORKSPACE_IMAGE } from './shared/constants';
@@ -336,14 +341,8 @@ program
 
       if (ports.length === 0) {
         console.log(`Workspace '${name}' is running.`);
-        console.log(`  SSH Port: ${workspace.ports.ssh}`);
         console.log('');
-        console.log('To forward ports manually, run:');
-        console.log(
-          `  ssh -N -L <local>:<remote> -p ${workspace.ports.ssh} workspace@${worker.split(':')[0]}`
-        );
-        console.log('');
-        console.log('Or use: workspace proxy <name> <port> [<port>...]');
+        console.log('Usage: workspace proxy <name> <port> [<port>...]');
         console.log('  Examples:');
         console.log('    workspace proxy alpha 3000         # Forward port 3000');
         console.log('    workspace proxy alpha 8080:3000    # Forward local 8080 to remote 3000');
@@ -351,26 +350,62 @@ program
         return;
       }
 
-      const forwards = ports.map(parsePortForward);
+      if (isLocalWorker(worker)) {
+        const containerName = getContainerName(name);
+        const containerIp = await getContainerIp(containerName);
+        if (!containerIp) {
+          console.error(`Could not get IP for container '${containerName}'`);
+          process.exit(1);
+        }
 
-      console.log(`Forwarding ports: ${formatPortForwards(forwards)}`);
-      console.log('Press Ctrl+C to stop.');
-      console.log('');
+        const forwards = ports.map(parseDockerPortForward);
+        console.log(`Forwarding ports: ${formatDockerPortForwards(forwards)}`);
+        console.log(`Container IP: ${containerIp}`);
+        console.log('Press Ctrl+C to stop.');
+        console.log('');
 
-      await startProxy({
-        worker,
-        sshPort: workspace.ports.ssh,
-        forwards,
-        onConnect: () => {
-          console.log('Connected. Ports are now forwarded.');
-        },
-        onDisconnect: (code) => {
-          console.log(`\nDisconnected (exit code: ${code})`);
-        },
-        onError: (err) => {
-          console.error(`\nConnection error: ${err.message}`);
-        },
-      });
+        const cleanup = await startDockerProxy({
+          containerIp,
+          forwards,
+          onConnect: (port) => {
+            console.log(`Listening on 0.0.0.0:${port}`);
+          },
+          onError: (err) => {
+            console.error(`Proxy error: ${err.message}`);
+          },
+        });
+
+        const handleSignal = () => {
+          console.log('\nStopping proxy...');
+          cleanup();
+          process.exit(0);
+        };
+        process.on('SIGINT', handleSignal);
+        process.on('SIGTERM', handleSignal);
+
+        await new Promise(() => {});
+      } else {
+        const forwards = ports.map(parsePortForward);
+
+        console.log(`Forwarding ports: ${formatPortForwards(forwards)}`);
+        console.log('Press Ctrl+C to stop.');
+        console.log('');
+
+        await startProxy({
+          worker,
+          sshPort: workspace.ports.ssh,
+          forwards,
+          onConnect: () => {
+            console.log('Connected. Ports are now forwarded.');
+          },
+          onDisconnect: (code) => {
+            console.log(`\nDisconnected (exit code: ${code})`);
+          },
+          onError: (err) => {
+            console.error(`\nConnection error: ${err.message}`);
+          },
+        });
+      }
     } catch (err) {
       handleError(err);
     }
