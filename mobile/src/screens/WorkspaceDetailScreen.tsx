@@ -1,64 +1,57 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
-  RefreshControl,
+  FlatList,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, WorkspaceInfo, SessionInfo, AgentType } from '../lib/api'
-import { parseNetworkError } from '../lib/network'
+import { useQuery } from '@tanstack/react-query'
+import { api, SessionInfo, AgentType, HOST_WORKSPACE_NAME } from '../lib/api'
 
-type Tab = 'sessions' | 'settings'
+type DateGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older'
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
-  return (
-    <View style={styles.tabBar}>
-      <TouchableOpacity
-        style={[styles.tab, active === 'sessions' && styles.tabActive]}
-        onPress={() => onChange('sessions')}
-      >
-        <Text style={[styles.tabText, active === 'sessions' && styles.tabTextActive]}>Sessions</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.tab, active === 'settings' && styles.tabActive]}
-        onPress={() => onChange('settings')}
-      >
-        <Text style={[styles.tabText, active === 'settings' && styles.tabTextActive]}>Settings</Text>
-      </TouchableOpacity>
-    </View>
-  )
+function getDateGroup(dateString: string): DateGroup {
+  const date = new Date(dateString)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const weekAgo = new Date(today)
+  weekAgo.setDate(weekAgo.getDate() - 7)
+
+  if (date >= today) return 'Today'
+  if (date >= yesterday) return 'Yesterday'
+  if (date >= weekAgo) return 'This Week'
+  return 'Older'
 }
 
-function StatusBadge({ status }: { status: WorkspaceInfo['status'] }) {
-  const colors = {
-    running: '#34c759',
-    stopped: '#8e8e93',
-    creating: '#ff9f0a',
-    error: '#ff3b30',
+function groupSessionsByDate(sessions: SessionInfo[]): Record<DateGroup, SessionInfo[]> {
+  const groups: Record<DateGroup, SessionInfo[]> = {
+    Today: [],
+    Yesterday: [],
+    'This Week': [],
+    Older: [],
   }
-  return (
-    <View style={[styles.badge, { backgroundColor: colors[status] }]}>
-      <Text style={styles.badgeText}>{status}</Text>
-    </View>
-  )
+  sessions.forEach((s) => {
+    const group = getDateGroup(s.lastActivity)
+    groups[group].push(s)
+  })
+  return groups
 }
 
 function AgentBadge({ type }: { type: AgentType }) {
   const labels: Record<AgentType, string> = {
-    'claude-code': 'Claude',
-    opencode: 'OpenCode',
-    codex: 'Codex',
+    'claude-code': 'CC',
+    opencode: 'OC',
+    codex: 'CX',
   }
   const colors: Record<AgentType, string> = {
-    'claude-code': '#ff6b35',
-    opencode: '#34c759',
-    codex: '#007aff',
+    'claude-code': '#8b5cf6',
+    opencode: '#22c55e',
+    codex: '#f59e0b',
   }
   return (
     <View style={[styles.agentBadge, { backgroundColor: colors[type] }]}>
@@ -67,330 +60,255 @@ function AgentBadge({ type }: { type: AgentType }) {
   )
 }
 
-function getTimeAgo(date: Date): string {
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffMins < 1) return 'now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
-}
-
-function getDateGroup(date: Date): string {
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today.getTime() - 86400000)
-  const weekAgo = new Date(today.getTime() - 7 * 86400000)
-
-  if (date >= today) return 'Today'
-  if (date >= yesterday) return 'Yesterday'
-  if (date >= weekAgo) return 'This Week'
-  return 'Older'
-}
-
-function SessionsTab({
-  workspace,
-  onSelectSession,
+function SessionRow({
+  session,
+  onPress,
 }: {
-  workspace: WorkspaceInfo
-  onSelectSession: (session: SessionInfo) => void
+  session: SessionInfo
+  onPress: () => void
 }) {
-  const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['sessions', workspace.name],
-    queryFn: () => api.listSessions(workspace.name, undefined, 100),
-    enabled: workspace.status === 'running',
-  })
-
-  if (workspace.status !== 'running') {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>⏸</Text>
-        <Text style={styles.emptyTitle}>Workspace Not Running</Text>
-        <Text style={styles.emptyText}>Start the workspace to view sessions</Text>
-      </View>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0a84ff" />
-      </View>
-    )
-  }
-
-  const sessions = data?.sessions || []
-
-  if (sessions.length === 0) {
-    return (
-      <ScrollView
-        contentContainerStyle={styles.emptyContainer}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
-      >
-        <Text style={styles.emptyIcon}>💬</Text>
-        <Text style={styles.emptyTitle}>No Sessions</Text>
-        <Text style={styles.emptyText}>Start a coding agent to create sessions</Text>
-      </ScrollView>
-    )
-  }
-
-  const grouped = sessions.reduce((acc, session) => {
-    const group = getDateGroup(new Date(session.lastActivity))
-    if (!acc[group]) acc[group] = []
-    acc[group].push(session)
-    return acc
-  }, {} as Record<string, SessionInfo[]>)
-
-  const groupOrder = ['Today', 'Yesterday', 'This Week', 'Older']
+  const timeAgo = useMemo(() => {
+    const date = new Date(session.lastActivity)
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins}m`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+  }, [session.lastActivity])
 
   return (
-    <ScrollView
-      style={styles.sessionsContainer}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0a84ff" />}
-    >
-      {groupOrder.map((group) => {
-        const groupSessions = grouped[group]
-        if (!groupSessions?.length) return null
-        return (
-          <View key={group}>
-            <Text style={styles.groupHeader}>{group}</Text>
-            {groupSessions.map((session) => (
-              <TouchableOpacity
-                key={session.id}
-                style={styles.sessionItem}
-                onPress={() => onSelectSession(session)}
-              >
-                <View style={styles.sessionHeader}>
-                  <AgentBadge type={session.agentType} />
-                  <Text style={styles.sessionTime}>{getTimeAgo(new Date(session.lastActivity))}</Text>
-                </View>
-                <Text style={styles.sessionPreview} numberOfLines={2}>
-                  {session.firstPrompt?.slice(0, 100) || 'No messages'}
-                </Text>
-                <Text style={styles.sessionMeta}>
-                  {session.messageCount} messages · {session.projectPath}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )
-      })}
-    </ScrollView>
+    <TouchableOpacity style={styles.sessionRow} onPress={onPress}>
+      <AgentBadge type={session.agentType} />
+      <View style={styles.sessionContent}>
+        <Text style={styles.sessionName} numberOfLines={1}>
+          {session.name || session.firstPrompt || 'Empty session'}
+        </Text>
+        <Text style={styles.sessionMeta}>
+          {session.messageCount} messages • {session.projectPath.split('/').pop()}
+        </Text>
+      </View>
+      <Text style={styles.sessionTime}>{timeAgo}</Text>
+      <Text style={styles.sessionChevron}>›</Text>
+    </TouchableOpacity>
   )
 }
 
-function SettingsTab({ workspace, onBack }: { workspace: WorkspaceInfo; onBack: () => void }) {
-  const queryClient = useQueryClient()
-
-  const startMutation = useMutation({
-    mutationFn: () => api.startWorkspace(workspace.name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
-    onError: (err) => Alert.alert('Error', parseNetworkError(err)),
-  })
-
-  const stopMutation = useMutation({
-    mutationFn: () => api.stopWorkspace(workspace.name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
-    onError: (err) => Alert.alert('Error', parseNetworkError(err)),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteWorkspace(workspace.name),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
-      onBack()
-    },
-    onError: (err) => Alert.alert('Error', parseNetworkError(err)),
-  })
-
-  const syncMutation = useMutation({
-    mutationFn: () => api.syncWorkspace(workspace.name),
-    onSuccess: () => Alert.alert('Success', 'Credentials synced to workspace'),
-    onError: (err) => Alert.alert('Error', parseNetworkError(err)),
-  })
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Workspace',
-      `Are you sure you want to delete "${workspace.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() },
-      ]
-    )
-  }
-
-  const isRunning = workspace.status === 'running'
-  const isStopped = workspace.status === 'stopped'
-  const isError = workspace.status === 'error'
-
+function DateGroupHeader({ title }: { title: string }) {
   return (
-    <ScrollView style={styles.settingsContainer}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Workspace Info</Text>
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Status</Text>
-            <StatusBadge status={workspace.status} />
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>SSH Port</Text>
-            <Text style={styles.infoValue}>{workspace.ports.ssh}</Text>
-          </View>
-          {workspace.ports.http && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>HTTP Port</Text>
-              <Text style={styles.infoValue}>{workspace.ports.http}</Text>
-            </View>
-          )}
-          {workspace.repo && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Repository</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{workspace.repo}</Text>
-            </View>
-          )}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Container ID</Text>
-            <Text style={styles.infoValueMono}>{workspace.containerId.slice(0, 12)}</Text>
-          </View>
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.infoLabel}>Created</Text>
-            <Text style={styles.infoValue}>{new Date(workspace.created).toLocaleDateString()}</Text>
-          </View>
-        </View>
-      </View>
-
-      {isRunning && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Actions</Text>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-          >
-            {syncMutation.isPending ? (
-              <ActivityIndicator size="small" color="#0a84ff" />
-            ) : (
-              <>
-                <Text style={styles.actionButtonIcon}>🔄</Text>
-                <View>
-                  <Text style={styles.actionButtonText}>Sync Credentials</Text>
-                  <Text style={styles.actionButtonSubtext}>Push config files to workspace</Text>
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Danger Zone</Text>
-        <View style={styles.dangerCard}>
-          {isRunning && (
-            <TouchableOpacity
-              style={[styles.dangerButton, styles.stopButton]}
-              onPress={() => stopMutation.mutate()}
-              disabled={stopMutation.isPending}
-            >
-              {stopMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.dangerButtonText}>Stop Workspace</Text>
-              )}
-            </TouchableOpacity>
-          )}
-          {(isStopped || isError) && (
-            <TouchableOpacity
-              style={[styles.dangerButton, styles.startButton]}
-              onPress={() => startMutation.mutate()}
-              disabled={startMutation.isPending}
-            >
-              {startMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.dangerButtonText}>{isError ? 'Recover Workspace' : 'Start Workspace'}</Text>
-              )}
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.dangerButton, styles.deleteButton]}
-            onPress={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.dangerButtonText}>Delete Workspace</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+    <View style={styles.dateGroupHeader}>
+      <Text style={styles.dateGroupTitle}>{title}</Text>
+    </View>
   )
 }
 
 export function WorkspaceDetailScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets()
-  const [activeTab, setActiveTab] = useState<Tab>('sessions')
   const { name } = route.params
+  const [agentFilter, setAgentFilter] = useState<AgentType | undefined>(undefined)
+  const [showAgentPicker, setShowAgentPicker] = useState(false)
+  const [showNewChatPicker, setShowNewChatPicker] = useState(false)
 
-  const { data: workspace, isLoading, error } = useQuery({
+  const isHost = name === HOST_WORKSPACE_NAME
+
+  const { data: workspace, isLoading: workspaceLoading } = useQuery({
     queryKey: ['workspace', name],
     queryFn: () => api.getWorkspace(name),
+    refetchInterval: 5000,
+    enabled: !isHost,
   })
 
-  if (isLoading) {
+  const { data: hostInfo } = useQuery({
+    queryKey: ['hostInfo'],
+    queryFn: api.getHostInfo,
+    enabled: isHost,
+  })
+
+  const isRunning = isHost ? true : workspace?.status === 'running'
+
+  const { data: sessionsData, isLoading: sessionsLoading, refetch } = useQuery({
+    queryKey: ['sessions', name, agentFilter],
+    queryFn: () => api.listSessions(name, agentFilter, 100),
+    enabled: isRunning,
+  })
+
+  const groupedSessions = useMemo(() => {
+    if (!sessionsData?.sessions) return null
+    return groupSessionsByDate(sessionsData.sessions)
+  }, [sessionsData?.sessions])
+
+  const flatData = useMemo(() => {
+    if (!groupedSessions) return []
+    const result: ({ type: 'header'; title: DateGroup } | { type: 'session'; session: SessionInfo })[] = []
+    const order: DateGroup[] = ['Today', 'Yesterday', 'This Week', 'Older']
+    order.forEach((group) => {
+      if (groupedSessions[group].length > 0) {
+        result.push({ type: 'header', title: group })
+        groupedSessions[group].forEach((s) => result.push({ type: 'session', session: s }))
+      }
+    })
+    return result
+  }, [groupedSessions])
+
+  if (workspaceLoading && !isHost) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color="#0a84ff" />
       </View>
     )
   }
 
-  if (error || !workspace) {
-    return (
-      <View style={[styles.container, styles.errorContainer]}>
-        <Text style={styles.errorIcon}>⚠</Text>
-        <Text style={styles.errorTitle}>Workspace Not Found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
+  const displayName = isHost
+    ? (hostInfo ? `${hostInfo.username}@${hostInfo.hostname}` : 'Host Machine')
+    : name
 
-  const handleSelectSession = (session: SessionInfo) => {
-    navigation.navigate('SessionDetail', {
-      workspaceName: workspace.name,
-      sessionId: session.id,
-      agentType: session.agentType,
-    })
+  const agentLabels: Record<string, string> = {
+    all: 'All Agents',
+    'claude-code': 'Claude Code',
+    opencode: 'OpenCode',
+    codex: 'Codex',
   }
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
-          <Text style={styles.headerBackText}>←</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
-        <View style={styles.headerTitle}>
-          <Text style={styles.headerName}>{workspace.name}</Text>
-          <StatusBadge status={workspace.status} />
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, isHost && styles.hostHeaderTitle]}>{displayName}</Text>
+          <View style={[styles.statusIndicator, { backgroundColor: isHost ? '#f59e0b' : (isRunning ? '#34c759' : '#636366') }]} />
         </View>
-        <View style={{ width: 40 }} />
+        {isHost ? (
+          <View style={styles.settingsBtn} />
+        ) : (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('WorkspaceSettings', { name })}
+            style={styles.settingsBtn}
+          >
+            <Text style={styles.settingsIcon}>⚙</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <View style={styles.actionBar}>
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => setShowAgentPicker(!showAgentPicker)}
+        >
+          <Text style={styles.filterBtnText}>
+            {agentLabels[agentFilter || 'all']}
+          </Text>
+          <Text style={styles.filterBtnArrow}>▼</Text>
+        </TouchableOpacity>
 
-      {activeTab === 'sessions' ? (
-        <SessionsTab workspace={workspace} onSelectSession={handleSelectSession} />
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.terminalBtn}
+            onPress={() => navigation.navigate('Terminal', { name })}
+            disabled={!isRunning}
+          >
+            <Text style={[styles.terminalBtnText, !isRunning && styles.disabledText]}>Terminal</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newChatBtn}
+            onPress={() => setShowNewChatPicker(!showNewChatPicker)}
+            disabled={!isRunning}
+          >
+            <Text style={[styles.newChatBtnText, !isRunning && styles.disabledText]}>New Chat ▼</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {showAgentPicker && (
+        <View style={styles.agentPicker}>
+          {(['all', 'claude-code', 'opencode', 'codex'] as const).map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={[
+                styles.agentPickerItem,
+                (type === 'all' ? !agentFilter : agentFilter === type) && styles.agentPickerItemActive,
+              ]}
+              onPress={() => {
+                setAgentFilter(type === 'all' ? undefined : type as AgentType)
+                setShowAgentPicker(false)
+              }}
+            >
+              <Text style={styles.agentPickerText}>{agentLabels[type]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {showNewChatPicker && (
+        <View style={styles.newChatPickerOverlay}>
+          <TouchableOpacity style={styles.newChatPickerBackdrop} onPress={() => setShowNewChatPicker(false)} />
+          <View style={styles.newChatPicker}>
+            <Text style={styles.newChatPickerTitle}>Start chat with</Text>
+            {(['claude-code', 'opencode', 'codex'] as const).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={styles.newChatPickerItem}
+                onPress={() => {
+                  setShowNewChatPicker(false)
+                  navigation.navigate('SessionChat', { workspaceName: name, isNew: true, agentType: type })
+                }}
+              >
+                <View style={[styles.agentBadgeLarge, { backgroundColor: type === 'claude-code' ? '#8b5cf6' : type === 'opencode' ? '#22c55e' : '#f59e0b' }]}>
+                  <Text style={styles.agentBadgeLargeText}>{type === 'claude-code' ? 'CC' : type === 'opencode' ? 'OC' : 'CX'}</Text>
+                </View>
+                <Text style={styles.newChatPickerItemText}>{agentLabels[type]}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {isHost && (
+        <View style={styles.hostWarningBanner}>
+          <Text style={styles.hostWarningText}>
+            Commands run directly on your machine without isolation
+          </Text>
+        </View>
+      )}
+
+      {!isRunning && !isHost ? (
+        <View style={styles.notRunning}>
+          <Text style={styles.notRunningText}>Workspace is not running</Text>
+          <Text style={styles.notRunningSubtext}>Start it from settings to view sessions</Text>
+        </View>
+      ) : sessionsLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#0a84ff" />
+        </View>
+      ) : flatData.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>No sessions yet</Text>
+          <Text style={styles.emptySubtext}>Start a new chat to create one</Text>
+        </View>
       ) : (
-        <SettingsTab workspace={workspace} onBack={() => navigation.goBack()} />
+        <FlatList
+          data={flatData}
+          keyExtractor={(item, idx) => item.type === 'header' ? `header-${item.title}` : `session-${item.session.id}`}
+          renderItem={({ item }) => {
+            if (item.type === 'header') {
+              return <DateGroupHeader title={item.title} />
+            }
+            return (
+              <SessionRow
+                session={item.session}
+                onPress={() => navigation.navigate('SessionChat', {
+                  workspaceName: name,
+                  sessionId: item.session.id,
+                  agentType: item.session.agentType,
+                })}
+              />
+            )
+          }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        />
       )}
     </View>
   )
@@ -401,256 +319,282 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c1c1e',
-  },
-  headerBack: {
-    width: 40,
-    height: 40,
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerBackText: {
-    fontSize: 24,
-    color: '#0a84ff',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
   },
-  headerTitle: {
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnText: {
+    fontSize: 32,
+    color: '#0a84ff',
+    fontWeight: '300',
+  },
+  headerCenter: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  headerName: {
+  headerTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: '#fff',
   },
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c1c1e',
+  hostHeaderTitle: {
+    color: '#f59e0b',
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#0a84ff',
-  },
-  tabText: {
-    fontSize: 15,
-    color: '#8e8e93',
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: '#0a84ff',
-  },
-  loadingContainer: {
+  settingsBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  backButton: {
-    backgroundColor: '#0a84ff',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
+  settingsIcon: {
+    fontSize: 22,
     color: '#8e8e93',
-    textAlign: 'center',
   },
-  sessionsContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  groupHeader: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8e8e93',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  sessionItem: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  sessionHeader: {
+  actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
   },
-  sessionTime: {
-    fontSize: 12,
-    color: '#636366',
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1c1c1e',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
   },
-  sessionPreview: {
+  filterBtnText: {
     fontSize: 14,
     color: '#fff',
-    lineHeight: 20,
-    marginBottom: 6,
+  },
+  filterBtnArrow: {
+    fontSize: 10,
+    color: '#8e8e93',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  terminalBtn: {
+    backgroundColor: '#1c1c1e',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  terminalBtnText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  newChatBtn: {
+    backgroundColor: '#0a84ff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  newChatBtnText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  disabledText: {
+    opacity: 0.4,
+  },
+  agentPicker: {
+    backgroundColor: '#1c1c1e',
+    marginHorizontal: 12,
+    marginTop: -1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  agentPickerItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  agentPickerItemActive: {
+    backgroundColor: '#2c2c2e',
+  },
+  agentPickerText: {
+    fontSize: 15,
+    color: '#fff',
+  },
+  hostWarningBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  hostWarningText: {
+    fontSize: 12,
+    color: '#f59e0b',
+    textAlign: 'center',
+  },
+  notRunning: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  notRunningText: {
+    fontSize: 17,
+    color: '#8e8e93',
+    fontWeight: '500',
+  },
+  notRunningSubtext: {
+    fontSize: 14,
+    color: '#636366',
+    marginTop: 6,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 17,
+    color: '#8e8e93',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#636366',
+    marginTop: 4,
+  },
+  dateGroupHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  dateGroupTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#636366',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1c1e',
+  },
+  agentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  agentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  sessionContent: {
+    flex: 1,
+  },
+  sessionName: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '500',
   },
   sessionMeta: {
     fontSize: 12,
     color: '#636366',
+    marginTop: 2,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  sessionTime: {
+    fontSize: 13,
+    color: '#636366',
+    marginRight: 8,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-    textTransform: 'uppercase',
+  sessionChevron: {
+    fontSize: 18,
+    color: '#636366',
   },
-  agentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+  newChatPickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
   },
-  agentBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
+  newChatPickerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  settingsContainer: {
-    flex: 1,
-    padding: 16,
+  newChatPicker: {
+    position: 'absolute',
+    top: 120,
+    right: 12,
+    backgroundColor: '#2c2c2e',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 180,
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
+  newChatPickerTitle: {
     fontSize: 13,
     fontWeight: '600',
     color: '#8e8e93',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginBottom: 12,
+    textAlign: 'center',
   },
-  infoCard: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    padding: 16,
-  },
-  infoRow: {
+  newChatPickerItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2c2e',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#8e8e93',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#fff',
-    maxWidth: '60%',
-    textAlign: 'right',
-  },
-  infoValueMono: {
-    fontSize: 13,
-    color: '#fff',
-    fontFamily: 'monospace',
-  },
-  actionButton: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 8,
+    borderRadius: 8,
     gap: 12,
   },
-  actionButtonIcon: {
-    fontSize: 24,
-  },
-  actionButtonText: {
+  newChatPickerItemText: {
     fontSize: 16,
     color: '#fff',
     fontWeight: '500',
   },
-  actionButtonSubtext: {
-    fontSize: 13,
-    color: '#8e8e93',
-    marginTop: 2,
-  },
-  dangerCard: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  dangerButton: {
-    paddingVertical: 14,
+  agentBadgeLarge: {
+    width: 32,
+    height: 32,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  startButton: {
-    backgroundColor: '#34c759',
-  },
-  stopButton: {
-    backgroundColor: '#ff9f0a',
-  },
-  deleteButton: {
-    backgroundColor: '#ff3b30',
-  },
-  dangerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  agentBadgeLargeText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#fff',
   },
 })

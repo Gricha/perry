@@ -21,6 +21,15 @@ export interface InfoResponse {
   dockerVersion: string
 }
 
+export interface HostInfo {
+  enabled: boolean
+  hostname: string
+  username: string
+  homeDir: string
+}
+
+export const HOST_WORKSPACE_NAME = '@host'
+
 export interface CreateWorkspaceRequest {
   name: string
   clone?: string
@@ -146,9 +155,13 @@ function createClient() {
         limit?: number
         offset?: number
       }) => Promise<{ sessions: (SessionInfo & { workspaceName: string })[]; total: number; hasMore: boolean }>
-      get: (input: { workspaceName: string; sessionId: string; agentType?: AgentType }) => Promise<SessionDetail>
+      get: (input: { workspaceName: string; sessionId: string; agentType?: AgentType; limit?: number; offset?: number }) => Promise<SessionDetail & { total: number; hasMore: boolean }>
     }
     info: () => Promise<InfoResponse>
+    host: {
+      info: () => Promise<HostInfo>
+      updateAccess: (input: { enabled: boolean }) => Promise<HostInfo>
+    }
     config: {
       credentials: {
         get: () => Promise<Credentials>
@@ -182,6 +195,17 @@ export interface SessionInfoWithWorkspace extends SessionInfo {
   workspaceName: string
 }
 
+export function getTerminalUrl(workspaceName: string): string {
+  const wsUrl = baseUrl.replace(/^http/, 'ws')
+  return `${wsUrl}/rpc/terminal/${encodeURIComponent(workspaceName)}`
+}
+
+export function getChatUrl(workspaceName: string, agentType: AgentType = 'claude-code'): string {
+  const wsUrl = baseUrl.replace(/^http/, 'ws')
+  const endpoint = agentType === 'opencode' ? 'opencode' : 'chat'
+  return `${wsUrl}/rpc/${endpoint}/${encodeURIComponent(workspaceName)}`
+}
+
 export const api = {
   listWorkspaces: () => client.workspaces.list(),
   getWorkspace: (name: string) => client.workspaces.get({ name }),
@@ -196,9 +220,11 @@ export const api = {
     client.sessions.list({ workspaceName, agentType, limit, offset }),
   listAllSessions: (agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.listAll({ agentType, limit, offset }),
-  getSession: (workspaceName: string, sessionId: string, agentType?: AgentType) =>
-    client.sessions.get({ workspaceName, sessionId, agentType }),
+  getSession: (workspaceName: string, sessionId: string, agentType?: AgentType, limit?: number, offset?: number) =>
+    client.sessions.get({ workspaceName, sessionId, agentType, limit, offset }),
   getInfo: () => client.info(),
+  getHostInfo: () => client.host.info(),
+  updateHostAccess: (enabled: boolean) => client.host.updateAccess({ enabled }),
   getCredentials: () => client.config.credentials.get(),
   updateCredentials: (data: Credentials) => client.config.credentials.update(data),
   getScripts: () => client.config.scripts.get(),
