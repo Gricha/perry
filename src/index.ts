@@ -17,6 +17,7 @@ import {
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from './config/loader';
 import { buildImage } from './docker';
 import { DEFAULT_AGENT_PORT, WORKSPACE_IMAGE_LOCAL } from './shared/constants';
+import { checkForUpdates } from './update-checker';
 
 const program = new Command();
 
@@ -512,5 +513,7 @@ function formatUptime(seconds: number): string {
 
   return parts.join(' ');
 }
+
+checkForUpdates(pkg.version);
 
 program.parse();
