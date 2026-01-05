@@ -39,7 +39,7 @@ export class OpencodeSession {
 
   constructor(options: OpencodeOptions, onMessage: (message: ChatMessage) => void) {
     this.containerName = options.containerName;
-    this.workDir = options.workDir || '/workspace';
+    this.workDir = options.workDir || '/home/workspace';
     this.sessionId = options.sessionId;
     this.onMessage = onMessage;
   }

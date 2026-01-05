@@ -88,7 +88,7 @@ export class OpencodeWebSocketServer extends BaseWebSocketServer<OpencodeConnect
               connection.session = createOpencodeSession(
                 {
                   containerName,
-                  workDir: '/workspace',
+                  workDir: '/home/workspace',
                   sessionId: message.sessionId,
                 },
                 onMessage

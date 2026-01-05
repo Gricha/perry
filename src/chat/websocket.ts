@@ -93,7 +93,7 @@ export class ChatWebSocketServer extends BaseWebSocketServer<ChatConnection> {
               connection.session = createChatSession(
                 {
                   containerName,
-                  workDir: '/workspace',
+                  workDir: '/home/workspace',
                   sessionId: message.sessionId,
                   model,
                 },

@@ -50,7 +50,7 @@ export class ChatSession {
 
   constructor(options: ChatOptions, onMessage: (message: ChatMessage) => void) {
     this.containerName = options.containerName;
-    this.workDir = options.workDir || '/workspace';
+    this.workDir = options.workDir || '/home/workspace';
     this.sessionId = options.sessionId;
     this.model = options.model || 'sonnet';
     this.onMessage = onMessage;
