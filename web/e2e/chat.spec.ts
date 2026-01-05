@@ -82,4 +82,42 @@ test.describe('Chat', () => {
 
     expect(react301Errors).toHaveLength(0);
   });
+
+  test('should not reload history when session ID updates during active chat', async ({ page }) => {
+    let sessionGetCalls = 0;
+
+    await page.route('**/rpc/sessions.get**', async (route) => {
+      sessionGetCalls++;
+      await route.continue();
+    });
+
+    await page.goto('/workspaces/test?tab=sessions');
+    await page.waitForTimeout(1000);
+
+    const newChatButton = page.locator('button:has-text("New Chat")');
+    if (!(await newChatButton.isVisible())) {
+      test.skip();
+      return;
+    }
+
+    await newChatButton.click();
+    await page.waitForTimeout(500);
+
+    const claudeOption = page.locator('text=Claude Code').first();
+    if (await claudeOption.isVisible()) {
+      await claudeOption.click();
+    }
+
+    await page.waitForTimeout(1000);
+    const initialCalls = sessionGetCalls;
+
+    const chatInput = page.locator('textarea[placeholder="Send a message..."]');
+    if (await chatInput.isVisible()) {
+      await chatInput.fill('test message');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(3000);
+    }
+
+    expect(sessionGetCalls).toBe(initialCalls);
+  });
 });
