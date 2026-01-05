@@ -16,17 +16,6 @@
 
 ## Tasks
 
-### Race Conditions & Stability
-
-#### Add container health check before exec operations
-**Files**: `src/workspace/manager.ts` (lines ~444-453, ~529-538)
-
-After `docker.startContainer()`, code immediately runs `docker exec` to copy credentials. Container may not be ready to accept exec commands. Add retry loop with exponential backoff or health check.
-
-**Fix**: Create `waitForContainer(name, timeout)` helper that polls container readiness before returning.
-
----
-
 ### Code Duplication
 
 #### Extract credential setup into single method

@@ -440,6 +440,7 @@ export class WorkspaceManager {
       await this.state.setWorkspace(workspace);
 
       await docker.startContainer(containerName);
+      await docker.waitForContainerReady(containerName);
 
       await this.copyGitConfig(containerName);
       await this.copyCredentialFiles(containerName);
@@ -525,6 +526,7 @@ export class WorkspaceManager {
     }
 
     await docker.startContainer(containerName);
+    await docker.waitForContainerReady(containerName);
 
     await this.copyGitConfig(containerName);
     await this.copyCredentialFiles(containerName);

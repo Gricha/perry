@@ -227,6 +227,29 @@ export async function startContainer(name: string): Promise<void> {
   await docker(['start', name]);
 }
 
+export async function waitForContainerReady(
+  name: string,
+  options: { timeout?: number; interval?: number } = {}
+): Promise<void> {
+  const timeout = options.timeout ?? 30000;
+  const interval = options.interval ?? 100;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const result = await execInContainer(name, ['true']);
+      if (result.exitCode === 0) {
+        return;
+      }
+    } catch {
+      // Container not ready yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+
+  throw new Error(`Container '${name}' did not become ready within ${timeout}ms`);
+}
+
 export async function stopContainer(name: string, timeout = 10): Promise<void> {
   await docker(['stop', '-t', String(timeout), name]);
 }
