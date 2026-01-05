@@ -27,7 +27,26 @@ async function cleanupOrphanedResources() {
   } catch {}
 }
 
+function imageExists() {
+  try {
+    execSync('docker image inspect workspace:latest', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function buildImage() {
+  if (process.env.SKIP_DOCKER_BUILD === 'true' && imageExists()) {
+    console.log('\n✅ Using existing workspace:latest image (SKIP_DOCKER_BUILD=true)\n');
+    return;
+  }
+
+  if (imageExists() && !process.env.FORCE_DOCKER_BUILD) {
+    console.log('\n✅ Using existing workspace:latest image\n');
+    return;
+  }
+
   return new Promise((resolve, reject) => {
     console.log('\n🏗️  Building workspace Docker image once for all tests...\n');
 
