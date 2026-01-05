@@ -55,6 +55,10 @@ function collectMessages(ws: WebSocket, duration: number): Promise<string> {
   });
 }
 
+function sendResize(ws: WebSocket, cols = 80, rows = 24): void {
+  ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+}
+
 describe('Terminal WebSocket', () => {
   let agent: TestAgent;
   let workspaceName: string;
@@ -146,6 +150,9 @@ describe('Terminal WebSocket', () => {
     const ws = new WebSocket(`ws://127.0.0.1:${agent.port}/rpc/terminal/${workspaceName}`);
 
     await waitForOpen(ws);
+    sendResize(ws);
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const outputPromise = collectMessages(ws, 2000);
     ws.send('echo "HELLO_FROM_TERMINAL"\n');
@@ -198,6 +205,9 @@ describe('Terminal WebSocket', () => {
 
     await Promise.all([waitForOpen(ws1), waitForOpen(ws2)]);
 
+    sendResize(ws1);
+    sendResize(ws2);
+
     expect(ws1.readyState).toBe(WebSocket.OPEN);
     expect(ws2.readyState).toBe(WebSocket.OPEN);
 
@@ -222,6 +232,7 @@ describe('Terminal WebSocket', () => {
     const ws = new WebSocket(`ws://127.0.0.1:${agent.port}/rpc/terminal/${workspaceName}`);
 
     await waitForOpen(ws);
+    sendResize(ws);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -249,6 +260,9 @@ describe('Terminal WebSocket', () => {
     const ws = new WebSocket(`ws://127.0.0.1:${agent.port}/rpc/terminal/${workspaceName}`);
 
     await waitForOpen(ws);
+    sendResize(ws);
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const closePromise = new Promise<number>((resolve) => {
       ws.on('close', (code) => {

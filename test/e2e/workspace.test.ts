@@ -141,6 +141,10 @@ describe('E2E - Workspace Creation', () => {
       ws.on('error', reject);
     });
 
+    ws.send(JSON.stringify({ type: 'resize', cols: 80, rows: 24 }));
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     let output = '';
     ws.on('message', (data: Buffer) => {
       output += data.toString();

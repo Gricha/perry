@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, vi } from 'vitest';
 
 interface MockSession {
   interrupt: () => Promise<void>;
@@ -13,8 +13,8 @@ describe('Chat interrupt behavior', () => {
   test('session is reset to null after interrupt', async () => {
     const connection: MockConnection = {
       session: {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock(() => Promise.resolve()),
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn(() => Promise.resolve()),
       },
     };
 
@@ -30,8 +30,8 @@ describe('Chat interrupt behavior', () => {
   test('new session is created after interrupt when sending message', async () => {
     const connection: MockConnection = {
       session: {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock(() => Promise.resolve()),
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn(() => Promise.resolve()),
       },
     };
 
@@ -46,8 +46,8 @@ describe('Chat interrupt behavior', () => {
     // Simulate new message - should create new session
     if (!connection.session) {
       connection.session = {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock(() => Promise.resolve()),
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn(() => Promise.resolve()),
       };
     }
 
@@ -60,8 +60,8 @@ describe('Chat interrupt behavior', () => {
 
     const connection: MockConnection = {
       session: {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock((msg: string) => {
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn((msg: string) => {
           sendMessageCalls.push(msg);
           return Promise.resolve();
         }),
@@ -79,8 +79,8 @@ describe('Chat interrupt behavior', () => {
     if (!connection.session) {
       // This block never runs because session still exists
       connection.session = {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock((msg: string) => {
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn((msg: string) => {
           sendMessageCalls.push(`new:${msg}`);
           return Promise.resolve();
         }),
@@ -98,8 +98,8 @@ describe('Chat interrupt behavior', () => {
 
     const connection: MockConnection = {
       session: {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock((msg: string) => {
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn((msg: string) => {
           oldSessionCalls.push(msg);
           return Promise.resolve();
         }),
@@ -116,8 +116,8 @@ describe('Chat interrupt behavior', () => {
     // Second message - creates new session
     if (!connection.session) {
       connection.session = {
-        interrupt: mock(() => Promise.resolve()),
-        sendMessage: mock((msg: string) => {
+        interrupt: vi.fn(() => Promise.resolve()),
+        sendMessage: vi.fn((msg: string) => {
           newSessionCalls.push(msg);
           return Promise.resolve();
         }),
