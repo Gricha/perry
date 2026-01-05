@@ -303,6 +303,14 @@ export class WorkspaceManager {
     });
   }
 
+  private async setupWorkspaceCredentials(containerName: string): Promise<void> {
+    await this.copyGitConfig(containerName);
+    await this.copyCredentialFiles(containerName);
+    await this.setupClaudeCodeConfig(containerName);
+    await this.copyCodexCredentials(containerName);
+    await this.setupOpencodeConfig(containerName);
+  }
+
   private async runPostStartScript(containerName: string): Promise<void> {
     const scriptPath = this.config.scripts.post_start;
     if (!scriptPath) {
@@ -441,12 +449,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-
-      await this.copyGitConfig(containerName);
-      await this.copyCredentialFiles(containerName);
-      await this.setupClaudeCodeConfig(containerName);
-      await this.copyCodexCredentials(containerName);
-      await this.setupOpencodeConfig(containerName);
+      await this.setupWorkspaceCredentials(containerName);
 
       workspace.status = 'running';
       await this.state.setWorkspace(workspace);
@@ -527,12 +530,7 @@ export class WorkspaceManager {
 
     await docker.startContainer(containerName);
     await docker.waitForContainerReady(containerName);
-
-    await this.copyGitConfig(containerName);
-    await this.copyCredentialFiles(containerName);
-    await this.setupClaudeCodeConfig(containerName);
-    await this.copyCodexCredentials(containerName);
-    await this.setupOpencodeConfig(containerName);
+    await this.setupWorkspaceCredentials(containerName);
 
     workspace.status = 'running';
     await this.state.setWorkspace(workspace);
@@ -620,10 +618,6 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' is not running`);
     }
 
-    await this.copyGitConfig(containerName);
-    await this.copyCredentialFiles(containerName);
-    await this.setupClaudeCodeConfig(containerName);
-    await this.copyCodexCredentials(containerName);
-    await this.setupOpencodeConfig(containerName);
+    await this.setupWorkspaceCredentials(containerName);
   }
 }

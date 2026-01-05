@@ -18,20 +18,6 @@
 
 ### Code Duplication
 
-#### Extract credential setup into single method
-**File**: `src/workspace/manager.ts`
-
-The `create()`, `start()`, and `sync()` methods all duplicate these 5 calls:
-```typescript
-await this.copyGitConfig(containerName);
-await this.copyCredentialFiles(containerName);
-await this.setupClaudeCodeConfig(containerName);
-await this.copyCodexCredentials(containerName);
-await this.setupOpencodeConfig(containerName);
-```
-
-**Fix**: Create `private async setupWorkspaceCredentials(containerName: string)` and call from all three methods.
-
 #### Create base class for chat WebSocket handlers
 **Files**: `src/chat/websocket.ts`, `src/chat/opencode-websocket.ts`
 
