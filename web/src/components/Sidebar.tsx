@@ -3,13 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Menu,
   X,
-  Boxes,
   KeyRound,
   FolderSync,
   Terminal,
   Settings,
   MessageSquare,
   Monitor,
+  Boxes,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
@@ -60,9 +60,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       >
         <div className="flex h-14 items-center justify-between border-b px-4 flex-shrink-0">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-primary/15">
-              <Boxes className="h-4 w-4 text-primary" />
-            </div>
+            <img src="/logo.png" alt="Perry Logo" className="h-7 w-7 object-contain" />
             <span className="font-semibold text-sm tracking-tight">Perry</span>
           </Link>
           <Button
