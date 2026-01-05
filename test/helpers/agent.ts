@@ -275,8 +275,8 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
   const proc = spawn('bun', ['run', agentPath], {
     env: {
       ...process.env,
-      WS_CONFIG_DIR: configDir,
-      WS_PORT: String(port),
+      PERRY_CONFIG_DIR: configDir,
+      PERRY_PORT: String(port),
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });

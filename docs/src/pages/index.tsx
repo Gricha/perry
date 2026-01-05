@@ -109,22 +109,22 @@ function CodeExample(): ReactNode {
             <div className={styles.codeBlock}>
               <pre>
                 <code>{`# Install
-npm install -g @subroutinecom/workspace
+npm install -g @gricha/perry
 
 # Build base image
-ws build
+perry build
 
 # Start agent
-ws agent start
+perry agent run
 
 # Create workspace
-ws create myproject --clone git@github.com:user/repo.git
+perry create myproject --clone git@github.com:user/repo.git
 
 # Access via SSH
 ssh -p 2201 workspace@localhost
 
 # Or use the web UI
-open http://localhost:8420`}</code>
+open http://localhost:7391`}</code>
               </pre>
             </div>
           </div>
@@ -152,7 +152,7 @@ function CallToAction(): ReactNode {
               </Link>
               <Link
                 className="button button--secondary button--lg"
-                to="https://github.com/subroutinecom/workspace"
+                to="https://github.com/gricha/perry"
                 style={{marginLeft: '1rem'}}>
                 GitHub
               </Link>

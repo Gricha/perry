@@ -13,13 +13,13 @@ sidebar_position: 2
 ## Install
 
 ```bash
-npm install -g @subroutinecom/workspace
+npm install -g @gricha/perry
 ```
 
 From source:
 ```bash
-git clone https://github.com/subroutinecom/workspace.git
-cd workspace
+git clone https://github.com/gricha/perry.git
+cd perry
 bun install
 bun run build
 bun link
@@ -28,7 +28,7 @@ bun link
 ## Build Base Image
 
 ```bash
-ws build
+perry build
 ```
 
 Builds the Ubuntu 24.04 base image with dev tools. Takes 5-10 minutes, only needed once.
@@ -36,5 +36,5 @@ Builds the Ubuntu 24.04 base image with dev tools. Takes 5-10 minutes, only need
 ## Verify
 
 ```bash
-ws doctor
+perry info
 ```

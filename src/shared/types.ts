@@ -79,7 +79,7 @@ export interface InfoResponse {
 }
 
 export const DEFAULT_CONFIG_DIR =
-  process.env.WS_CONFIG_DIR || `${process.env.HOME}/.config/workspace`;
+  process.env.PERRY_CONFIG_DIR || `${process.env.HOME}/.config/perry`;
 export const STATE_FILE = 'state.json';
 export const CONFIG_FILE = 'config.json';
 export const CLIENT_CONFIG_FILE = 'client.json';

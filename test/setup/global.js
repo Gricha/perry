@@ -31,7 +31,7 @@ async function buildImage() {
   return new Promise((resolve, reject) => {
     console.log('\n🏗️  Building workspace Docker image once for all tests...\n');
 
-    const buildContext = path.join(process.cwd(), 'workspace');
+    const buildContext = path.join(process.cwd(), 'perry');
     const proc = spawn('docker', ['build', '-t', 'workspace:latest', buildContext], {
       stdio: 'inherit',
     });

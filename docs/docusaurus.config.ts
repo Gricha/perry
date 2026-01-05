@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Workspace',
+  title: 'Perry',
   tagline: 'Isolated, self-hosted workspaces accessible over Tailscale',
   favicon: 'img/favicon.ico',
 
@@ -15,15 +15,15 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://workspace.subroutine.com',
+  url: 'https://gricha.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/perry/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'subroutinecom', // Usually your GitHub org/user name.
-  projectName: 'workspace', // Usually your repo name.
+  organizationName: 'gricha', // Usually your GitHub org/user name.
+  projectName: 'perry', // Usually your repo name.
 
   onBrokenLinks: 'throw',
 
@@ -42,7 +42,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl:
-            'https://github.com/subroutinecom/workspace/tree/main/docs/',
+            'https://github.com/gricha/perry/tree/main/docs/',
         },
         blog: false,
         theme: {
@@ -59,9 +59,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Workspace',
+      title: 'Perry',
       logo: {
-        alt: 'Workspace Logo',
+        alt: 'Perry Logo',
         src: 'img/logo.svg',
       },
       items: [
@@ -72,12 +72,12 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/subroutinecom/workspace',
+          href: 'https://github.com/gricha/perry',
           label: 'GitHub',
           position: 'right',
         },
         {
-          href: 'https://www.npmjs.com/package/@subroutinecom/workspace',
+          href: 'https://www.npmjs.com/package/@gricha/perry',
           label: 'npm',
           position: 'right',
         },
@@ -108,29 +108,20 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/subroutinecom/workspace',
+              href: 'https://github.com/gricha/perry',
             },
             {
               label: 'npm Package',
-              href: 'https://www.npmjs.com/package/@subroutinecom/workspace',
+              href: 'https://www.npmjs.com/package/@gricha/perry',
             },
             {
               label: 'Report Issues',
-              href: 'https://github.com/subroutinecom/workspace/issues',
-            },
-          ],
-        },
-        {
-          title: 'Company',
-          items: [
-            {
-              label: 'Subroutine',
-              href: 'https://subroutine.com',
+              href: 'https://github.com/gricha/perry/issues',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Subroutine. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Perry. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

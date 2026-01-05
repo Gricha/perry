@@ -21,7 +21,7 @@ import { DEFAULT_AGENT_PORT, WORKSPACE_IMAGE } from './shared/constants';
 const program = new Command();
 
 program
-  .name('workspace')
+  .name('perry')
   .description('Distributed development environment orchestrator')
   .version(pkg.version)
   .action(() => {
@@ -104,7 +104,7 @@ async function getClient() {
     if (localRunning) {
       worker = `localhost:${DEFAULT_AGENT_PORT}`;
     } else {
-      console.error('No worker configured. Run: workspace config worker <hostname>');
+      console.error('No worker configured. Run: perry config worker <hostname>');
       process.exit(1);
     }
   }
@@ -318,7 +318,7 @@ async function getWorkerWithFallback(): Promise<string> {
     if (localRunning) {
       worker = `localhost:${DEFAULT_AGENT_PORT}`;
     } else {
-      console.error('No worker configured. Run: workspace config worker <hostname>');
+      console.error('No worker configured. Run: perry config worker <hostname>');
       process.exit(1);
     }
   }
@@ -342,11 +342,11 @@ program
       if (ports.length === 0) {
         console.log(`Workspace '${name}' is running.`);
         console.log('');
-        console.log('Usage: workspace proxy <name> <port> [<port>...]');
+        console.log('Usage: perry proxy <name> <port> [<port>...]');
         console.log('  Examples:');
-        console.log('    workspace proxy alpha 3000         # Forward port 3000');
-        console.log('    workspace proxy alpha 8080:3000    # Forward local 8080 to remote 3000');
-        console.log('    workspace proxy alpha 3000 5173    # Forward multiple ports');
+        console.log('    perry proxy alpha 3000         # Forward port 3000');
+        console.log('    perry proxy alpha 8080:3000    # Forward local 8080 to remote 3000');
+        console.log('    perry proxy alpha 3000 5173    # Forward multiple ports');
         return;
       }
 
@@ -470,7 +470,7 @@ program
   .description('Build the workspace Docker image')
   .option('--no-cache', 'Build without cache')
   .action(async (options) => {
-    const buildContext = './workspace';
+    const buildContext = './perry';
 
     console.log(`Building workspace image ${WORKSPACE_IMAGE}...`);
 

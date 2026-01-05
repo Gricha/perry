@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Introduction
 
-Workspace creates isolated, containerized development environments accessible from anywhere.
+Perry creates isolated, containerized development environments accessible from anywhere.
 
 ## Features
 
@@ -25,7 +25,7 @@ Workspace creates isolated, containerized development environments accessible fr
 ## Access
 
 - **Web UI** - Browser interface (port 7391)
-- **CLI** - `ws` command
+- **CLI** - `perry` command
 - **SSH** - Direct terminal access
 
 Next: [Installation](./installation.md)

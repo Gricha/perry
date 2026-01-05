@@ -25,7 +25,7 @@ describe('CLI commands', () => {
   });
 
   function cliEnv() {
-    return { WS_CONFIG_DIR: clientConfigDir };
+    return { PERRY_CONFIG_DIR: clientConfigDir };
   }
 
   describe('workspace list', () => {
@@ -251,7 +251,7 @@ describe('CLI commands', () => {
     it('shows help', async () => {
       const result = await runCLIExpecting(
         ['--help'],
-        ['workspace', 'Distributed development environment', 'Commands:'],
+        ['perry', 'Distributed development environment', 'Commands:'],
         {}
       );
       expect(result.code).toBe(0);
@@ -267,7 +267,7 @@ describe('CLI commands', () => {
 
       try {
         const result = await runCLI(['list'], {
-          env: { WS_CONFIG_DIR: emptyConfigDir },
+          env: { PERRY_CONFIG_DIR: emptyConfigDir },
         });
         expect(result.code).toBe(0);
       } finally {
@@ -284,7 +284,7 @@ describe('CLI commands', () => {
       );
 
       const result = await runCLIExpectingError(['list'], ['Unable to connect'], {
-        env: { WS_CONFIG_DIR: unreachableConfigDir },
+        env: { PERRY_CONFIG_DIR: unreachableConfigDir },
         timeout: 15000,
       });
       expect(result.code).not.toBe(0);

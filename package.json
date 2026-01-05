@@ -1,10 +1,10 @@
 {
-  "name": "@subroutinecom/workspace",
+  "name": "@gricha/perry",
   "version": "0.1.13",
-  "description": "Self-contained CLI for spinning up Docker-in-Docker workspaces with SSH and proxy helpers.",
+  "description": "Self-contained CLI for spinning up Docker-in-Docker development environments with SSH and proxy helpers.",
   "type": "module",
   "bin": {
-    "workspace": "./dist/index.js"
+    "perry": "./dist/index.js"
   },
   "scripts": {
     "build": "rm -rf ./dist && bun run build:ts && bun run build:web && bun link",
@@ -47,17 +47,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/subroutinecom/workspace.git"
+    "url": "https://github.com/gricha/perry.git"
   },
   "keywords": [
     "docker",
     "development",
-    "workspace",
+    "perry",
     "cli",
     "docker-in-docker",
     "ssh"
   ],
-  "author": "Subroutine",
+  "author": "gricha",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

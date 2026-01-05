@@ -5,8 +5,8 @@ import { spawn } from 'child_process';
 import { DEFAULT_CONFIG_DIR } from '../shared/types';
 import { DEFAULT_AGENT_PORT } from '../shared/constants';
 
-const SERVICE_NAME = 'workspace-agent';
-const SERVICE_DESCRIPTION = 'Workspace Agent Daemon';
+const SERVICE_NAME = 'perry-agent';
+const SERVICE_DESCRIPTION = 'Perry Agent Daemon';
 
 function getSystemdUserDir(): string {
   return path.join(os.homedir(), '.config', 'systemd', 'user');
@@ -30,13 +30,13 @@ export function generateServiceFile(options: InstallOptions = {}): string {
   const agentPath = path.resolve(__dirname, 'index.js');
 
   const envLines = [
-    `Environment=WS_PORT=${port}`,
-    `Environment=WS_CONFIG_DIR=${configDir}`,
+    `Environment=PERRY_PORT=${port}`,
+    `Environment=PERRY_CONFIG_DIR=${configDir}`,
     `Environment=NODE_ENV=production`,
   ];
 
   if (options.noHostAccess) {
-    envLines.push(`Environment=WS_NO_HOST_ACCESS=true`);
+    envLines.push(`Environment=PERRY_NO_HOST_ACCESS=true`);
   }
 
   return `[Unit]
@@ -233,7 +233,7 @@ export async function showStatus(): Promise<void> {
   } else {
     console.log('');
     console.log('Service not installed. Install with:');
-    console.log('  workspace agent install');
+    console.log('  perry agent install');
   }
 }
 
@@ -247,7 +247,7 @@ export async function showLogs(options: ShowLogsOptions = {}): Promise<void> {
 
   if (!status.installed) {
     console.error('Agent service is not installed.');
-    console.error('Install with: workspace agent install');
+    console.error('Install with: perry agent install');
     process.exit(1);
   }
 

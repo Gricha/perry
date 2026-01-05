@@ -63,7 +63,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             <div className="flex h-7 w-7 items-center justify-center rounded bg-primary/15">
               <Boxes className="h-4 w-4 text-primary" />
             </div>
-            <span className="font-semibold text-sm tracking-tight">Command</span>
+            <span className="font-semibold text-sm tracking-tight">Perry</span>
           </Link>
           <Button
             variant="ghost"
@@ -172,7 +172,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <div className="section-header">Appearance</div>
           <ThemeSwitcher />
           <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider pt-2">
-            Workspace v0.1.0
+            Perry v0.1.0
           </div>
         </div>
       </aside>

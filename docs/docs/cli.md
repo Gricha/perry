@@ -7,25 +7,34 @@ sidebar_position: 5
 ## Agent
 
 ```bash
-ws agent start [--port PORT] [--host HOST]
-ws agent stop
-ws agent status
+perry agent run [--port PORT]
+perry agent install
+perry agent uninstall
+perry agent status
 ```
 
 ## Workspaces
 
 ```bash
-ws create <name> [--clone URL]
-ws start <name>
-ws stop <name>
-ws delete <name> [-f]
-ws list
-ws logs <name> [-f]
+perry create <name> [--clone URL]
+perry start <name>
+perry stop <name>
+perry delete <name>
+perry list
+perry logs <name>
+perry sync <name>
 ```
 
 ## Build
 
 ```bash
-ws build [--no-cache]
-ws doctor
+perry build [--no-cache]
+```
+
+## Configuration
+
+```bash
+perry config show
+perry config worker [hostname]
+perry config agent
 ```

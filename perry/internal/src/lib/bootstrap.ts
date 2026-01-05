@@ -47,7 +47,7 @@ export const runBootstrapScripts = async (workspaceHome: string, entries: Bootst
     if (!stat) {
       console.log(`ERROR: Bootstrap script not found: ${scriptPath}`);
       if (entry.source === "user") {
-        console.log("Scripts should be in ~/.workspaces/ or subdirectories");
+        console.log("Scripts should be in ~/.config/perry/ or subdirectories");
       } else {
         console.log("Scripts should be in the directory with .workspace.yml");
       }
@@ -68,7 +68,7 @@ export const runBootstrapScripts = async (workspaceHome: string, entries: Bootst
     if (!(await isExecutableFile(scriptPath))) {
       console.log(`ERROR: Bootstrap script is not executable: ${scriptPath}`);
       if (entry.source === "user") {
-        console.log(`Hint: Run 'chmod +x ~/.workspaces/${entry.path}' on your host machine`);
+        console.log(`Hint: Run 'chmod +x ~/.config/perry/${entry.path}' on your host machine`);
       } else {
         console.log(`Hint: Run 'chmod +x ${entry.path}' on your host machine`);
       }

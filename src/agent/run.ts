@@ -161,12 +161,12 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
 
   const config = await loadAgentConfig(configDir);
 
-  if (options.noHostAccess || process.env.WS_NO_HOST_ACCESS === 'true') {
+  if (options.noHostAccess || process.env.PERRY_NO_HOST_ACCESS === 'true') {
     config.allowHostAccess = false;
   }
 
   const port =
-    options.port || parseInt(process.env.WS_PORT || '', 10) || config.port || DEFAULT_AGENT_PORT;
+    options.port || parseInt(process.env.PERRY_PORT || '', 10) || config.port || DEFAULT_AGENT_PORT;
 
   console.log(`[agent] Config directory: ${configDir}`);
   console.log(`[agent] Starting on port ${port}...`);
@@ -183,7 +183,7 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
       if (processInfo) {
         console.error(`[agent] Process using port: ${processInfo}`);
       }
-      console.error(`[agent] Try using a different port with: workspace agent run --port <port>`);
+      console.error(`[agent] Try using a different port with: perry agent run --port <port>`);
       process.exit(1);
     } else {
       console.error(`[agent] Server error: ${err.message}`);

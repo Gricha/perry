@@ -46,7 +46,7 @@ bun run test      # Run tests (requires Docker)
 
 ## Project Overview
 
-Workspace creates isolated Docker-in-Docker development environments. Distributed architecture: agent daemon, oRPC API, multiple clients (CLI, Web UI, Mobile).
+Perry creates isolated Docker-in-Docker development environments. Distributed architecture: agent daemon, oRPC API, multiple clients (CLI, Web UI, Mobile).
 
 **Runtime**: Bun (not Node.js)
 **Language**: TypeScript with ES modules
@@ -57,7 +57,7 @@ Workspace creates isolated Docker-in-Docker development environments. Distribute
 ## Key Patterns
 
 - **Docker via CLI**: Spawned commands, not SDK (`src/docker/`)
-- **State**: `~/.workspaces/state/state.json` with file locking (`proper-lockfile`)
+- **State**: `~/.config/perry/state.json` with file locking (`proper-lockfile`)
 - **API**: oRPC server (`src/agent/`), client (`src/client/api.ts`)
 - **Web UI**: React + Vite + shadcn/ui (`web/`)
 - **Docs**: Docusaurus (`docs/`)
@@ -89,7 +89,7 @@ Workspace creates isolated Docker-in-Docker development environments. Distribute
 - Integration: `test/integration/`
 - Web UI: Playwright (`web/e2e/`)
 
-If modifying Dockerfile/init scripts, run `workspace build` first.
+If modifying Dockerfile/init scripts, run `perry build` first.
 
 ### UI Testing
 

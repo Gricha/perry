@@ -4,13 +4,13 @@ sidebar_position: 100
 
 # Troubleshooting
 
-Common issues and their solutions when working with Workspace.
+Common issues and their solutions when working with Perry.
 
 ## Docker Issues
 
 ### "Cannot connect to Docker daemon"
 
-**Symptoms:** Error when running `ws build` or Docker commands.
+**Symptoms:** Error when running `perry build` or Docker commands.
 
 **Cause:** Docker is not running or not accessible.
 
@@ -45,7 +45,7 @@ Common issues and their solutions when working with Workspace.
 **Solution:**
 
 ```bash
-ws build
+perry build
 # Wait for build to complete (5-10 minutes)
 ```
 
@@ -87,7 +87,7 @@ ws build
 1. **Check container logs:**
    ```bash
    docker logs workspace-<name>
-   ws logs <name>
+   perry logs <name>
    ```
 
 2. **Check running containers:**
@@ -97,8 +97,8 @@ ws build
 
 3. **Delete and recreate:**
    ```bash
-   ws delete <name>
-   ws create <name>
+   perry delete <name>
+   perry create <name>
    ```
 
 4. **Check for port conflicts:**
@@ -117,13 +117,13 @@ ws build
 
 1. **Verify workspace is running:**
    ```bash
-   ws list
+   perry list
    # Status should be "running" (green)
    ```
 
 2. **Get correct SSH port:**
    ```bash
-   ws list
+   perry list
    # Check the ssh:// URL for the port
    ```
 
@@ -134,8 +134,8 @@ ws build
 
 4. **Restart the workspace:**
    ```bash
-   ws stop <name>
-   ws start <name>
+   perry stop <name>
+   perry start <name>
    ```
 
 5. **Check SSH daemon inside workspace:**
@@ -168,7 +168,7 @@ ws build
 
 4. **Use HTTPS URL instead:**
    ```bash
-   ws create myproject --clone https://github.com/user/repo.git
+   perry create myproject --clone https://github.com/user/repo.git
    ```
 
 ### Workspace deleted but container still running
@@ -192,7 +192,7 @@ docker volume rm workspace-<name>
 
 ### Agent won't start
 
-**Symptoms:** `ws agent start` fails or exits immediately.
+**Symptoms:** `perry agent run` fails or exits immediately.
 
 **Cause:** Port already in use, permissions issue, or invalid configuration.
 
@@ -207,12 +207,12 @@ docker volume rm workspace-<name>
 
 2. **Use a different port:**
    ```bash
-   ws agent start --port 3000
+   perry agent run --port 3000
    ```
 
 3. **Check configuration file:**
    ```bash
-   cat ~/.workspace-agent/config.yaml
+   cat ~/.config/perry/config.json
    # Fix any YAML syntax errors
    ```
 
@@ -225,7 +225,7 @@ docker volume rm workspace-<name>
 5. **Remove state file if corrupted:**
    ```bash
    mv ~/.workspace-agent/state.json ~/.workspace-agent/state.json.backup
-   ws agent start
+   perry agent run
    ```
 
 ### Web UI not loading
@@ -238,7 +238,7 @@ docker volume rm workspace-<name>
 
 1. **Verify agent is running:**
    ```bash
-   ws agent status
+   perry agent status
    # Should show "Agent is running on port 7391"
    ```
 
@@ -273,8 +273,8 @@ docker volume rm workspace-<name>
 
 2. **Restart the agent:**
    ```bash
-   ws agent stop
-   ws agent start
+   # Stop the agent process and restart
+   perry agent run
    ```
 
 3. **Check Docker daemon:**
@@ -310,8 +310,8 @@ docker volume rm workspace-<name>
 
 4. **Restart workspace for changes:**
    ```bash
-   ws stop <name>
-   ws start <name>
+   perry stop <name>
+   perry start <name>
    ```
 
 5. **Verify token inside workspace:**
@@ -335,8 +335,8 @@ docker volume rm workspace-<name>
 
 2. **Stop and start workspace:**
    ```bash
-   ws stop <name>
-   ws start <name>
+   perry stop <name>
+   perry start <name>
    ```
 
 3. **Check environment variable:**
@@ -371,8 +371,8 @@ docker volume rm workspace-<name>
 
 3. **Restart workspace:**
    ```bash
-   ws stop <name>
-   ws start <name>
+   perry stop <name>
+   perry start <name>
    ```
 
 4. **Authenticate inside workspace:**
@@ -535,13 +535,13 @@ docker volume rm workspace-<name>
 2. **Check disk usage:**
    ```bash
    docker system df
-   du -sh ~/.workspace-agent
+   du -sh ~/.config/perry
    ```
 
 3. **Delete unused workspaces:**
    ```bash
-   ws list
-   ws delete <unused-workspace>
+   perry list
+   perry delete <unused-workspace>
    ```
 
 4. **Clean up inside workspaces:**
@@ -577,7 +577,7 @@ If issues persist after trying these solutions:
 
 1. **Collect diagnostic information:**
    ```bash
-   ws doctor
+   perry info
    docker version
    docker info
    uname -a
@@ -585,17 +585,17 @@ If issues persist after trying these solutions:
 
 2. **Check logs:**
    ```bash
-   ws logs <workspace-name>
+   perry logs <workspace-name>
    docker logs workspace-<name>
    ```
 
 3. **File an issue:**
-   - Visit https://github.com/subroutinecom/workspace/issues
+   - Visit https://github.com/gricha/perry/issues
    - Search for existing issues first
    - Include:
      - OS and version
      - Docker version
-     - Workspace version (`ws --version`)
+     - Perry version (`perry --version`)
      - Error messages (full output)
      - Steps to reproduce
      - Relevant logs
