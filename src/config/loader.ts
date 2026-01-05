@@ -22,6 +22,14 @@ export function createDefaultAgentConfig(): AgentConfig {
     scripts: {},
     agents: {},
     allowHostAccess: true,
+    ssh: {
+      autoAuthorizeHostKeys: true,
+      global: {
+        copy: [],
+        authorize: [],
+      },
+      workspaces: {},
+    },
   };
 }
 
@@ -41,6 +49,14 @@ export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> 
       scripts: config.scripts || {},
       agents: config.agents || {},
       allowHostAccess: config.allowHostAccess ?? true,
+      ssh: {
+        autoAuthorizeHostKeys: config.ssh?.autoAuthorizeHostKeys ?? true,
+        global: {
+          copy: config.ssh?.global?.copy || [],
+          authorize: config.ssh?.global?.authorize || [],
+        },
+        workspaces: config.ssh?.workspaces || {},
+      },
     };
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {

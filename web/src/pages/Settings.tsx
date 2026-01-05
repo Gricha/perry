@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Save, RefreshCw } from 'lucide-react'
-import { api, type Credentials, type Scripts } from '@/lib/api'
+import { Plus, Trash2, Save, RefreshCw, Key, Check } from 'lucide-react'
+import { api, type Credentials, type Scripts, type SSHSettings } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export function Settings() {
   const queryClient = useQueryClient()
@@ -19,6 +20,16 @@ export function Settings() {
     queryFn: api.getScripts,
   })
 
+  const { data: sshSettings, isLoading: sshLoading, error: sshError, refetch: refetchSSH } = useQuery({
+    queryKey: ['sshSettings'],
+    queryFn: api.getSSHSettings,
+  })
+
+  const { data: sshKeys } = useQuery({
+    queryKey: ['sshKeys'],
+    queryFn: api.listSSHKeys,
+  })
+
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([])
   const [files, setFiles] = useState<Array<{ dest: string; source: string }>>([])
   const [postStartScript, setPostStartScript] = useState('')
@@ -26,6 +37,12 @@ export function Settings() {
   const [hasFileChanges, setHasFileChanges] = useState(false)
   const [hasScriptChanges, setHasScriptChanges] = useState(false)
   const [initialized, setInitialized] = useState(false)
+
+  const [autoAuthorize, setAutoAuthorize] = useState(true)
+  const [copyKeys, setCopyKeys] = useState<string[]>([])
+  const [authorizeKeys, setAuthorizeKeys] = useState<string[]>([])
+  const [hasSSHChanges, setHasSSHChanges] = useState(false)
+  const [sshInitialized, setSSHInitialized] = useState(false)
 
   useEffect(() => {
     if (credentials && !initialized) {
@@ -41,6 +58,15 @@ export function Settings() {
     }
   }, [scripts, hasScriptChanges, postStartScript])
 
+  useEffect(() => {
+    if (sshSettings && !sshInitialized) {
+      setAutoAuthorize(sshSettings.autoAuthorizeHostKeys)
+      setCopyKeys(sshSettings.global.copy || [])
+      setAuthorizeKeys(sshSettings.global.authorize || [])
+      setSSHInitialized(true)
+    }
+  }, [sshSettings, sshInitialized])
+
   const credentialsMutation = useMutation({
     mutationFn: (data: Credentials) => api.updateCredentials(data),
     onSuccess: () => {
@@ -55,6 +81,14 @@ export function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scripts'] })
       setHasScriptChanges(false)
+    },
+  })
+
+  const sshMutation = useMutation({
+    mutationFn: (data: SSHSettings) => api.updateSSHSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sshSettings'] })
+      setHasSSHChanges(false)
     },
   })
 
@@ -96,6 +130,35 @@ export function Settings() {
     })
   }
 
+  const handleSaveSSH = () => {
+    sshMutation.mutate({
+      autoAuthorizeHostKeys: autoAuthorize,
+      global: {
+        copy: copyKeys,
+        authorize: authorizeKeys,
+      },
+      workspaces: sshSettings?.workspaces || {},
+    })
+  }
+
+  const toggleCopyKey = (keyPath: string) => {
+    if (copyKeys.includes(keyPath)) {
+      setCopyKeys(copyKeys.filter(k => k !== keyPath))
+    } else {
+      setCopyKeys([...copyKeys, keyPath])
+    }
+    setHasSSHChanges(true)
+  }
+
+  const toggleAuthorizeKey = (keyPath: string) => {
+    if (authorizeKeys.includes(keyPath)) {
+      setAuthorizeKeys(authorizeKeys.filter(k => k !== keyPath))
+    } else {
+      setAuthorizeKeys([...authorizeKeys, keyPath])
+    }
+    setHasSSHChanges(true)
+  }
+
   const addEnvVar = () => {
     setEnvVars([...envVars, { key: '', value: '' }])
     setHasEnvChanges(true)
@@ -130,14 +193,14 @@ export function Settings() {
     setHasFileChanges(true)
   }
 
-  const isLoading = credentialsLoading || scriptsLoading
-  const error = credentialsError || scriptsError
+  const isLoading = credentialsLoading || scriptsLoading || sshLoading
+  const error = credentialsError || scriptsError || sshError
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <p className="text-destructive mb-4">Failed to load settings</p>
-        <Button onClick={() => { refetchCredentials(); refetchScripts() }} variant="outline">
+        <Button onClick={() => { refetchCredentials(); refetchScripts(); refetchSSH() }} variant="outline">
           <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
@@ -319,6 +382,126 @@ export function Settings() {
               {scriptsMutation.error && (
                 <p className="mt-2 text-sm text-destructive">
                   {(scriptsMutation.error as Error).message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    SSH Keys
+                  </CardTitle>
+                  <CardDescription>Configure SSH keys for workspace access and git operations</CardDescription>
+                </div>
+                <Button
+                  onClick={handleSaveSSH}
+                  disabled={sshMutation.isPending || !hasSSHChanges}
+                  size="sm"
+                >
+                  <Save className="mr-1 h-4 w-4" />
+                  {sshMutation.isPending ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Auto-authorize host keys</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically add all host SSH keys to workspace authorized_keys
+                  </p>
+                </div>
+                <Button
+                  variant={autoAuthorize ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setAutoAuthorize(!autoAuthorize)
+                    setHasSSHChanges(true)
+                  }}
+                >
+                  {autoAuthorize ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+
+              {sshKeys && sshKeys.length > 0 && (
+                <>
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Keys to copy to workspaces</h4>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Private keys copied for git operations
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {sshKeys.filter(k => k.hasPrivateKey).map((key) => (
+                        <div
+                          key={key.path}
+                          className="flex items-center justify-between p-2 rounded-md border cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleCopyKey(key.path)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                              copyKeys.includes(key.path) ? 'bg-primary border-primary' : 'border-muted-foreground'
+                            }`}>
+                              {copyKeys.includes(key.path) && <Check className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{key.name}</p>
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {key.type.toUpperCase()} · {key.fingerprint.slice(0, 20)}...
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Keys to authorize</h4>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Additional public keys added to authorized_keys
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {sshKeys.map((key) => (
+                        <div
+                          key={key.path}
+                          className="flex items-center justify-between p-2 rounded-md border cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleAuthorizeKey(key.publicKeyPath)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                              authorizeKeys.includes(key.publicKeyPath) ? 'bg-primary border-primary' : 'border-muted-foreground'
+                            }`}>
+                              {authorizeKeys.includes(key.publicKeyPath) && <Check className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{key.name}</p>
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {key.type.toUpperCase()} · {key.fingerprint.slice(0, 20)}...
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {(!sshKeys || sshKeys.length === 0) && (
+                <p className="text-sm text-muted-foreground">No SSH keys found in ~/.ssh/</p>
+              )}
+
+              {sshMutation.error && (
+                <p className="text-sm text-destructive">
+                  {(sshMutation.error as Error).message}
                 </p>
               )}
             </CardContent>

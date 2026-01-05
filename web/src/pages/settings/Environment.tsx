@@ -4,9 +4,11 @@ import { Plus, Trash2, Save, RefreshCw, Variable } from 'lucide-react'
 import { api, type Credentials } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useSyncPrompt } from '@/contexts/SyncContext'
 
 export function EnvironmentSettings() {
   const queryClient = useQueryClient()
+  const showSyncPrompt = useSyncPrompt()
 
   const { data: credentials, isLoading, error, refetch } = useQuery({
     queryKey: ['credentials'],
@@ -29,6 +31,7 @@ export function EnvironmentSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
       setHasChanges(false)
+      showSyncPrompt()
     },
   })
 

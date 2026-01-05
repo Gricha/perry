@@ -16,6 +16,7 @@ import {
   SSH_PORT_RANGE_START,
   SSH_PORT_RANGE_END,
 } from '../shared/constants';
+import { collectAuthorizedKeys, collectCopyKeys } from '../ssh/sync';
 
 async function findAvailablePort(start: number, end: number): Promise<number> {
   for (let port = start; port <= end; port++) {
@@ -303,12 +304,89 @@ export class WorkspaceManager {
     });
   }
 
-  private async setupWorkspaceCredentials(containerName: string): Promise<void> {
+  private async setupSSHKeys(containerName: string, workspaceName: string): Promise<void> {
+    if (!this.config.ssh) {
+      return;
+    }
+
+    await docker.execInContainer(containerName, ['mkdir', '-p', '/home/workspace/.ssh'], {
+      user: 'workspace',
+    });
+    await docker.execInContainer(containerName, ['chmod', '700', '/home/workspace/.ssh'], {
+      user: 'workspace',
+    });
+
+    const authorizedKeys = await collectAuthorizedKeys(this.config.ssh, workspaceName);
+    if (authorizedKeys.length > 0) {
+      const content = authorizedKeys.join('\n') + '\n';
+      const tempFile = path.join(os.tmpdir(), `ws-authkeys-${Date.now()}`);
+      try {
+        await fs.writeFile(tempFile, content);
+        await docker.copyToContainer(
+          containerName,
+          tempFile,
+          '/home/workspace/.ssh/authorized_keys'
+        );
+        await docker.execInContainer(
+          containerName,
+          ['chown', 'workspace:workspace', '/home/workspace/.ssh/authorized_keys'],
+          { user: 'root' }
+        );
+        await docker.execInContainer(
+          containerName,
+          ['chmod', '600', '/home/workspace/.ssh/authorized_keys'],
+          { user: 'workspace' }
+        );
+      } finally {
+        await fs.unlink(tempFile).catch(() => {});
+      }
+    }
+
+    const copyKeys = await collectCopyKeys(this.config.ssh, workspaceName);
+    for (const key of copyKeys) {
+      const privateKeyPath = `/home/workspace/.ssh/${key.name}`;
+      const publicKeyPath = `/home/workspace/.ssh/${key.name}.pub`;
+
+      const privateTempFile = path.join(os.tmpdir(), `ws-privkey-${Date.now()}`);
+      const publicTempFile = path.join(os.tmpdir(), `ws-pubkey-${Date.now()}`);
+
+      try {
+        await fs.writeFile(privateTempFile, key.privateKey + '\n');
+        await fs.writeFile(publicTempFile, key.publicKey + '\n');
+
+        await docker.copyToContainer(containerName, privateTempFile, privateKeyPath);
+        await docker.copyToContainer(containerName, publicTempFile, publicKeyPath);
+
+        await docker.execInContainer(
+          containerName,
+          ['chown', 'workspace:workspace', privateKeyPath, publicKeyPath],
+          { user: 'root' }
+        );
+        await docker.execInContainer(containerName, ['chmod', '600', privateKeyPath], {
+          user: 'workspace',
+        });
+        await docker.execInContainer(containerName, ['chmod', '644', publicKeyPath], {
+          user: 'workspace',
+        });
+      } finally {
+        await fs.unlink(privateTempFile).catch(() => {});
+        await fs.unlink(publicTempFile).catch(() => {});
+      }
+    }
+  }
+
+  private async setupWorkspaceCredentials(
+    containerName: string,
+    workspaceName?: string
+  ): Promise<void> {
     await this.copyGitConfig(containerName);
     await this.copyCredentialFiles(containerName);
     await this.setupClaudeCodeConfig(containerName);
     await this.copyCodexCredentials(containerName);
     await this.setupOpencodeConfig(containerName);
+    if (workspaceName) {
+      await this.setupSSHKeys(containerName, workspaceName);
+    }
   }
 
   private async runPostStartScript(containerName: string): Promise<void> {
@@ -449,7 +527,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-      await this.setupWorkspaceCredentials(containerName);
+      await this.setupWorkspaceCredentials(containerName, name);
 
       workspace.status = 'running';
       await this.state.setWorkspace(workspace);
@@ -530,7 +608,7 @@ export class WorkspaceManager {
 
     await docker.startContainer(containerName);
     await docker.waitForContainerReady(containerName);
-    await this.setupWorkspaceCredentials(containerName);
+    await this.setupWorkspaceCredentials(containerName, name);
 
     workspace.status = 'running';
     await this.state.setWorkspace(workspace);
@@ -618,6 +696,6 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' is not running`);
     }
 
-    await this.setupWorkspaceCredentials(containerName);
+    await this.setupWorkspaceCredentials(containerName, name);
   }
 }

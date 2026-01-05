@@ -1,18 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Save, RefreshCw, FolderSync, ArrowRight, Boxes, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Trash2, Save, RefreshCw, FolderSync, ArrowRight } from 'lucide-react'
 import { api, type Credentials } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
-type SyncResult = {
-  synced: number
-  failed: number
-  results: { name: string; success: boolean; error?: string }[]
-}
+import { useSyncPrompt } from '@/contexts/SyncContext'
 
 export function FilesSettings() {
   const queryClient = useQueryClient()
+  const showSyncPrompt = useSyncPrompt()
 
   const { data: credentials, isLoading, error, refetch } = useQuery({
     queryKey: ['credentials'],
@@ -22,7 +18,6 @@ export function FilesSettings() {
   const [files, setFiles] = useState<Array<{ dest: string; source: string }>>([])
   const [hasChanges, setHasChanges] = useState(false)
   const [initialized, setInitialized] = useState(false)
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
 
   useEffect(() => {
     if (credentials && !initialized) {
@@ -36,13 +31,7 @@ export function FilesSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
       setHasChanges(false)
-    },
-  })
-
-  const syncAllMutation = useMutation({
-    mutationFn: () => api.syncAllWorkspaces(),
-    onSuccess: (data) => {
-      setSyncResult(data)
+      showSyncPrompt()
     },
   })
 
@@ -172,67 +161,6 @@ export function FilesSettings() {
           <div className="mt-4 rounded border border-destructive/50 bg-destructive/10 p-3">
             <p className="text-sm text-destructive">
               {(mutation.error as Error).message}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="border-t pt-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="section-header flex-1 mb-0 border-b-0">Sync All Workspaces</div>
-            <p className="text-xs text-muted-foreground mt-1">Push environment and file settings to all running workspaces</p>
-          </div>
-          <Button
-            onClick={() => syncAllMutation.mutate()}
-            disabled={syncAllMutation.isPending}
-            variant="outline"
-            size="sm"
-          >
-            <Boxes className="mr-1.5 h-3.5 w-3.5" />
-            {syncAllMutation.isPending ? 'Syncing...' : 'Sync All'}
-          </Button>
-        </div>
-
-        {syncResult && (
-          <div className="rounded-lg border bg-card/50 p-4 space-y-3">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-muted-foreground">
-                {syncResult.synced} synced
-              </span>
-              {syncResult.failed > 0 && (
-                <span className="text-destructive">
-                  {syncResult.failed} failed
-                </span>
-              )}
-            </div>
-            {syncResult.results.length > 0 && (
-              <div className="space-y-1.5">
-                {syncResult.results.map((r) => (
-                  <div key={r.name} className="flex items-center gap-2 text-sm">
-                    {r.success ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    ) : (
-                      <XCircle className="h-3.5 w-3.5 text-destructive" />
-                    )}
-                    <span className={r.success ? 'text-foreground' : 'text-destructive'}>{r.name}</span>
-                    {r.error && (
-                      <span className="text-xs text-muted-foreground">— {r.error}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {syncResult.results.length === 0 && (
-              <p className="text-sm text-muted-foreground">No running workspaces to sync</p>
-            )}
-          </div>
-        )}
-
-        {syncAllMutation.error && (
-          <div className="mt-4 rounded border border-destructive/50 bg-destructive/10 p-3">
-            <p className="text-sm text-destructive">
-              {(syncAllMutation.error as Error).message}
             </p>
           </div>
         )}

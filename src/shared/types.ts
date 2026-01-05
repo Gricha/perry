@@ -20,12 +20,24 @@ export interface CodingAgents {
   };
 }
 
+export interface SSHKeyConfig {
+  copy: string[];
+  authorize: string[];
+}
+
+export interface SSHSettings {
+  autoAuthorizeHostKeys: boolean;
+  global: SSHKeyConfig;
+  workspaces: Record<string, Partial<SSHKeyConfig>>;
+}
+
 export interface AgentConfig {
   port: number;
   credentials: WorkspaceCredentials;
   scripts: WorkspaceScripts;
   agents?: CodingAgents;
   allowHostAccess?: boolean;
+  ssh?: SSHSettings;
 }
 
 export const HOST_WORKSPACE_NAME = '@host';

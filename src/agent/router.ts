@@ -13,6 +13,7 @@ import {
   getSessionNamesForWorkspace,
   deleteSessionName,
 } from '../sessions/metadata';
+import { discoverSSHKeys } from '../ssh/discovery';
 import { parseClaudeSessionContent } from '../sessions/parser';
 import type { SessionMessage } from '../sessions/types';
 import {
@@ -64,6 +65,26 @@ const CodingAgentsSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+});
+
+const SSHKeyConfigSchema = z.object({
+  copy: z.array(z.string()),
+  authorize: z.array(z.string()),
+});
+
+const SSHSettingsSchema = z.object({
+  autoAuthorizeHostKeys: z.boolean(),
+  global: SSHKeyConfigSchema,
+  workspaces: z.record(z.string(), SSHKeyConfigSchema.partial()),
+});
+
+const SSHKeyInfoSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  publicKeyPath: z.string(),
+  type: z.enum(['ed25519', 'rsa', 'ecdsa', 'dsa', 'unknown']),
+  fingerprint: z.string(),
+  hasPrivateKey: z.boolean(),
 });
 
 export interface RouterContext {
@@ -252,6 +273,32 @@ export function createRouter(ctx: RouterContext) {
       await saveAgentConfig(newConfig, ctx.configDir);
       return input;
     });
+
+  const getSSHSettings = os.output(SSHSettingsSchema).handler(async () => {
+    const config = ctx.config.get();
+    return (
+      config.ssh || {
+        autoAuthorizeHostKeys: true,
+        global: { copy: [], authorize: [] },
+        workspaces: {},
+      }
+    );
+  });
+
+  const updateSSHSettings = os
+    .input(SSHSettingsSchema)
+    .output(SSHSettingsSchema)
+    .handler(async ({ input }) => {
+      const currentConfig = ctx.config.get();
+      const newConfig = { ...currentConfig, ssh: input };
+      ctx.config.set(newConfig);
+      await saveAgentConfig(newConfig, ctx.configDir);
+      return input;
+    });
+
+  const listSSHKeys = os.output(z.array(SSHKeyInfoSchema)).handler(async () => {
+    return discoverSSHKeys();
+  });
 
   type ListSessionsInput = {
     workspaceName: string;
@@ -772,6 +819,11 @@ export function createRouter(ctx: RouterContext) {
       agents: {
         get: getAgents,
         update: updateAgents,
+      },
+      ssh: {
+        get: getSSHSettings,
+        update: updateSSHSettings,
+        listKeys: listSSHKeys,
       },
     },
   };

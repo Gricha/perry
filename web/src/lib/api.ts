@@ -13,6 +13,8 @@ import type {
   SessionMessage,
   SessionDetail,
   HostInfo,
+  SSHSettings,
+  SSHKeyInfo,
 } from './types'
 
 export type {
@@ -28,6 +30,8 @@ export type {
   SessionMessage,
   SessionDetail,
   HostInfo,
+  SSHSettings,
+  SSHKeyInfo,
 }
 
 function getRpcUrl(): string {
@@ -87,6 +91,11 @@ const client = createORPCClient<{
       get: () => Promise<CodingAgents>
       update: (input: CodingAgents) => Promise<CodingAgents>
     }
+    ssh: {
+      get: () => Promise<SSHSettings>
+      update: (input: SSHSettings) => Promise<SSHSettings>
+      listKeys: () => Promise<SSHKeyInfo[]>
+    }
   }
 }>(link)
 
@@ -119,6 +128,9 @@ export const api = {
   updateAgents: (data: CodingAgents) => client.config.agents.update(data),
   getHostInfo: () => client.host.info(),
   updateHostAccess: (enabled: boolean) => client.host.updateAccess({ enabled }),
+  getSSHSettings: () => client.config.ssh.get(),
+  updateSSHSettings: (data: SSHSettings) => client.config.ssh.update(data),
+  listSSHKeys: () => client.config.ssh.listKeys(),
 }
 
 export function getTerminalUrl(name: string): string {

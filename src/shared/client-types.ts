@@ -83,3 +83,23 @@ export interface HostInfo {
   username: string;
   homeDir: string;
 }
+
+export interface SSHKeyConfig {
+  copy: string[];
+  authorize: string[];
+}
+
+export interface SSHSettings {
+  autoAuthorizeHostKeys: boolean;
+  global: SSHKeyConfig;
+  workspaces: Record<string, Partial<SSHKeyConfig>>;
+}
+
+export interface SSHKeyInfo {
+  name: string;
+  path: string;
+  publicKeyPath: string;
+  type: 'ed25519' | 'rsa' | 'ecdsa' | 'dsa' | 'unknown';
+  fingerprint: string;
+  hasPrivateKey: boolean;
+}

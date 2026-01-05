@@ -40,6 +40,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { to: '/settings/agents', label: 'Configuration', icon: Settings },
     { to: '/settings/files', label: 'Files', icon: FolderSync },
     { to: '/settings/scripts', label: 'Scripts', icon: Terminal },
+    { to: '/settings/ssh', label: 'SSH Keys', icon: KeyRound },
   ]
 
   return (
@@ -163,6 +164,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 ))}
               </div>
             </div>
+
           </div>
         </nav>
 
