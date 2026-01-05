@@ -1,5 +1,5 @@
 repo:
-  remote: git@github.com:Gricha/workspace-demo.git
+  remote: git@github.com:gricha/workspace-demo.git
   branch: main
   cloneArgs:
     - --depth=1
