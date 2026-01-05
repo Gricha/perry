@@ -304,6 +304,7 @@ export class HostOpencodeSession {
     if (event.type === 'step_start' && event.sessionID) {
       if (!this.sessionId) {
         this.sessionId = event.sessionID;
+        this.historyLoaded = true;
         this.onMessage({
           type: 'system',
           content: `Session started ${this.sessionId}`,
