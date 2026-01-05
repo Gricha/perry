@@ -493,6 +493,17 @@ function handleError(err: unknown): never {
     }
   } else if (err instanceof Error) {
     console.error(`Error: ${err.message}`);
+  } else if (err && typeof err === 'object') {
+    const errObj = err as Record<string, unknown>;
+    if ('message' in errObj && typeof errObj.message === 'string') {
+      console.error(`Error: ${errObj.message}`);
+    } else if ('code' in errObj) {
+      console.error(`Error: ${String(errObj.code)}`);
+    } else {
+      console.error(`Error: ${JSON.stringify(err)}`);
+    }
+  } else if (err !== undefined && err !== null) {
+    console.error(`Error: ${String(err)}`);
   } else {
     console.error('An unknown error occurred');
   }
