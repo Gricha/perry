@@ -9,9 +9,11 @@ import {
   Terminal,
   Settings,
   MessageSquare,
+  Monitor,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
+import { HOST_WORKSPACE_NAME } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
@@ -26,6 +28,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { data: workspaces } = useQuery({
     queryKey: ['workspaces'],
     queryFn: api.listWorkspaces,
+  })
+
+  const { data: hostInfo } = useQuery({
+    queryKey: ['hostInfo'],
+    queryFn: api.getHostInfo,
   })
 
   const settingsLinks = [
@@ -120,6 +127,21 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     </span>
                   </Link>
                 ))}
+                {hostInfo?.enabled && (
+                  <Link
+                    to={`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
+                      location.pathname.includes(encodeURIComponent(HOST_WORKSPACE_NAME)) && 'nav-active'
+                    )}
+                    onClick={() => isOpen && onToggle()}
+                  >
+                    <Monitor className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                    <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                      {hostInfo.hostname}
+                    </span>
+                  </Link>
+                )}
               </div>
             </div>
 

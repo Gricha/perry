@@ -197,6 +197,27 @@ export function createRouter(ctx: RouterContext) {
     }
   });
 
+  const syncAllWorkspaces = os.handler(async () => {
+    const workspaces = await ctx.workspaces.list();
+    const runningWorkspaces = workspaces.filter((ws) => ws.status === 'running');
+    const results: { name: string; success: boolean; error?: string }[] = [];
+
+    for (const ws of runningWorkspaces) {
+      try {
+        await ctx.workspaces.sync(ws.name);
+        results.push({ name: ws.name, success: true });
+      } catch (err) {
+        results.push({ name: ws.name, success: false, error: (err as Error).message });
+      }
+    }
+
+    return {
+      synced: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    };
+  });
+
   const getInfo = os.handler(async () => {
     let dockerVersion = 'unknown';
     try {
@@ -359,9 +380,7 @@ export function createRouter(ctx: RouterContext) {
                 if ((entry.type === 'user' || entry.type === 'human') && entry.message?.content) {
                   const msgContent = entry.message.content;
                   if (Array.isArray(msgContent)) {
-                    const textBlock = msgContent.find(
-                      (b: { type: string }) => b.type === 'text'
-                    );
+                    const textBlock = msgContent.find((b: { type: string }) => b.type === 'text');
                     if (textBlock?.text) {
                       firstPrompt = textBlock.text.slice(0, 200);
                       break;
@@ -1208,6 +1227,7 @@ export function createRouter(ctx: RouterContext) {
       stop: stopWorkspace,
       logs: getLogs,
       sync: syncWorkspace,
+      syncAll: syncAllWorkspaces,
     },
     sessions: {
       list: listSessions,
