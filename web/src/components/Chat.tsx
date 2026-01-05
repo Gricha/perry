@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Send, StopCircle, Bot, Sparkles, Wrench, ChevronDown, CheckCircle2, Loader2, Code2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { getChatUrl, api, type AgentType } from '@/lib/api'
+import { getChatUrl, api, type AgentType, type SessionMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -235,71 +235,83 @@ function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
   )
 }
 
+const MESSAGES_PER_PAGE = 50
+
 export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, agentType = 'claude-code' }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(!!initialSessionId)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [messageOffset, setMessageOffset] = useState(0)
+
+  const parseMessages = useCallback((rawMessages: SessionMessage[]): ChatMessage[] => {
+    const historicalMessages: ChatMessage[] = []
+    let currentAssistantParts: ChatMessagePart[] = []
+
+    const flushAssistantParts = () => {
+      if (currentAssistantParts.length > 0) {
+        const textContent = currentAssistantParts
+          .filter(p => p.type === 'text')
+          .map(p => p.content)
+          .join('')
+        historicalMessages.push({
+          type: 'assistant',
+          content: textContent || '',
+          timestamp: new Date().toISOString(),
+          parts: [...currentAssistantParts],
+        })
+        currentAssistantParts = []
+      }
+    }
+
+    for (const m of rawMessages) {
+      if (m.type === 'user') {
+        flushAssistantParts()
+        historicalMessages.push({
+          type: 'user',
+          content: m.content || '',
+          timestamp: m.timestamp || new Date().toISOString(),
+        })
+      } else if (m.type === 'assistant') {
+        currentAssistantParts.push({
+          type: 'text',
+          content: m.content || '',
+        })
+      } else if (m.type === 'tool_use') {
+        currentAssistantParts.push({
+          type: 'tool_use',
+          content: m.toolInput || '',
+          toolName: m.toolName,
+          toolId: m.toolId,
+        })
+      } else if (m.type === 'tool_result') {
+        currentAssistantParts.push({
+          type: 'tool_result',
+          content: m.content || '',
+          toolId: m.toolId,
+        })
+      }
+    }
+    flushAssistantParts()
+
+    return historicalMessages
+  }, [])
 
   useEffect(() => {
     if (!initialSessionId || !workspaceName) return
 
     setIsLoadingHistory(true)
-    api.getSession(workspaceName, initialSessionId, agentType)
+    api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, 0)
       .then((detail) => {
         if (detail?.messages) {
-          const historicalMessages: ChatMessage[] = []
-          let currentAssistantParts: ChatMessagePart[] = []
-
-          const flushAssistantParts = () => {
-            if (currentAssistantParts.length > 0) {
-              const textContent = currentAssistantParts
-                .filter(p => p.type === 'text')
-                .map(p => p.content)
-                .join('')
-              historicalMessages.push({
-                type: 'assistant',
-                content: textContent || '',
-                timestamp: new Date().toISOString(),
-                parts: [...currentAssistantParts],
-              })
-              currentAssistantParts = []
-            }
-          }
-
-          for (const m of detail.messages) {
-            if (m.type === 'user') {
-              flushAssistantParts()
-              historicalMessages.push({
-                type: 'user',
-                content: m.content || '',
-                timestamp: m.timestamp || new Date().toISOString(),
-              })
-            } else if (m.type === 'assistant') {
-              currentAssistantParts.push({
-                type: 'text',
-                content: m.content || '',
-              })
-            } else if (m.type === 'tool_use') {
-              currentAssistantParts.push({
-                type: 'tool_use',
-                content: m.toolInput || '',
-                toolName: m.toolName,
-                toolId: m.toolId,
-              })
-            } else if (m.type === 'tool_result') {
-              currentAssistantParts.push({
-                type: 'tool_result',
-                content: m.content || '',
-                toolId: m.toolId,
-              })
-            }
-          }
-          flushAssistantParts()
-
+          const historicalMessages = parseMessages(detail.messages as SessionMessage[])
           setMessages(historicalMessages)
+          setHasMoreMessages(detail.hasMore)
+          setMessageOffset(MESSAGES_PER_PAGE)
         }
       })
       .catch((err) => {
@@ -308,7 +320,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
       .finally(() => {
         setIsLoadingHistory(false)
       })
-  }, [initialSessionId, workspaceName, agentType])
+  }, [initialSessionId, workspaceName, agentType, parseMessages])
 
   const streamingPartsRef = useRef<ChatMessagePart[]>([])
   const [streamingParts, setStreamingParts] = useState<ChatMessagePart[]>([])
@@ -340,6 +352,35 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
     }
   }, [])
 
+  const loadMoreMessages = useCallback(async () => {
+    if (!initialSessionId || !workspaceName || isLoadingMore || !hasMoreMessages) return
+
+    setIsLoadingMore(true)
+    const scrollContainer = scrollContainerRef.current
+    const previousScrollHeight = scrollContainer?.scrollHeight || 0
+
+    try {
+      const detail = await api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, messageOffset)
+      if (detail?.messages) {
+        const olderMessages = parseMessages(detail.messages as SessionMessage[])
+        setMessages(prev => [...olderMessages, ...prev])
+        setHasMoreMessages(detail.hasMore)
+        setMessageOffset(prev => prev + MESSAGES_PER_PAGE)
+
+        requestAnimationFrame(() => {
+          if (scrollContainer) {
+            const newScrollHeight = scrollContainer.scrollHeight
+            scrollContainer.scrollTop = newScrollHeight - previousScrollHeight
+          }
+        })
+      }
+    } catch (err) {
+      console.error('Failed to load more messages:', err)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [initialSessionId, workspaceName, agentType, isLoadingMore, hasMoreMessages, messageOffset, parseMessages])
+
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -348,11 +389,15 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
       const { scrollTop, scrollHeight, clientHeight } = container
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
       shouldAutoScrollRef.current = isNearBottom
+
+      if (scrollTop < 100 && hasMoreMessages && !isLoadingMore) {
+        loadMoreMessages()
+      }
     }
 
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
+  }, [hasMoreMessages, isLoadingMore, loadMoreMessages])
 
   useEffect(() => {
     scrollToBottom()
@@ -615,34 +660,51 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
         )}
 
         {!isLoadingHistory && messages.length > 0 && containerMounted && (
-          <div
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const message = messages[virtualRow.index]
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-index={virtualRow.index}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className="p-4 pb-0"
+          <>
+            {isLoadingMore && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {hasMoreMessages && !isLoadingMore && (
+              <div className="flex justify-center py-2">
+                <button
+                  onClick={loadMoreMessages}
+                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <MessageBubble message={message} />
-                </div>
-              )
-            })}
-          </div>
+                  Load older messages
+                </button>
+              </div>
+            )}
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const message = messages[virtualRow.index]
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="p-4 pb-0"
+                  >
+                    <MessageBubble message={message} />
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
 
         {!isLoadingHistory && messages.length > 0 && !containerMounted && (

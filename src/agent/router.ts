@@ -571,38 +571,62 @@ export function createRouter(ctx: RouterContext) {
         workspaceName: z.string(),
         sessionId: z.string(),
         agentType: z.enum(['claude-code', 'opencode', 'codex']).optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
       })
     )
     .handler(async ({ input }) => {
       const isHost = input.workspaceName === HOST_WORKSPACE_NAME;
 
+      let result;
       if (isHost) {
         const config = ctx.config.get();
         if (!config.allowHostAccess) {
           throw new ORPCError('PRECONDITION_FAILED', { message: 'Host access is disabled' });
         }
-        return getHostSession(input.sessionId, input.agentType);
-      }
+        result = await getHostSession(input.sessionId, input.agentType);
+      } else {
+        const workspace = await ctx.workspaces.get(input.workspaceName);
+        if (!workspace) {
+          throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
+        }
+        if (workspace.status !== 'running') {
+          throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
+        }
 
-      const workspace = await ctx.workspaces.get(input.workspaceName);
-      if (!workspace) {
-        throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
-      }
-      if (workspace.status !== 'running') {
-        throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
-      }
+        const containerName = `workspace-${input.workspaceName}`;
 
-      const containerName = `workspace-${input.workspaceName}`;
-
-      const result = input.agentType
-        ? await getSessionMessages(containerName, input.sessionId, input.agentType, execInContainer)
-        : await findSessionMessages(containerName, input.sessionId, execInContainer);
+        result = input.agentType
+          ? await getSessionMessages(
+              containerName,
+              input.sessionId,
+              input.agentType,
+              execInContainer
+            )
+          : await findSessionMessages(containerName, input.sessionId, execInContainer);
+      }
 
       if (!result) {
         throw new ORPCError('NOT_FOUND', { message: 'Session not found' });
       }
 
-      return result;
+      const allMessages = result.messages || [];
+      const total = allMessages.length;
+
+      if (input.limit !== undefined) {
+        const offset = input.offset ?? 0;
+        const startIndex = Math.max(0, total - offset - input.limit);
+        const endIndex = total - offset;
+        const paginatedMessages = allMessages.slice(startIndex, endIndex);
+        return {
+          ...result,
+          messages: paginatedMessages,
+          total,
+          hasMore: startIndex > 0,
+        };
+      }
+
+      return { ...result, total, hasMore: false };
     });
 
   const renameSession = os
