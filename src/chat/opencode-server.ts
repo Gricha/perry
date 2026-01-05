@@ -17,7 +17,9 @@ interface OpenCodeServerEvent {
       type: string;
       text?: string;
       tool?: string;
+      callID?: string;
       state?: {
+        status?: string;
         input?: Record<string, unknown>;
         output?: string;
         title?: string;
@@ -109,6 +111,8 @@ export class OpenCodeServerSession {
   private onMessage: (message: ChatMessage) => void;
   private sseProcess: Subprocess<'ignore', 'pipe', 'pipe'> | null = null;
   private responseComplete = false;
+  private seenToolUse = new Set<string>();
+  private seenToolResult = new Set<string>();
 
   constructor(options: OpenCodeServerOptions, onMessage: (message: ChatMessage) => void) {
     this.containerName = options.containerName;
@@ -154,6 +158,8 @@ export class OpenCodeServerSession {
       }
 
       this.responseComplete = false;
+      this.seenToolUse.clear();
+      this.seenToolResult.clear();
       const ssePromise = this.startSSEStream(port);
 
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -238,10 +244,7 @@ export class OpenCodeServerSession {
             const event: OpenCodeServerEvent = JSON.parse(data);
             this.handleEvent(event);
 
-            if (
-              event.type === 'message.part.updated' &&
-              event.properties.part?.type === 'step-finish'
-            ) {
+            if (event.type === 'session.idle') {
               this.responseComplete = true;
               proc.kill();
               resolve();
@@ -288,22 +291,30 @@ export class OpenCodeServerSession {
           content: event.properties.delta,
           timestamp,
         });
-      } else if (part.type === 'tool-use' && part.tool) {
-        const input = part.state?.input;
-        this.onMessage({
-          type: 'tool_use',
-          content: JSON.stringify(input, null, 2),
-          toolName: part.state?.title || part.tool,
-          toolId: part.id,
-          timestamp,
-        });
-      } else if (part.type === 'tool-result' && part.state?.output) {
-        this.onMessage({
-          type: 'tool_result',
-          content: part.state.output,
-          toolId: part.id,
-          timestamp,
-        });
+      } else if (part.type === 'tool' && part.tool) {
+        const state = part.state;
+        const partId = part.id;
+
+        if (!this.seenToolUse.has(partId)) {
+          this.seenToolUse.add(partId);
+          this.onMessage({
+            type: 'tool_use',
+            content: JSON.stringify(state?.input, null, 2),
+            toolName: state?.title || part.tool,
+            toolId: partId,
+            timestamp,
+          });
+        }
+
+        if (state?.status === 'completed' && state?.output && !this.seenToolResult.has(partId)) {
+          this.seenToolResult.add(partId);
+          this.onMessage({
+            type: 'tool_result',
+            content: state.output,
+            toolId: partId,
+            timestamp,
+          });
+        }
       }
     }
   }

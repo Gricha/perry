@@ -82,7 +82,7 @@ function ToolBubble({
   const hasResult = result && result.length > 0
 
   return (
-    <div className="ml-0">
+    <div className="ml-0 mt-1">
       <div className="bg-secondary/50 border border-border rounded-lg px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
