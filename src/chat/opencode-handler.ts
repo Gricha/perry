@@ -1,5 +1,7 @@
 import type { Subprocess } from 'bun';
 import type { ChatMessage } from './handler';
+import { opencodeProvider } from '../sessions/agents/opencode';
+import type { ExecInContainer } from '../sessions/agents/types';
 
 export interface OpencodeOptions {
   containerName: string;
@@ -36,6 +38,7 @@ export class OpencodeSession {
   private sessionId?: string;
   private onMessage: (message: ChatMessage) => void;
   private buffer: string = '';
+  private historyLoaded: boolean = false;
 
   constructor(options: OpencodeOptions, onMessage: (message: ChatMessage) => void) {
     this.containerName = options.containerName;
@@ -44,7 +47,75 @@ export class OpencodeSession {
     this.onMessage = onMessage;
   }
 
+  async loadHistory(): Promise<void> {
+    if (this.historyLoaded || !this.sessionId) {
+      return;
+    }
+
+    this.historyLoaded = true;
+
+    const exec: ExecInContainer = async (containerName, command, options) => {
+      const args = ['exec'];
+      if (options?.user) {
+        args.push('-u', options.user);
+      }
+      args.push(containerName, ...command);
+
+      const proc = Bun.spawn(['docker', ...args], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      return { stdout, stderr, exitCode };
+    };
+
+    try {
+      const result = await opencodeProvider.getSessionMessages(
+        this.containerName,
+        this.sessionId,
+        exec
+      );
+
+      if (result && result.messages.length > 0) {
+        this.onMessage({
+          type: 'system',
+          content: `Loading ${result.messages.length} messages from session history...`,
+          timestamp: new Date().toISOString(),
+        });
+
+        for (const msg of result.messages) {
+          this.onMessage({
+            type: msg.type as ChatMessage['type'],
+            content: msg.content || '',
+            toolName: msg.toolName,
+            toolId: msg.toolId,
+            timestamp: msg.timestamp || new Date().toISOString(),
+          });
+        }
+
+        this.onMessage({
+          type: 'system',
+          content: 'Session history loaded',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error('[opencode] Failed to load history:', err);
+    }
+  }
+
   async sendMessage(userMessage: string): Promise<void> {
+    if (this.sessionId && !this.historyLoaded) {
+      await this.loadHistory();
+    }
+
     const args = [
       'exec',
       '-u',
