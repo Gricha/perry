@@ -12,9 +12,13 @@
 
 <p align="center">Isolated, self-hosted workspaces accessible over Tailscale. AI coding agents, web UI, and remote terminal access.</p>
 
+## Overview
+
+Perry is designed to run on a machine within a **secure private network** such as [Tailscale](https://tailscale.com). It provides isolated Docker-based development environments that you can access remotely via CLI, web UI, or SSH from any device on your network.
+
 ## Features
 
-- **AI Coding Agents** - Claude Code, OpenCode, GitHub Copilot pre-installed
+- **AI Coding Agents** - Claude Code, OpenCode, Codex CLI pre-installed
 - **Self-Hosted** - Run on your own hardware, full control
 - **Remote Access** - Use from anywhere via Tailscale, CLI, web, or SSH
 - **Web UI** - Manage workspaces from your browser
@@ -28,26 +32,13 @@
 npm install -g @gricha/perry
 ```
 
-### Build Base Image
-
-```bash
-perry build
-```
-
 ### Start Agent
 
 ```bash
 perry agent run
 ```
 
-Web UI: **http://localhost:7391**
-
-The agent runs on port 7391 by default. For remote access, install as a service:
-
-```bash
-perry agent install
-systemctl --user start perry-agent
-```
+Web UI: **http://localhost:7391** (or your Tailscale host)
 
 ### Create & Use Workspaces
 
@@ -60,41 +51,46 @@ perry create myproject
 # Or clone a repo
 perry create myproject --clone git@github.com:user/repo.git
 
-# SSH into workspace
-perry list  # Find SSH port
-ssh -p 2201 workspace@localhost
+# Shell into workspace
+perry shell myproject
 
 # Manage workspaces
 perry start myproject
 perry stop myproject
 perry delete myproject
+perry list
 ```
 
 **Via Web UI:**
 
-Open http://localhost:7391 and click "+" to create a workspace.
+Open http://localhost:7391 (or your Tailscale host) and click "+" to create a workspace.
 
 ## Security
 
-Perry is designed for use within **secure networks** like [Tailscale](https://tailscale.com). The web UI and API have no authentication, making them ideal for private networks where you can safely access workspaces remotely without additional security concerns.
-
-For public internet exposure, place behind a reverse proxy with authentication.
+Perry is designed for use within **secure private networks** like [Tailscale](https://tailscale.com). The web UI and API currently have no authentication - this is intentional for private network use where all devices are trusted.
 
 ## Configuration
 
-Configure credentials and environment variables via Web UI → Settings or edit `~/.config/perry/config.json`:
+Configure credentials and agent settings via Web UI → Settings or edit `~/.config/perry/config.json`:
 
 ```json
 {
   "credentials": {
-    "env": {
-      "ANTHROPIC_API_KEY": "sk-ant-...",
-      "OPENAI_API_KEY": "sk-...",
-      "GITHUB_TOKEN": "ghp_..."
-    },
+    "env": {},
     "files": {
       "~/.ssh/id_ed25519": "~/.ssh/id_ed25519",
       "~/.gitconfig": "~/.gitconfig"
+    }
+  },
+  "agents": {
+    "github": {
+      "token": "ghp_..."
+    },
+    "claude_code": {
+      "oauth_token": "..."
+    },
+    "opencode": {
+      "zen_token": "..."
     }
   }
 }
@@ -116,8 +112,6 @@ Restart workspaces to apply changes.
 ```bash
 # Agent
 perry agent run [--port PORT]
-perry agent install
-perry agent uninstall
 perry agent status
 
 # Workspaces
@@ -126,10 +120,8 @@ perry start <name>
 perry stop <name>
 perry delete <name>
 perry list
+perry shell <name>
 perry logs <name>
-
-# Build
-perry build [--no-cache]
 ```
 
 ## Development
