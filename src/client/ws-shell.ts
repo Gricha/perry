@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { spawn } from 'child_process';
 import { ReadStream, WriteStream } from 'tty';
+import { DEFAULT_AGENT_PORT } from '../shared/constants';
 
 export interface WSShellOptions {
   url: string;
@@ -160,6 +161,9 @@ export function getTerminalWSUrl(worker: string, workspaceName: string): string 
     base = `http://${base}`;
   }
   const wsProtocol = base.startsWith('https://') ? 'wss://' : 'ws://';
-  const host = base.replace(/^https?:\/\//, '');
+  let host = base.replace(/^https?:\/\//, '');
+  if (!host.includes(':')) {
+    host = `${host}:${DEFAULT_AGENT_PORT}`;
+  }
   return `${wsProtocol}${host}/rpc/terminal/${encodeURIComponent(workspaceName)}`;
 }
