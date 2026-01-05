@@ -193,6 +193,7 @@ RUN cd /opt/workspace/internal && bun install --production
 COPY internal /opt/workspace/internal
 RUN chmod +x /opt/workspace/scripts/dockerd-entrypoint.sh \
   && install -m 0755 /opt/workspace/scripts/dockerd-entrypoint.sh /usr/local/bin/dockerd-entrypoint.sh \
+  && install -m 0755 /opt/workspace/scripts/perry-session-reader.sh /usr/local/bin/perry-session-reader \
   && chmod +x /opt/workspace/internal/src/index.ts \
   && printf '#!/bin/sh\nexec bun /opt/workspace/internal/src/index.ts "$@"\n' > /usr/local/bin/workspace-internal \
   && chmod +x /usr/local/bin/workspace-internal
