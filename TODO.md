@@ -18,17 +18,6 @@
 
 ### OpenCode Integration
 
-#### Load existing messages when reopening OpenCode session
-**Files**: `src/chat/opencode-handler.ts`, `web/src/pages/WorkspaceDetail.tsx`
-
-When reopening an existing OpenCode session via `--session <id>`, the web UI shows an empty chat. Previous messages should be loaded and displayed before accepting new input.
-
-**Fix**:
-1. When session ID is provided, first fetch session history from OpenCode storage
-2. Parse existing messages from session file (check `~/.local/share/opencode/storage/`)
-3. Send historical messages to web client before enabling input
-4. Use existing session parser logic from `src/sessions/parser.ts` if applicable
-
 #### Implement OpenCode Server API for real-time streaming
 **Files**: `src/chat/opencode-handler.ts`, possibly new `src/chat/opencode-server.ts`
 
