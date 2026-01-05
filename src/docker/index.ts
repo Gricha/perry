@@ -395,7 +395,28 @@ export async function imageExists(tag: string): Promise<boolean> {
 }
 
 export async function pullImage(tag: string): Promise<void> {
-  await docker(['pull', tag]);
+  return new Promise((resolve, reject) => {
+    const child = spawn('docker', ['pull', tag], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Failed to pull image ${tag}`));
+      }
+    });
+  });
+}
+
+export async function tryPullImage(tag: string): Promise<boolean> {
+  try {
+    await pullImage(tag);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function buildImage(

@@ -16,7 +16,7 @@ import {
 } from './client/docker-proxy';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from './config/loader';
 import { buildImage } from './docker';
-import { DEFAULT_AGENT_PORT, WORKSPACE_IMAGE } from './shared/constants';
+import { DEFAULT_AGENT_PORT, WORKSPACE_IMAGE_LOCAL } from './shared/constants';
 
 const program = new Command();
 
@@ -472,10 +472,10 @@ program
   .action(async (options) => {
     const buildContext = './perry';
 
-    console.log(`Building workspace image ${WORKSPACE_IMAGE}...`);
+    console.log(`Building workspace image ${WORKSPACE_IMAGE_LOCAL}...`);
 
     try {
-      await buildImage(WORKSPACE_IMAGE, buildContext, {
+      await buildImage(WORKSPACE_IMAGE_LOCAL, buildContext, {
         noCache: options.noCache === false ? false : !options.cache,
       });
       console.log('Build complete.');

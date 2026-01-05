@@ -2,6 +2,7 @@ import { AddressInfo, createServer } from 'net';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import pkg from '../../package.json';
 import type { AgentConfig } from '../shared/types';
 import type { Workspace, CreateWorkspaceOptions } from './types';
 import { StateManager } from './state';
@@ -10,7 +11,8 @@ import * as docker from '../docker';
 import { getContainerName } from '../docker';
 import {
   VOLUME_PREFIX,
-  WORKSPACE_IMAGE,
+  WORKSPACE_IMAGE_LOCAL,
+  WORKSPACE_IMAGE_REGISTRY,
   SSH_PORT_RANGE_START,
   SSH_PORT_RANGE_END,
 } from '../shared/constants';
@@ -30,6 +32,27 @@ async function findAvailablePort(start: number, end: number): Promise<number> {
     }
   }
   throw new Error(`No available port in range ${start}-${end}`);
+}
+
+async function ensureWorkspaceImage(): Promise<string> {
+  const registryImage = `${WORKSPACE_IMAGE_REGISTRY}:${pkg.version}`;
+
+  const localExists = await docker.imageExists(WORKSPACE_IMAGE_LOCAL);
+  if (localExists) {
+    return WORKSPACE_IMAGE_LOCAL;
+  }
+
+  console.log(`Pulling workspace image ${registryImage}...`);
+  const pulled = await docker.tryPullImage(registryImage);
+  if (pulled) {
+    return registryImage;
+  }
+
+  throw new Error(
+    `Workspace image not found. Either:\n` +
+      `  1. Run 'perry build' to build locally, or\n` +
+      `  2. Check your network connection to pull from registry`
+  );
 }
 
 interface CopyCredentialOptions {
@@ -373,12 +396,7 @@ export class WorkspaceManager {
     await this.state.setWorkspace(workspace);
 
     try {
-      const imageReady = await docker.imageExists(WORKSPACE_IMAGE);
-      if (!imageReady) {
-        throw new Error(
-          `Workspace image '${WORKSPACE_IMAGE}' not found. Run 'workspace build' first.`
-        );
-      }
+      const workspaceImage = await ensureWorkspaceImage();
 
       if (!(await docker.volumeExists(volumeName))) {
         await docker.createVolume(volumeName);
@@ -404,7 +422,7 @@ export class WorkspaceManager {
 
       const containerId = await docker.createContainer({
         name: containerName,
-        image: WORKSPACE_IMAGE,
+        image: workspaceImage,
         hostname: name,
         privileged: true,
         restartPolicy: 'unless-stopped',
@@ -461,6 +479,7 @@ export class WorkspaceManager {
         );
       }
 
+      const workspaceImage = await ensureWorkspaceImage();
       const sshPort = await findAvailablePort(SSH_PORT_RANGE_START, SSH_PORT_RANGE_END);
 
       const containerEnv: Record<string, string> = {
@@ -480,7 +499,7 @@ export class WorkspaceManager {
 
       const containerId = await docker.createContainer({
         name: containerName,
-        image: WORKSPACE_IMAGE,
+        image: workspaceImage,
         hostname: name,
         privileged: true,
         restartPolicy: 'unless-stopped',

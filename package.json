@@ -1,11 +1,14 @@
 {
   "name": "@gricha/perry",
-  "version": "0.1.13",
+  "version": "0.0.1",
   "description": "Self-contained CLI for spinning up Docker-in-Docker development environments with SSH and proxy helpers.",
   "type": "module",
   "bin": {
     "perry": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "rm -rf ./dist && bun run build:ts && bun run build:web && bun link",
     "build:ts": "tsc && chmod +x dist/index.js",
