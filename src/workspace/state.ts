@@ -108,4 +108,14 @@ export class StateManager {
     await this.setWorkspace(workspace);
     return workspace;
   }
+
+  async touchWorkspace(name: string): Promise<Workspace | null> {
+    const workspace = await this.getWorkspace(name);
+    if (!workspace) {
+      return null;
+    }
+    workspace.lastUsed = new Date().toISOString();
+    await this.setWorkspace(workspace);
+    return workspace;
+  }
 }

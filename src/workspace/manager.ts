@@ -459,6 +459,10 @@ export class WorkspaceManager {
     return workspace;
   }
 
+  async touch(name: string): Promise<Workspace | null> {
+    return this.state.touchWorkspace(name);
+  }
+
   async create(options: CreateWorkspaceOptions): Promise<Workspace> {
     const { name, clone, env } = options;
     const containerName = getContainerName(name);
@@ -478,6 +482,7 @@ export class WorkspaceManager {
       ports: {
         ssh: 0,
       },
+      lastUsed: new Date().toISOString(),
     };
     await this.state.setWorkspace(workspace);
 
@@ -602,6 +607,7 @@ export class WorkspaceManager {
     const running = await docker.containerRunning(containerName);
     if (running) {
       workspace.status = 'running';
+      workspace.lastUsed = new Date().toISOString();
       await this.state.setWorkspace(workspace);
       return workspace;
     }
@@ -611,6 +617,7 @@ export class WorkspaceManager {
     await this.setupWorkspaceCredentials(containerName, name);
 
     workspace.status = 'running';
+    workspace.lastUsed = new Date().toISOString();
     await this.state.setWorkspace(workspace);
 
     await this.runPostStartScript(containerName);

@@ -60,6 +60,7 @@ export interface WorkspaceInfo {
   created: string;
   repo?: string;
   ports: WorkspacePorts;
+  lastUsed?: string;
 }
 
 export interface WorkspaceState {
