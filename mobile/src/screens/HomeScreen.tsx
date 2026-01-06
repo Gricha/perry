@@ -7,11 +7,10 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Switch,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { api, WorkspaceInfo, HOST_WORKSPACE_NAME } from '../lib/api'
 import { useNetwork, parseNetworkError } from '../lib/network'
 
@@ -48,8 +47,6 @@ function WorkspaceRow({
 }
 
 function HostSection({ onHostPress }: { onHostPress: () => void }) {
-  const queryClient = useQueryClient()
-
   const { data: hostInfo, isLoading } = useQuery({
     queryKey: ['hostInfo'],
     queryFn: api.getHostInfo,
@@ -58,13 +55,6 @@ function HostSection({ onHostPress }: { onHostPress: () => void }) {
   const { data: info } = useQuery({
     queryKey: ['info'],
     queryFn: api.getInfo,
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => api.updateHostAccess(enabled),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hostInfo'] })
-    },
   })
 
   if (isLoading) {
@@ -78,19 +68,11 @@ function HostSection({ onHostPress }: { onHostPress: () => void }) {
   return (
     <View style={styles.hostSection}>
       <View style={styles.hostHeader}>
-        <View>
-          <Text style={styles.hostLabel}>Host Machine</Text>
-          <Text style={styles.hostName}>{info?.hostname || hostInfo?.hostname || 'Unknown'}</Text>
-        </View>
-        <Switch
-          value={hostInfo?.enabled || false}
-          onValueChange={(value) => toggleMutation.mutate(value)}
-          trackColor={{ false: '#3a3a3c', true: '#f59e0b' }}
-          thumbColor="#fff"
-        />
+        <Text style={styles.hostLabel}>Host Machine</Text>
+        <Text style={styles.hostName}>{info?.hostname || hostInfo?.hostname || 'Unknown'}</Text>
       </View>
 
-      {hostInfo?.enabled && (
+      {hostInfo?.enabled ? (
         <>
           <TouchableOpacity style={styles.hostRow} onPress={onHostPress}>
             <StatusDot status="host" />
@@ -103,17 +85,17 @@ function HostSection({ onHostPress }: { onHostPress: () => void }) {
             <Text style={styles.rowChevron}>›</Text>
           </TouchableOpacity>
           <Text style={styles.hostWarning}>
-            ⚠️ Commands run directly on your machine without isolation
+            Commands run directly on your machine without isolation
           </Text>
         </>
-      )}
-
-      {!hostInfo?.enabled && info && (
-        <View style={styles.hostStats}>
-          <Text style={styles.hostStat}>{info.workspacesCount} workspaces</Text>
-          <Text style={styles.hostStatDivider}>•</Text>
-          <Text style={styles.hostStat}>Docker {info.dockerVersion}</Text>
-        </View>
+      ) : (
+        info && (
+          <View style={styles.hostStats}>
+            <Text style={styles.hostStat}>{info.workspacesCount} workspaces</Text>
+            <Text style={styles.hostStatDivider}>•</Text>
+            <Text style={styles.hostStat}>Docker {info.dockerVersion}</Text>
+          </View>
+        )
       )}
     </View>
   )
@@ -240,11 +222,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1c1c1e',
   },
-  hostHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  hostHeader: {},
   hostLabel: {
     fontSize: 12,
     color: '#636366',
