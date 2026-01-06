@@ -3,7 +3,7 @@ import type { RawSession, SessionListItem, ExecInContainer, AgentSessionProvider
 
 export const opencodeProvider: AgentSessionProvider = {
   async discoverSessions(containerName: string, exec: ExecInContainer): Promise<RawSession[]> {
-    const result = await exec(containerName, ['perry-session-reader', 'list'], {
+    const result = await exec(containerName, ['perry', 'worker', 'sessions', 'list'], {
       user: 'workspace',
     });
 
@@ -38,9 +38,13 @@ export const opencodeProvider: AgentSessionProvider = {
     rawSession: RawSession,
     exec: ExecInContainer
   ): Promise<SessionListItem | null> {
-    const result = await exec(containerName, ['perry-session-reader', 'messages', rawSession.id], {
-      user: 'workspace',
-    });
+    const result = await exec(
+      containerName,
+      ['perry', 'worker', 'sessions', 'messages', rawSession.id],
+      {
+        user: 'workspace',
+      }
+    );
 
     if (result.exitCode !== 0) {
       return null;
@@ -83,9 +87,13 @@ export const opencodeProvider: AgentSessionProvider = {
     sessionId: string,
     exec: ExecInContainer
   ): Promise<{ id: string; messages: SessionMessage[] } | null> {
-    const result = await exec(containerName, ['perry-session-reader', 'messages', sessionId], {
-      user: 'workspace',
-    });
+    const result = await exec(
+      containerName,
+      ['perry', 'worker', 'sessions', 'messages', sessionId],
+      {
+        user: 'workspace',
+      }
+    );
 
     if (result.exitCode !== 0) {
       return null;

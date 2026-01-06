@@ -10,8 +10,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "rm -rf ./dist && bun run build:ts && bun run build:web && bun link",
+    "build": "rm -rf ./dist && bun run build:ts && bun run build:worker && bun run build:web && bun link",
     "build:ts": "tsc && chmod +x dist/index.js",
+    "build:worker": "bun build src/index.ts --compile --outfile dist/perry-worker --target=bun",
     "build:web": "cp src/shared/client-types.ts web/src/lib/types.ts && cd web && bun run build && cp -r dist ../dist/agent/web",
     "test": "vitest run",
     "test:web": "playwright test",

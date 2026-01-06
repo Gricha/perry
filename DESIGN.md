@@ -819,6 +819,75 @@ Currently none (Tailscale-trusted). Future options if needed:
 
 ---
 
+## Appendix: perry worker Pattern
+
+### Overview
+
+The `perry worker` subcommand runs inside containers to handle container-specific operations like session discovery. It's designed to be updated independently of the Docker image - the compiled binary is copied during `perry sync`, avoiding the need to rebuild images for bug fixes.
+
+### Architecture
+
+```
+src/
+├── index.ts                           # Main CLI with 'worker' subcommand
+├── sessions/agents/
+│   ├── opencode-storage.ts            # Shared session reading logic
+│   └── opencode.ts                    # Container provider (calls perry worker)
+└── workspace/
+    └── manager.ts                     # copyPerryWorker() syncs binary to container
+
+dist/
+├── index.js                           # Main perry CLI
+└── perry-worker                       # Compiled standalone binary (bun build --compile)
+```
+
+### Key Principle: No Bifurcation
+
+The same code (`opencode-storage.ts`) handles OpenCode session reading everywhere:
+- **Host**: Imported directly in `router.ts`
+- **Container**: Called via `perry worker sessions list/messages`
+
+This eliminates duplicate implementations and ensures consistent behavior.
+
+### Build & Sync
+
+The worker binary is compiled during build and copied during sync:
+
+```bash
+# Build (in package.json scripts)
+bun build src/index.ts --compile --outfile dist/perry-worker --target=bun
+
+# Sync copies binary to container (in WorkspaceManager.copyPerryWorker)
+docker cp dist/perry-worker container:/usr/local/bin/perry
+```
+
+### Usage
+
+```bash
+# List all OpenCode sessions (JSON output)
+perry worker sessions list
+
+# Get messages for a session (JSON output)
+perry worker sessions messages <session_id>
+```
+
+### Why This Pattern?
+
+1. **Independent Updates**: Fix bugs in session reading, rebuild, sync - no Docker image rebuild needed
+2. **Single Source of Truth**: Same TypeScript code used on host and in container
+3. **Instant Propagation**: `perry sync` updates all workspaces immediately
+4. **No External Dependencies**: Self-contained binary, no npm install in container
+
+### Adding New Commands
+
+To add new functionality:
+
+1. Add shared logic to `src/sessions/agents/` or appropriate module
+2. Add subcommand to `perry worker` in `src/index.ts`
+3. Import shared module in both host code and worker command
+
+---
+
 ## Appendix: Port Selection
 
 Default port: **7391**

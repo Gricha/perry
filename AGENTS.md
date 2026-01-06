@@ -91,6 +91,34 @@ Perry creates isolated Docker-in-Docker development environments. Distributed ar
 
 If modifying Dockerfile/init scripts, run `perry build` first.
 
+### Manual Agent Testing
+
+When manually testing agent changes, use a dedicated test port to avoid conflicts with any running production agent:
+
+```bash
+# Kill any existing agents and start test agent on port 7391
+pkill -f "perry agent" 2>/dev/null
+perry agent run --port 7391 &
+
+# Configure CLI to use test agent
+perry config worker localhost:7391
+
+# Test your changes
+perry list
+perry sync <workspace-name>
+
+# Verify in container (example: testing perry worker binary)
+docker exec -u workspace workspace-<name> perry --version
+docker exec -u workspace workspace-<name> perry worker sessions list
+
+# Test API directly
+curl -s -X POST "http://localhost:7391/rpc/sessions/list" \
+  -H "Content-Type: application/json" \
+  -d '{"json":{"workspaceName":"<name>"}}'
+```
+
+**Important**: Always kill the test agent when done, or it will conflict with automated tests.
+
 ### UI Testing
 
 **Critical**: UI (Web, mobile) MUST have e2e tests. Unit/integration tests miss rendering bugs, event binding issues, and framework regressions.
