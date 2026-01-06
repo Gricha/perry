@@ -43,7 +43,7 @@ function WorkspaceRow({
     <TouchableOpacity style={styles.row} onPress={onPress} testID={`workspace-item-${workspace.name}`}>
       <StatusDot status={workspace.status} />
       <View style={styles.rowContent}>
-        <Text style={[styles.rowName, { color: colors.text }]} testID="workspace-name">{workspace.name}</Text>
+        <Text style={[styles.rowName, { color: colors.text }]} testID="workspace-name">{workspace.displayName || workspace.name}</Text>
         {workspace.repo && (
           <Text style={[styles.rowRepo, { color: colors.textMuted }]} numberOfLines={1}>{workspace.repo}</Text>
         )}

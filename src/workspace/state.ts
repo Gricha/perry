@@ -118,4 +118,14 @@ export class StateManager {
     await this.setWorkspace(workspace);
     return workspace;
   }
+
+  async setDisplayName(name: string, displayName: string | undefined): Promise<Workspace | null> {
+    const workspace = await this.getWorkspace(name);
+    if (!workspace) {
+      return null;
+    }
+    workspace.displayName = displayName || undefined;
+    await this.setWorkspace(workspace);
+    return workspace;
+  }
 }

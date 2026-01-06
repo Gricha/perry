@@ -1,5 +1,6 @@
 export interface WorkspaceInfo {
   name: string;
+  displayName?: string;
   status: 'running' | 'stopped' | 'creating' | 'error';
   containerId: string;
   created: string;

@@ -722,4 +722,12 @@ export class WorkspaceManager {
 
     await this.setupWorkspaceCredentials(containerName, name);
   }
+
+  async setDisplayName(name: string, displayName: string | undefined): Promise<Workspace> {
+    const workspace = await this.state.setDisplayName(name, displayName);
+    if (!workspace) {
+      throw new Error(`Workspace '${name}' not found`);
+    }
+    return workspace;
+  }
 }

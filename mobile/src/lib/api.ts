@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export interface WorkspaceInfo {
   name: string
+  displayName?: string
   status: 'running' | 'stopped' | 'creating' | 'error'
   containerId: string
   created: string
@@ -156,6 +157,7 @@ function createClient() {
       logs: (input: { name: string; tail?: number }) => Promise<string>
       sync: (input: { name: string }) => Promise<{ success: boolean }>
       syncAll: () => Promise<{ synced: number; failed: number; results: { name: string; success: boolean; error?: string }[] }>
+      setDisplayName: (input: { name: string; displayName?: string }) => Promise<WorkspaceInfo>
     }
     sessions: {
       list: (input: {
@@ -236,6 +238,7 @@ export const api = {
   getLogs: (name: string, tail = 100) => client.workspaces.logs({ name, tail }),
   syncWorkspace: (name: string) => client.workspaces.sync({ name }),
   syncAllWorkspaces: () => client.workspaces.syncAll(),
+  setDisplayName: (name: string, displayName?: string) => client.workspaces.setDisplayName({ name, displayName }),
   listSessions: (workspaceName: string, agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.list({ workspaceName, agentType, limit, offset }),
   listAllSessions: (agentType?: AgentType, limit?: number, offset?: number) =>

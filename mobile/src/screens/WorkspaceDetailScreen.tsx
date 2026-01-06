@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -6,9 +6,12 @@ import {
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  TextInput,
+  Keyboard,
+  Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, SessionInfo, AgentType, HOST_WORKSPACE_NAME } from '../lib/api'
 
 type DateGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older'
@@ -106,10 +109,14 @@ function DateGroupHeader({ title }: { title: string }) {
 
 export function WorkspaceDetailScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets()
+  const queryClient = useQueryClient()
   const { name } = route.params
   const [agentFilter, setAgentFilter] = useState<AgentType | undefined>(undefined)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showNewChatPicker, setShowNewChatPicker] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const inputRef = useRef<TextInput>(null)
 
   const isHost = name === HOST_WORKSPACE_NAME
 
@@ -124,6 +131,18 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
     queryKey: ['hostInfo'],
     queryFn: api.getHostInfo,
     enabled: isHost,
+  })
+
+  const displayNameMutation = useMutation({
+    mutationFn: (newDisplayName: string) => api.setDisplayName(name, newDisplayName || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', name] })
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      setIsEditing(false)
+    },
+    onError: (err: any) => {
+      Alert.alert('Error', err?.message || 'Failed to update name')
+    },
   })
 
   const isRunning = isHost ? true : workspace?.status === 'running'
@@ -155,7 +174,31 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
 
   const displayName = isHost
     ? (hostInfo ? `${hostInfo.username}@${hostInfo.hostname}` : 'Host Machine')
-    : name
+    : (workspace?.displayName || name)
+
+  const handleStartEditing = () => {
+    if (isHost) return
+    setEditValue(workspace?.displayName || name)
+    setIsEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 100)
+  }
+
+  const handleSaveEdit = () => {
+    Keyboard.dismiss()
+    const trimmed = editValue.trim()
+    if (trimmed === name) {
+      displayNameMutation.mutate('')
+    } else if (trimmed) {
+      displayNameMutation.mutate(trimmed)
+    } else {
+      setIsEditing(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    Keyboard.dismiss()
+    setIsEditing(false)
+  }
 
   const agentLabels: Record<string, string> = {
     all: 'All Agents',
@@ -171,8 +214,30 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, isHost && styles.hostHeaderTitle]}>{displayName}</Text>
-          <View style={[styles.statusIndicator, { backgroundColor: isHost ? '#f59e0b' : (isRunning ? '#34c759' : isCreating ? '#ff9f0a' : '#636366') }]} />
+          {isEditing ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                ref={inputRef}
+                style={styles.editInput}
+                value={editValue}
+                onChangeText={setEditValue}
+                onSubmitEditing={handleSaveEdit}
+                onBlur={handleCancelEdit}
+                autoCapitalize="none"
+                autoCorrect={false}
+                selectTextOnFocus
+                returnKeyType="done"
+              />
+              {displayNameMutation.isPending && (
+                <ActivityIndicator size="small" color="#0a84ff" style={{ marginLeft: 8 }} />
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity onPress={handleStartEditing} disabled={isHost} style={styles.titleTouchable}>
+              <Text style={[styles.headerTitle, isHost && styles.hostHeaderTitle]} numberOfLines={1}>{displayName}</Text>
+              <View style={[styles.statusIndicator, { backgroundColor: isHost ? '#f59e0b' : (isRunning ? '#34c759' : isCreating ? '#ff9f0a' : '#636366') }]} />
+            </TouchableOpacity>
+          )}
         </View>
         {isHost ? (
           <View style={styles.settingsBtn} />
@@ -367,6 +432,28 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  titleTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  editInput: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#fff',
+    backgroundColor: '#1c1c1e',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlign: 'center',
   },
   settingsBtn: {
     width: 44,

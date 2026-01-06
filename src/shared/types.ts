@@ -56,6 +56,7 @@ export interface WorkspacePorts {
 
 export interface WorkspaceInfo {
   name: string;
+  displayName?: string;
   status: WorkspaceStatus;
   containerId: string;
   created: string;

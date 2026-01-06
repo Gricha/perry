@@ -39,6 +39,7 @@ const WorkspacePortsSchema = z.object({
 
 const WorkspaceInfoSchema = z.object({
   name: z.string(),
+  displayName: z.string().optional(),
   status: WorkspaceStatusSchema,
   containerId: z.string(),
   created: z.string(),
@@ -238,6 +239,14 @@ export function createRouter(ctx: RouterContext) {
       if (!workspace) {
         throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
       }
+      return workspace;
+    });
+
+  const setDisplayName = os
+    .input(z.object({ name: z.string(), displayName: z.string().optional() }))
+    .output(WorkspaceInfoSchema)
+    .handler(async ({ input }) => {
+      const workspace = await ctx.workspaces.setDisplayName(input.name, input.displayName);
       return workspace;
     });
 
@@ -853,6 +862,7 @@ export function createRouter(ctx: RouterContext) {
       sync: syncWorkspace,
       syncAll: syncAllWorkspaces,
       touch: touchWorkspace,
+      setDisplayName: setDisplayName,
     },
     sessions: {
       list: listSessions,
