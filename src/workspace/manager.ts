@@ -384,9 +384,33 @@ export class WorkspaceManager {
     await this.setupClaudeCodeConfig(containerName);
     await this.copyCodexCredentials(containerName);
     await this.setupOpencodeConfig(containerName);
+    await this.copyPerryWorker(containerName);
     if (workspaceName) {
       await this.setupSSHKeys(containerName, workspaceName);
     }
+  }
+
+  private async copyPerryWorker(containerName: string): Promise<void> {
+    const distDir = path.dirname(new URL(import.meta.url).pathname);
+    const workerBinaryPath = path.join(distDir, '..', 'perry-worker');
+
+    try {
+      await fs.access(workerBinaryPath);
+    } catch {
+      console.warn(
+        `[sync] perry-worker binary not found at ${workerBinaryPath}, session discovery may not work`
+      );
+      return;
+    }
+
+    const destPath = '/usr/local/bin/perry';
+    await docker.copyToContainer(containerName, workerBinaryPath, destPath);
+    await docker.execInContainer(containerName, ['chown', 'root:root', destPath], {
+      user: 'root',
+    });
+    await docker.execInContainer(containerName, ['chmod', '755', destPath], {
+      user: 'root',
+    });
   }
 
   private async runPostStartScript(containerName: string): Promise<void> {

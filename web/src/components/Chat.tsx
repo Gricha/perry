@@ -538,9 +538,9 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
 
         if (msg.type === 'system') {
           if (msg.content.startsWith('Session started')) {
-            const match = msg.content.match(/Session (\S+)/)
+            const match = msg.content.match(/Session started:?\s+(\S+)/)
             if (match) {
-              const newSessionId = match[1]
+              const newSessionId = match[1].replace(/\.+$/, '')
               setSessionId(newSessionId)
               onSessionIdRef.current?.(newSessionId)
             }

@@ -667,6 +667,36 @@ program
     }
   });
 
+const workerCmd = program
+  .command('worker')
+  .description('Worker mode commands (for use inside containers)');
+
+workerCmd
+  .command('sessions')
+  .argument('<subcommand>', 'Subcommand: list or messages')
+  .argument('[sessionId]', 'Session ID (required for messages)')
+  .description('Manage OpenCode sessions')
+  .action(async (subcommand: string, sessionId?: string) => {
+    const { listOpencodeSessions, getOpencodeSessionMessages } =
+      await import('./sessions/agents/opencode-storage');
+
+    if (subcommand === 'list') {
+      const sessions = await listOpencodeSessions();
+      console.log(JSON.stringify(sessions));
+    } else if (subcommand === 'messages') {
+      if (!sessionId) {
+        console.error('Usage: perry worker sessions messages <session_id>');
+        process.exit(1);
+      }
+      const result = await getOpencodeSessionMessages(sessionId);
+      console.log(JSON.stringify(result));
+    } else {
+      console.error(`Unknown subcommand: ${subcommand}`);
+      console.error('Available: list, messages');
+      process.exit(1);
+    }
+  });
+
 function handleError(err: unknown): never {
   if (err instanceof ApiClientError) {
     console.error(`Error: ${err.message}`);

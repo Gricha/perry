@@ -227,9 +227,10 @@ export function WorkspaceDetail() {
   const handleSessionId = useCallback((sessionId: string) => {
     if (name && chatMode?.type === 'chat' && chatMode.agentType) {
       api.recordSessionAccess(name, sessionId, chatMode.agentType).catch(() => {})
+      queryClient.invalidateQueries({ queryKey: ['sessions', name] })
     }
     setChatMode((prev) => prev?.type === 'chat' ? { ...prev, sessionId } : prev)
-  }, [name, chatMode])
+  }, [name, chatMode, queryClient])
 
   const { data: hostInfo, isLoading: hostLoading } = useQuery({
     queryKey: ['hostInfo'],

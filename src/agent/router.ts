@@ -29,6 +29,10 @@ import {
   discoverHostOpencodeModels,
   discoverContainerOpencodeModels,
 } from '../models/discovery';
+import {
+  listOpencodeSessions,
+  getOpencodeSessionMessages,
+} from '../sessions/agents/opencode-storage';
 
 const WorkspaceStatusSchema = z.enum(['running', 'stopped', 'creating', 'error']);
 
@@ -383,30 +387,16 @@ export function createRouter(ctx: RouterContext) {
     }
 
     if (!input.agentType || input.agentType === 'opencode') {
-      const opencodeDir = path.join(homeDir, '.opencode', 'sessions');
-      try {
-        const sessions = await fs.readdir(opencodeDir);
-        for (const sessionDir of sessions) {
-          const sessionPath = path.join(opencodeDir, sessionDir);
-          const stat = await fs.stat(sessionPath);
-          if (!stat.isDirectory()) continue;
-
-          const sessionFile = path.join(sessionPath, 'session.json');
-          try {
-            const sessionStat = await fs.stat(sessionFile);
-            rawSessions.push({
-              id: sessionDir,
-              agentType: 'opencode',
-              projectPath: homeDir,
-              mtime: sessionStat.mtimeMs,
-              filePath: sessionFile,
-            });
-          } catch {
-            // session.json doesn't exist
-          }
-        }
-      } catch {
-        // Directory doesn't exist
+      const opencodeSessions = await listOpencodeSessions();
+      for (const session of opencodeSessions) {
+        rawSessions.push({
+          id: session.id,
+          agentType: 'opencode',
+          projectPath: session.directory || homeDir,
+          mtime: session.mtime,
+          filePath: session.file,
+          name: session.title || undefined,
+        });
       }
     }
 
@@ -447,15 +437,18 @@ export function createRouter(ctx: RouterContext) {
             // Can't read file
           }
         } else if (raw.agentType === 'opencode') {
-          try {
-            const sessionContent = await fs.readFile(raw.filePath, 'utf-8');
-            const sessionData = JSON.parse(sessionContent);
-            messageCount = sessionData.messages?.length || 0;
-            if (sessionData.title) {
-              firstPrompt = sessionData.title;
+          const sessionMessages = await getOpencodeSessionMessages(raw.id);
+          const userAssistantMessages = sessionMessages.messages.filter(
+            (m) => m.type === 'user' || m.type === 'assistant'
+          );
+          messageCount = userAssistantMessages.length;
+          if (raw.name) {
+            firstPrompt = raw.name;
+          } else {
+            const firstUserMsg = userAssistantMessages.find((m) => m.type === 'user' && m.content);
+            if (firstUserMsg?.content) {
+              firstPrompt = firstUserMsg.content.slice(0, 200);
             }
-          } catch {
-            // Can't read file
           }
         }
 
@@ -521,58 +514,17 @@ export function createRouter(ctx: RouterContext) {
     }
 
     if (!agentType || agentType === 'opencode') {
-      const sessionDir = path.join(homeDir, '.opencode', 'sessions', sessionId);
-      const partsDir = path.join(sessionDir, 'part');
-
-      try {
-        const partFiles = await fs.readdir(partsDir);
-        const sortedParts = partFiles.sort();
-
-        for (const partFile of sortedParts) {
-          const partPath = path.join(partsDir, partFile);
-          try {
-            const partContent = await fs.readFile(partPath, 'utf-8');
-            const part = JSON.parse(partContent);
-
-            if (part.role === 'user' && part.content) {
-              const textContent = Array.isArray(part.content)
-                ? part.content
-                    .filter((c: { type: string }) => c.type === 'text')
-                    .map((c: { text: string }) => c.text)
-                    .join('\n')
-                : part.content;
-              messages.push({
-                type: 'user',
-                content: textContent,
-                timestamp: part.time || null,
-              });
-            } else if (part.role === 'assistant') {
-              if (part.content) {
-                const textContent = Array.isArray(part.content)
-                  ? part.content
-                      .filter((c: { type: string }) => c.type === 'text')
-                      .map((c: { text: string }) => c.text)
-                      .join('\n')
-                  : part.content;
-                if (textContent) {
-                  messages.push({
-                    type: 'assistant',
-                    content: textContent,
-                    timestamp: part.time || null,
-                  });
-                }
-              }
-            }
-          } catch {
-            // Can't parse part
-          }
-        }
-
-        if (messages.length > 0) {
-          return { id: sessionId, agentType: 'opencode', messages };
-        }
-      } catch {
-        // Directory doesn't exist
+      const sessionData = await getOpencodeSessionMessages(sessionId);
+      if (sessionData.messages.length > 0) {
+        const opencodeMessages: SessionMessage[] = sessionData.messages.map((m) => ({
+          type: m.type as SessionMessage['type'],
+          content: m.content,
+          toolName: m.toolName,
+          toolId: m.toolId,
+          toolInput: m.toolInput,
+          timestamp: m.timestamp,
+        }));
+        return { id: sessionId, agentType: 'opencode', messages: opencodeMessages };
       }
     }
 
