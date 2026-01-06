@@ -116,3 +116,15 @@ If modifying Dockerfile/init scripts, run `perry build` first.
 - Test with real Docker
 - Follow naming: `workspace-<name>` containers, `workspace-internal-` resources
 - Keep commands fast (lazy init, reuse)
+
+## Releasing
+
+To create a new release:
+
+1. Update version in `package.json` to the new version (e.g., `0.1.7`)
+2. Commit the version bump
+3. Push to main: `git push origin main`
+4. Create tag: `git tag v0.1.7`
+5. Push tag: `git push origin v0.1.7`
+
+The GitHub Actions workflow (`.github/workflows/release.yml`) will automatically build and publish to npm and ghcr.io when a `v*` tag is pushed.
