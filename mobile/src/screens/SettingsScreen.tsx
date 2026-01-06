@@ -10,10 +10,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActionSheetIOS,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, CodingAgents, Credentials, Scripts, SyncResult, getBaseUrl, saveServerConfig, getDefaultPort, refreshClient } from '../lib/api'
+import { api, CodingAgents, Credentials, Scripts, SyncResult, ModelInfo, getBaseUrl, saveServerConfig, getDefaultPort, refreshClient } from '../lib/api'
 import { useNetwork, parseNetworkError } from '../lib/network'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -55,6 +56,54 @@ function SettingRow({
   )
 }
 
+const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and cost-effective' },
+  { id: 'opus', name: 'Opus', description: 'Most capable' },
+  { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost' },
+]
+
+function ModelPicker({
+  label,
+  models,
+  selectedModel,
+  onSelect,
+}: {
+  label: string
+  models: ModelInfo[]
+  selectedModel: string
+  onSelect: (model: string) => void
+}) {
+  const selectedModelInfo = models.find(m => m.id === selectedModel)
+
+  const showPicker = () => {
+    const options = [...models.map(m => m.name), 'Cancel']
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex: options.length - 1,
+        title: 'Select Model',
+      },
+      (buttonIndex) => {
+        if (buttonIndex < models.length) {
+          onSelect(models[buttonIndex].id)
+        }
+      }
+    )
+  }
+
+  return (
+    <View style={styles.row}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity style={styles.modelPicker} onPress={showPicker}>
+        <Text style={styles.modelPickerText}>
+          {selectedModelInfo?.name || 'Select Model'}
+        </Text>
+        <Text style={styles.modelPickerChevron}>›</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 function AgentsSettings() {
   const queryClient = useQueryClient()
 
@@ -63,19 +112,34 @@ function AgentsSettings() {
     queryFn: api.getAgents,
   })
 
-  const [openaiKey, setOpenaiKey] = useState('')
-  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('')
+  const { data: claudeModelsData } = useQuery({
+    queryKey: ['models', 'claude-code'],
+    queryFn: () => api.listModels('claude-code'),
+  })
+
+  const { data: opencodeModelsData } = useQuery({
+    queryKey: ['models', 'opencode'],
+    queryFn: () => api.listModels('opencode'),
+  })
+
+  const claudeModels = claudeModelsData?.models?.length ? claudeModelsData.models : FALLBACK_CLAUDE_MODELS
+  const opencodeModels = opencodeModelsData?.models || []
+
+  const [opencodeZenToken, setOpencodeZenToken] = useState('')
+  const [opencodeModel, setOpencodeModel] = useState('')
   const [githubToken, setGithubToken] = useState('')
   const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
+  const [claudeModel, setClaudeModel] = useState('sonnet')
   const [hasChanges, setHasChanges] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
     if (agents && !initialized) {
-      setOpenaiKey(agents.opencode?.api_key || '')
-      setOpenaiBaseUrl(agents.opencode?.api_base_url || '')
+      setOpencodeZenToken(agents.opencode?.zen_token || '')
+      setOpencodeModel(agents.opencode?.model || '')
       setGithubToken(agents.github?.token || '')
       setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
+      setClaudeModel(agents.claude_code?.model || 'sonnet')
       setInitialized(true)
     }
   }, [agents, initialized])
@@ -95,14 +159,15 @@ function AgentsSettings() {
   const handleSave = () => {
     mutation.mutate({
       opencode: {
-        api_key: openaiKey.trim() || undefined,
-        api_base_url: openaiBaseUrl.trim() || undefined,
+        zen_token: opencodeZenToken.trim() || undefined,
+        model: opencodeModel || undefined,
       },
       github: {
         token: githubToken.trim() || undefined,
       },
       claude_code: {
         oauth_token: claudeOAuthToken.trim() || undefined,
+        model: claudeModel,
       },
     })
   }
@@ -119,20 +184,22 @@ function AgentsSettings() {
     <Section title="Coding Agents">
       <View style={styles.agentCard}>
         <Text style={styles.agentName}>OpenCode</Text>
-        <Text style={styles.agentDescription}>OpenAI-compatible API for AI-assisted coding</Text>
+        <Text style={styles.agentDescription}>Zen token for OpenCode AI assistant</Text>
         <SettingRow
-          label="API Key"
-          value={openaiKey}
-          placeholder="sk-..."
-          onChangeText={(t) => { setOpenaiKey(t); setHasChanges(true) }}
+          label="Zen Token"
+          value={opencodeZenToken}
+          placeholder="zen_..."
+          onChangeText={(t) => { setOpencodeZenToken(t); setHasChanges(true) }}
           secureTextEntry
         />
-        <SettingRow
-          label="Base URL"
-          value={openaiBaseUrl}
-          placeholder="https://api.openai.com/v1"
-          onChangeText={(t) => { setOpenaiBaseUrl(t); setHasChanges(true) }}
-        />
+        {opencodeModels.length > 0 && (
+          <ModelPicker
+            label="Model"
+            models={opencodeModels}
+            selectedModel={opencodeModel}
+            onSelect={(m) => { setOpencodeModel(m); setHasChanges(true) }}
+          />
+        )}
       </View>
 
       <View style={styles.agentCard}>
@@ -144,6 +211,12 @@ function AgentsSettings() {
           placeholder="sk-ant-oat01-..."
           onChangeText={(t) => { setClaudeOAuthToken(t); setHasChanges(true) }}
           secureTextEntry
+        />
+        <ModelPicker
+          label="Model"
+          models={claudeModels}
+          selectedModel={claudeModel}
+          onSelect={(m) => { setClaudeModel(m); setHasChanges(true) }}
         />
       </View>
 
@@ -807,6 +880,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
     fontFamily: 'monospace',
+  },
+  modelPicker: {
+    backgroundColor: '#2c2c2e',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modelPickerText: {
+    fontSize: 15,
+    color: '#fff',
+  },
+  modelPickerChevron: {
+    fontSize: 18,
+    color: '#636366',
   },
   saveButton: {
     backgroundColor: '#0a84ff',

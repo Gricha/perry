@@ -46,15 +46,22 @@ export interface Scripts {
 
 export interface CodingAgents {
   opencode?: {
-    api_key?: string
-    api_base_url?: string
+    zen_token?: string
+    model?: string
   }
   github?: {
     token?: string
   }
   claude_code?: {
     oauth_token?: string
+    model?: string
   }
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+  description?: string
 }
 
 export type AgentType = 'claude-code' | 'opencode' | 'codex'
@@ -185,6 +192,9 @@ function createClient() {
         update: (input: CodingAgents) => Promise<CodingAgents>
       }
     }
+    models: {
+      list: (input: { agentType: 'claude-code' | 'opencode'; workspaceName?: string }) => Promise<{ models: ModelInfo[] }>
+    }
   }>(link)
 }
 
@@ -244,4 +254,6 @@ export const api = {
   updateScripts: (data: Scripts) => client.config.scripts.update(data),
   getAgents: () => client.config.agents.get(),
   updateAgents: (data: CodingAgents) => client.config.agents.update(data),
+  listModels: (agentType: 'claude-code' | 'opencode', workspaceName?: string) =>
+    client.models.list({ agentType, workspaceName }),
 }

@@ -10,10 +10,17 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  ActionSheetIOS,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
-import { api, AgentType, getChatUrl, HOST_WORKSPACE_NAME } from '../lib/api'
+import { api, AgentType, getChatUrl, HOST_WORKSPACE_NAME, ModelInfo } from '../lib/api'
+
+const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
+  { id: 'sonnet', name: 'Sonnet' },
+  { id: 'opus', name: 'Opus' },
+  { id: 'haiku', name: 'Haiku' },
+]
 
 interface MessagePart {
   type: 'text' | 'tool_use' | 'tool_result'
@@ -222,11 +229,41 @@ export function SessionChatScreen({ route, navigation }: any) {
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [messageOffset, setMessageOffset] = useState(0)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined)
   const wsRef = useRef<WebSocket | null>(null)
   const flatListRef = useRef<FlatList>(null)
   const streamingPartsRef = useRef<MessagePart[]>([])
   const messageIdCounter = useRef(0)
   const hasLoadedInitial = useRef(false)
+  const modelInitialized = useRef(false)
+
+  const fetchAgentType = agentType === 'opencode' ? 'opencode' : 'claude-code'
+
+  const { data: modelsData } = useQuery({
+    queryKey: ['models', fetchAgentType],
+    queryFn: () => api.listModels(fetchAgentType, workspaceName),
+  })
+
+  const { data: agentsConfig } = useQuery({
+    queryKey: ['agents'],
+    queryFn: api.getAgents,
+  })
+
+  const availableModels = useMemo(() => {
+    if (modelsData?.models?.length) return modelsData.models
+    if (fetchAgentType === 'claude-code') return FALLBACK_CLAUDE_MODELS
+    return []
+  }, [modelsData, fetchAgentType])
+
+  useEffect(() => {
+    if (availableModels.length > 0 && !modelInitialized.current) {
+      modelInitialized.current = true
+      const configModel = fetchAgentType === 'opencode'
+        ? agentsConfig?.opencode?.model
+        : agentsConfig?.claude_code?.model
+      setSelectedModel(configModel || availableModels[0].id)
+    }
+  }, [availableModels, agentsConfig, fetchAgentType])
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true))
@@ -470,11 +507,17 @@ export function SessionChatScreen({ route, navigation }: any) {
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
 
-    wsRef.current.send(JSON.stringify({
+    const payload: Record<string, unknown> = {
       type: 'message',
       content: msg,
       sessionId: currentSessionId,
-    }))
+    }
+
+    if (selectedModel) {
+      payload.model = selectedModel
+    }
+
+    wsRef.current.send(JSON.stringify(payload))
   }
 
   const interrupt = () => {
@@ -483,6 +526,40 @@ export function SessionChatScreen({ route, navigation }: any) {
       setIsStreaming(false)
     }
   }
+
+  const showModelPicker = () => {
+    if (availableModels.length === 0) return
+    if (isStreaming) return
+    if (agentType === 'opencode' && currentSessionId) return
+
+    const options = [...availableModels.map(m => m.name), 'Cancel']
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex: options.length - 1,
+        title: 'Select Model',
+      },
+      (buttonIndex) => {
+        if (buttonIndex < availableModels.length) {
+          const newModel = availableModels[buttonIndex].id
+          if (newModel !== selectedModel) {
+            setSelectedModel(newModel)
+            if (agentType !== 'opencode' && currentSessionId) {
+              setCurrentSessionId(null)
+              setMessages(prev => [...prev, {
+                role: 'system',
+                content: `Switching to model: ${availableModels[buttonIndex].name}`,
+                id: `msg-model-${Date.now()}`,
+              }])
+            }
+          }
+        }
+      }
+    )
+  }
+
+  const selectedModelName = availableModels.find(m => m.id === selectedModel)?.name || 'Model'
+  const canChangeModel = !isStreaming && !(agentType === 'opencode' && currentSessionId)
 
   const agentLabels: Record<AgentType, string> = {
     'claude-code': 'Claude Code',
@@ -517,7 +594,18 @@ export function SessionChatScreen({ route, navigation }: any) {
           </View>
           <Text style={styles.headerSubtitle}>{agentLabels[agentType as AgentType]}</Text>
         </View>
-        <View style={styles.placeholder} />
+        {availableModels.length > 0 && (
+          <TouchableOpacity
+            style={[styles.modelBtn, !canChangeModel && styles.modelBtnDisabled]}
+            onPress={showModelPicker}
+            disabled={!canChangeModel}
+          >
+            <Text style={[styles.modelBtnText, !canChangeModel && styles.modelBtnTextDisabled]}>
+              {selectedModelName}
+            </Text>
+          </TouchableOpacity>
+        )}
+        {availableModels.length === 0 && <View style={styles.placeholder} />}
       </View>
 
       <FlatList
@@ -638,6 +726,23 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 44,
+  },
+  modelBtn: {
+    backgroundColor: '#1c1c1e',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  modelBtnDisabled: {
+    opacity: 0.5,
+  },
+  modelBtnText: {
+    fontSize: 13,
+    color: '#0a84ff',
+    fontWeight: '500',
+  },
+  modelBtnTextDisabled: {
+    color: '#8e8e93',
   },
   messageList: {
     padding: 16,
