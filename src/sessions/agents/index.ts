@@ -65,3 +65,16 @@ export async function findSessionMessages(
   }
   return null;
 }
+
+export async function deleteSession(
+  containerName: string,
+  sessionId: string,
+  agentType: AgentType,
+  exec: ExecInContainer
+): Promise<{ success: boolean; error?: string }> {
+  const provider = providers[agentType];
+  if (!provider) {
+    return { success: false, error: 'Unknown agent type' };
+  }
+  return provider.deleteSession(containerName, sessionId, exec);
+}

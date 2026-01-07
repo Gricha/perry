@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -20,6 +20,8 @@ import {
   Info,
   AlertTriangle,
   FolderSync,
+  Search,
+  X,
 } from 'lucide-react'
 import { api, type SessionInfo, type AgentType } from '@/lib/api'
 import { HOST_WORKSPACE_NAME } from '@/lib/types'
@@ -142,63 +144,83 @@ function CopyableSessionId({ sessionId }: { sessionId: string }) {
   )
 }
 
-function SessionListItem({ session, onClick }: { session: SessionInfo; onClick: () => void }) {
+function SessionListItem({
+  session,
+  onClick,
+  onDelete,
+}: {
+  session: SessionInfo
+  onClick: () => void
+  onDelete: () => void
+}) {
   const isEmpty = session.messageCount === 0
   const hasPrompt = session.firstPrompt && session.firstPrompt.trim().length > 0
   const displayTitle = session.name || (hasPrompt ? session.firstPrompt : 'No prompt recorded')
 
   return (
-    <button
-      onClick={onClick}
+    <div
       data-testid="session-list-item"
       className={cn(
         'w-full text-left px-3 sm:px-4 py-3 border-b border-border/50 transition-colors hover:bg-accent/50 flex items-center gap-2 sm:gap-4 min-h-[56px]',
         isEmpty && 'opacity-60'
       )}
     >
-      <span
-        className={cn(
-          'shrink-0 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded',
-          AGENT_COLORS[session.agentType]
-        )}
-        data-testid="agent-badge"
-      >
-        [{AGENT_BADGES[session.agentType]}]
-      </span>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p
-            className={cn(
-              'text-sm font-medium truncate',
-              hasPrompt || session.name ? 'text-foreground' : 'text-muted-foreground italic'
-            )}
-          >
-            {displayTitle}
-          </p>
-          {isEmpty && (
-            <Badge variant="secondary" className="text-[10px] font-normal bg-muted text-muted-foreground shrink-0 hidden sm:inline-flex">
-              Empty
-            </Badge>
+      <button onClick={onClick} className="flex-1 flex items-center gap-2 sm:gap-4 min-w-0">
+        <span
+          className={cn(
+            'shrink-0 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded',
+            AGENT_COLORS[session.agentType]
           )}
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-muted-foreground">
-          <CopyableSessionId sessionId={session.id} />
-          <span className="flex items-center gap-1">
-            <Hash className="h-3 w-3" />
-            {session.messageCount}
-          </span>
-          <span className="truncate font-mono text-[11px] hidden sm:inline">{session.projectPath}</span>
-        </div>
-      </div>
+          data-testid="agent-badge"
+        >
+          [{AGENT_BADGES[session.agentType]}]
+        </span>
 
-      <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 text-xs text-muted-foreground">
-        <Clock className="h-3 w-3 hidden sm:block" />
-        <span className="text-[11px] sm:text-xs">{formatTimeAgo(session.lastActivity)}</span>
-      </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p
+              className={cn(
+                'text-sm font-medium truncate',
+                hasPrompt || session.name ? 'text-foreground' : 'text-muted-foreground italic'
+              )}
+            >
+              {displayTitle}
+            </p>
+            {isEmpty && (
+              <Badge variant="secondary" className="text-[10px] font-normal bg-muted text-muted-foreground shrink-0 hidden sm:inline-flex">
+                Empty
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-muted-foreground">
+            <CopyableSessionId sessionId={session.id} />
+            <span className="flex items-center gap-1">
+              <Hash className="h-3 w-3" />
+              {session.messageCount}
+            </span>
+            <span className="truncate font-mono text-[11px] hidden sm:inline">{session.projectPath}</span>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3 hidden sm:block" />
+          <span className="text-[11px] sm:text-xs">{formatTimeAgo(session.lastActivity)}</span>
+        </div>
+      </button>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+        className="shrink-0 p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+        title="Delete session"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
 
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-    </button>
+    </div>
   )
 }
 
@@ -217,8 +239,17 @@ export function WorkspaceDetail() {
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [deleteSessionDialog, setDeleteSessionDialog] = useState<SessionInfo | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
 
-  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const setTab = (tab: TabType) => {
     setChatMode(null)
     setSearchParams({ tab })
@@ -252,8 +283,26 @@ export function WorkspaceDetail() {
     enabled: !!name && ((isHostWorkspace && hostInfo?.enabled) || (!isHostWorkspace && workspace?.status === 'running')),
   })
 
-  const sessions = sessionsData?.sessions || []
+  const sessions = sessionsData?.sessions
   const totalSessions = sessionsData?.total || 0
+
+  const filteredSessions = useMemo(() => {
+    const sessionList = sessions || []
+    if (!debouncedQuery.trim()) return sessionList
+    const query = debouncedQuery.toLowerCase()
+    return sessionList.filter((session) => {
+      const searchableText = [
+        session.name,
+        session.firstPrompt,
+        session.id,
+        session.projectPath,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return searchableText.includes(query)
+    })
+  }, [sessions, debouncedQuery])
 
   const startMutation = useMutation({
     mutationFn: () => api.startWorkspace(name!),
@@ -282,6 +331,16 @@ export function WorkspaceDetail() {
 
   const syncMutation = useMutation({
     mutationFn: () => api.syncWorkspace(name!),
+  })
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: ({ sessionId, agentType }: { sessionId: string; agentType: AgentType }) =>
+      api.deleteSession(name!, sessionId, agentType),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions', name] })
+      queryClient.invalidateQueries({ queryKey: ['recentSessions'] })
+      setDeleteSessionDialog(null)
+    },
   })
 
   const handleResume = (sessionId: string, agentType: AgentType) => {
@@ -537,7 +596,10 @@ export function WorkspaceDetail() {
                     </DropdownMenu>
                     {totalSessions > 0 && (
                       <span className="text-xs sm:text-sm text-muted-foreground truncate">
-                        {totalSessions} session{totalSessions !== 1 && 's'}
+                        {debouncedQuery
+                          ? `${filteredSessions.length} of ${totalSessions}`
+                          : totalSessions}{' '}
+                        session{totalSessions !== 1 && 's'}
                       </span>
                     )}
                   </div>
@@ -565,12 +627,32 @@ export function WorkspaceDetail() {
                   </DropdownMenu>
                 </div>
 
+                <div className="px-3 sm:px-4 py-2 border-b border-border/50">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search sessions..."
+                      className="pl-9 h-9"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto">
                   {sessionsLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
-                  ) : sessions.length === 0 ? (
+                  ) : !sessions || sessions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
                       <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-muted-foreground mb-4">No sessions yet</p>
@@ -597,10 +679,15 @@ export function WorkspaceDetail() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                  ) : filteredSessions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16">
+                      <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                      <p className="text-muted-foreground">No sessions match your search</p>
+                    </div>
                   ) : (
                     <div data-testid="sessions-list">
                       {(['Today', 'Yesterday', 'This Week', 'Older'] as DateGroup[]).map((group) => {
-                        const groupedSessions = groupSessionsByDate(sessions)
+                        const groupedSessions = groupSessionsByDate(filteredSessions)
                         const groupSessions = groupedSessions[group]
                         if (groupSessions.length === 0) return null
                         return (
@@ -615,6 +702,7 @@ export function WorkspaceDetail() {
                                 key={session.id}
                                 session={session}
                                 onClick={() => handleResume(session.id, session.agentType)}
+                                onDelete={() => setDeleteSessionDialog(session)}
                               />
                             ))}
                           </div>
@@ -840,6 +928,38 @@ export function WorkspaceDetail() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog
+        open={!!deleteSessionDialog}
+        onOpenChange={(open) => !open && setDeleteSessionDialog(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this session and its conversation history.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteSessionDialog) {
+                  deleteSessionMutation.mutate({
+                    sessionId: deleteSessionDialog.id,
+                    agentType: deleteSessionDialog.agentType,
+                  })
+                }
+              }}
+              disabled={deleteSessionMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSessionMutation.isPending ? 'Deleting...' : 'Delete Session'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -21,6 +21,7 @@ import {
   getSessionDetails as getAgentSessionDetails,
   getSessionMessages,
   findSessionMessages,
+  deleteSession as deleteSessionFromProvider,
 } from '../sessions/agents';
 import type { SessionsCacheManager } from '../sessions/cache';
 import type { ModelCacheManager } from '../models/cache';
@@ -32,6 +33,7 @@ import {
 import {
   listOpencodeSessions,
   getOpencodeSessionMessages,
+  deleteOpencodeSession,
 } from '../sessions/agents/opencode-storage';
 
 const WorkspaceStatusSchema = z.enum(['running', 'stopped', 'creating', 'error']);
@@ -708,6 +710,131 @@ export function createRouter(ctx: RouterContext) {
       return { success: true };
     });
 
+  const deleteSession = os
+    .input(
+      z.object({
+        workspaceName: z.string(),
+        sessionId: z.string(),
+        agentType: z.enum(['claude-code', 'opencode', 'codex']),
+      })
+    )
+    .handler(async ({ input }) => {
+      const isHost = input.workspaceName === HOST_WORKSPACE_NAME;
+
+      if (isHost) {
+        const config = ctx.config.get();
+        if (!config.allowHostAccess) {
+          throw new ORPCError('PRECONDITION_FAILED', { message: 'Host access is disabled' });
+        }
+
+        const result = await deleteHostSession(input.sessionId, input.agentType);
+        if (!result.success) {
+          throw new ORPCError('INTERNAL_SERVER_ERROR', {
+            message: result.error || 'Failed to delete session',
+          });
+        }
+
+        await deleteSessionName(ctx.stateDir, input.workspaceName, input.sessionId);
+        await ctx.sessionsCache.removeSession(input.workspaceName, input.sessionId);
+
+        return { success: true };
+      }
+
+      const workspace = await ctx.workspaces.get(input.workspaceName);
+      if (!workspace) {
+        throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
+      }
+      if (workspace.status !== 'running') {
+        throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
+      }
+
+      const containerName = `workspace-${input.workspaceName}`;
+
+      const result = await deleteSessionFromProvider(
+        containerName,
+        input.sessionId,
+        input.agentType,
+        execInContainer
+      );
+
+      if (!result.success) {
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: result.error || 'Failed to delete session',
+        });
+      }
+
+      await deleteSessionName(ctx.stateDir, input.workspaceName, input.sessionId);
+      await ctx.sessionsCache.removeSession(input.workspaceName, input.sessionId);
+
+      return { success: true };
+    });
+
+  async function deleteHostSession(
+    sessionId: string,
+    agentType: 'claude-code' | 'opencode' | 'codex'
+  ): Promise<{ success: boolean; error?: string }> {
+    const homeDir = os_module.homedir();
+
+    if (agentType === 'claude-code') {
+      const safeSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '');
+      const claudeProjectsDir = path.join(homeDir, '.claude', 'projects');
+
+      try {
+        const projectDirs = await fs.readdir(claudeProjectsDir);
+        for (const projectDir of projectDirs) {
+          const sessionFile = path.join(claudeProjectsDir, projectDir, `${safeSessionId}.jsonl`);
+          try {
+            await fs.unlink(sessionFile);
+            return { success: true };
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        return { success: false, error: 'Session not found' };
+      }
+      return { success: false, error: 'Session not found' };
+    }
+
+    if (agentType === 'opencode') {
+      return deleteOpencodeSession(sessionId);
+    }
+
+    if (agentType === 'codex') {
+      const codexSessionsDir = path.join(homeDir, '.codex', 'sessions');
+      try {
+        const files = await fs.readdir(codexSessionsDir);
+        for (const file of files) {
+          if (!file.endsWith('.jsonl')) continue;
+          const filePath = path.join(codexSessionsDir, file);
+          const fileId = file.replace('.jsonl', '');
+
+          if (fileId === sessionId) {
+            await fs.unlink(filePath);
+            return { success: true };
+          }
+
+          try {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const firstLine = content.split('\n')[0];
+            const meta = JSON.parse(firstLine) as { session_id?: string };
+            if (meta.session_id === sessionId) {
+              await fs.unlink(filePath);
+              return { success: true };
+            }
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        return { success: false, error: 'Session not found' };
+      }
+      return { success: false, error: 'Session not found' };
+    }
+
+    return { success: false, error: 'Unsupported agent type' };
+  }
+
   const getHostInfo = os.handler(async () => {
     const config = ctx.config.get();
     return {
@@ -813,6 +940,7 @@ export function createRouter(ctx: RouterContext) {
       clearName: clearSessionName,
       getRecent: getRecentSessions,
       recordAccess: recordSessionAccess,
+      delete: deleteSession,
     },
     models: {
       list: listModels,
