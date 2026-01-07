@@ -32,15 +32,20 @@ function HomepageHeader() {
             View on GitHub
           </Link>
         </div>
-        <div className={styles.terminalPrompt}>
-          <span>curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash</span>
-        </div>
-        <div className={styles.terminalPrompt}>
-          <span>perry agent run</span>
-        </div>
-        <div className={styles.terminalPrompt}>
-          <span>open http://localhost:7391</span>
-          <span className={styles.cursor}></span>
+        <div className={styles.terminalBlock}>
+          <div className={styles.terminalLine}>
+            <span className={styles.terminalPromptChar}>$</span>
+            <span>curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash</span>
+          </div>
+          <div className={styles.terminalLine}>
+            <span className={styles.terminalPromptChar}>$</span>
+            <span>perry agent run</span>
+          </div>
+          <div className={styles.terminalLine}>
+            <span className={styles.terminalPromptChar}>$</span>
+            <span>open http://localhost:7391</span>
+            <span className={styles.cursor}></span>
+          </div>
         </div>
       </div>
     </header>

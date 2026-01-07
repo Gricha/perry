@@ -129,23 +129,29 @@
   flex-wrap: wrap;
 }
 
-/* Terminal prompt decoration */
-.terminalPrompt {
-  display: inline-flex;
-  align-items: center;
+/* Terminal block decoration */
+.terminalBlock {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   color: var(--perry-text-muted);
   margin-top: 3rem;
-  padding: 0.75rem 1.25rem;
+  padding: 1rem 1.5rem;
   background: var(--perry-bg-card);
   border: 1px solid var(--perry-border);
   border-radius: 8px;
+  text-align: left;
 }
 
-.terminalPrompt::before {
-  content: '$';
+.terminalLine {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terminalPromptChar {
   color: var(--perry-accent);
   font-weight: 600;
 }
