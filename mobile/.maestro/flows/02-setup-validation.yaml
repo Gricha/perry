@@ -18,7 +18,7 @@ tags:
 - inputText: "test-server.local"
 - tapOn:
     id: "port-input"
-- clearText
+- eraseText
 - inputText: "0"
 - tapOn:
     id: "connect-button"
