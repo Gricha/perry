@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { api, type SessionInfo, type AgentType } from '@/lib/api'
-import { HOST_WORKSPACE_NAME } from '@/lib/types'
+import { HOST_WORKSPACE_NAME } from '@shared/client-types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'

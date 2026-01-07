@@ -16,7 +16,7 @@ import type {
   SSHKeyInfo,
   RecentSession,
   ModelInfo,
-} from './types'
+} from '@shared/client-types'
 
 export type {
   WorkspaceInfo,

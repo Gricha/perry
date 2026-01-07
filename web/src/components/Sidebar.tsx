@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, type WorkspaceInfo } from '@/lib/api'
-import { HOST_WORKSPACE_NAME } from '@/lib/types'
+import { HOST_WORKSPACE_NAME } from '@shared/client-types'
 import { Button } from '@/components/ui/button'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
