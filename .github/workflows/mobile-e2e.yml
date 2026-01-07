@@ -37,6 +37,22 @@ jobs:
         working-directory: mobile
         run: bun install
 
+      - name: Select Xcode version
+        run: |
+          # Try Xcode 16.2 first, fall back to 16.1 if not available
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+          else
+            echo "Available Xcode versions:"
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+            exit 1
+          fi
+          xcodebuild -version
+
       - name: Generate iOS native code
         working-directory: mobile
         run: bunx expo prebuild --platform ios --clean
@@ -52,9 +68,6 @@ jobs:
       - name: Install CocoaPods dependencies
         working-directory: mobile/ios
         run: pod install
-
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app
 
       - name: List available simulators
         run: xcrun simctl list devices available
