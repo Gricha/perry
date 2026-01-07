@@ -33,7 +33,13 @@ function HomepageHeader() {
           </Link>
         </div>
         <div className={styles.terminalPrompt}>
-          <span>perry start myproject --clone git@github.com:user/repo.git</span>
+          <span>curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash</span>
+        </div>
+        <div className={styles.terminalPrompt}>
+          <span>perry agent run</span>
+        </div>
+        <div className={styles.terminalPrompt}>
+          <span>open http://localhost:7391</span>
           <span className={styles.cursor}></span>
         </div>
       </div>
