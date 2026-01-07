@@ -228,13 +228,11 @@ function StreamingMessage({ parts }: { parts: ChatMessagePart[] }) {
   return (
     <div className="space-y-3">
       {renderPartsWithPairedTools(parts)}
-      {!hasContent && (
-        <div className="flex gap-1">
-          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-        </div>
-      )}
+      <div className={cn("flex gap-1 transition-opacity duration-150", hasContent ? "opacity-0 h-0 overflow-hidden" : "opacity-100")}>
+        <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
     </div>
   )
 }
