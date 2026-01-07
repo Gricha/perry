@@ -7,7 +7,18 @@
     "no-var": "error",
     "prefer-const": "error",
     "no-empty": "error",
-    "no-useless-catch": "error"
+    "no-useless-catch": "error",
+    "no-self-compare": "error",
+    "no-constant-condition": "error",
+    "no-unreachable": "error",
+    "no-loss-of-precision": "error",
+    "no-debugger": "error",
+    "no-duplicate-case": "error",
+    "no-fallthrough": "error",
+    "no-unsafe-finally": "error",
+    "no-sparse-arrays": "error",
+    "no-template-curly-in-string": "error",
+    "valid-typeof": "error"
   },
   "ignorePatterns": ["dist", "node_modules", "workspace"]
 }
