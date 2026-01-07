@@ -22,6 +22,7 @@ import {
   getSessionMessages,
   findSessionMessages,
   deleteSession as deleteSessionFromProvider,
+  searchSessions as searchSessionsInContainer,
 } from '../sessions/agents';
 import type { SessionsCacheManager } from '../sessions/cache';
 import type { ModelCacheManager } from '../models/cache';
@@ -769,6 +770,120 @@ export function createRouter(ctx: RouterContext) {
       return { success: true };
     });
 
+  const searchSessions = os
+    .input(
+      z.object({
+        workspaceName: z.string(),
+        query: z.string().min(1).max(500),
+      })
+    )
+    .handler(async ({ input }) => {
+      const isHost = input.workspaceName === HOST_WORKSPACE_NAME;
+
+      if (isHost) {
+        const config = ctx.config.get();
+        if (!config.allowHostAccess) {
+          throw new ORPCError('PRECONDITION_FAILED', { message: 'Host access is disabled' });
+        }
+
+        const results = await searchHostSessions(input.query);
+        return { results };
+      }
+
+      const workspace = await ctx.workspaces.get(input.workspaceName);
+      if (!workspace) {
+        throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
+      }
+      if (workspace.status !== 'running') {
+        throw new ORPCError('PRECONDITION_FAILED', { message: 'Workspace is not running' });
+      }
+
+      const containerName = `workspace-${input.workspaceName}`;
+      const results = await searchSessionsInContainer(containerName, input.query, execInContainer);
+
+      return { results };
+    });
+
+  async function searchHostSessions(query: string): Promise<
+    Array<{
+      sessionId: string;
+      agentType: 'claude-code' | 'opencode' | 'codex';
+      matchCount: number;
+    }>
+  > {
+    const homeDir = os_module.homedir();
+    const safeQuery = query.replace(/['"\\]/g, '\\$&');
+    const searchPaths = [
+      path.join(homeDir, '.claude', 'projects'),
+      path.join(homeDir, '.local', 'share', 'opencode', 'storage'),
+      path.join(homeDir, '.codex', 'sessions'),
+    ].filter((p) => {
+      try {
+        require('fs').accessSync(p);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    if (searchPaths.length === 0) {
+      return [];
+    }
+
+    const { execSync } = await import('child_process');
+    try {
+      const output = execSync(
+        `rg -l -i --no-messages "${safeQuery}" ${searchPaths.join(' ')} 2>/dev/null | head -100`,
+        {
+          encoding: 'utf-8',
+          timeout: 30000,
+        }
+      );
+
+      const files = output.trim().split('\n').filter(Boolean);
+      const results: Array<{
+        sessionId: string;
+        agentType: 'claude-code' | 'opencode' | 'codex';
+        matchCount: number;
+      }> = [];
+
+      for (const file of files) {
+        let sessionId: string | null = null;
+        let agentType: 'claude-code' | 'opencode' | 'codex' | null = null;
+
+        if (file.includes('/.claude/projects/')) {
+          const match = file.match(/\/([^/]+)\.jsonl$/);
+          if (match && !match[1].startsWith('agent-')) {
+            sessionId = match[1];
+            agentType = 'claude-code';
+          }
+        } else if (file.includes('/.local/share/opencode/storage/')) {
+          if (file.includes('/session/') && file.endsWith('.json')) {
+            const match = file.match(/\/(ses_[^/]+)\.json$/);
+            if (match) {
+              sessionId = match[1];
+              agentType = 'opencode';
+            }
+          }
+        } else if (file.includes('/.codex/sessions/')) {
+          const match = file.match(/\/([^/]+)\.jsonl$/);
+          if (match) {
+            sessionId = match[1];
+            agentType = 'codex';
+          }
+        }
+
+        if (sessionId && agentType) {
+          results.push({ sessionId, agentType, matchCount: 1 });
+        }
+      }
+
+      return results;
+    } catch {
+      return [];
+    }
+  }
+
   async function deleteHostSession(
     sessionId: string,
     agentType: 'claude-code' | 'opencode' | 'codex'
@@ -941,6 +1056,7 @@ export function createRouter(ctx: RouterContext) {
       getRecent: getRecentSessions,
       recordAccess: recordSessionAccess,
       delete: deleteSession,
+      search: searchSessions,
     },
     models: {
       list: listModels,
