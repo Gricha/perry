@@ -3,7 +3,7 @@ import { BaseWebSocketServer, type BaseConnection, safeSend } from '../shared/ba
 import { createTerminalSession, TerminalSession } from './handler';
 import { createHostTerminalSession, HostTerminalSession } from './host-handler';
 import { isControlMessage } from './types';
-import { HOST_WORKSPACE_NAME } from '../shared/types';
+import { HOST_WORKSPACE_NAME } from '../shared/client-types';
 
 type AnyTerminalSession = TerminalSession | HostTerminalSession;
 

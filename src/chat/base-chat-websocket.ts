@@ -2,7 +2,7 @@ import { WebSocket } from 'ws';
 import { BaseWebSocketServer, type BaseConnection, safeSend } from '../shared/base-websocket';
 import type { ChatMessage } from './handler';
 import { getContainerName } from '../docker';
-import { HOST_WORKSPACE_NAME } from '../shared/types';
+import { HOST_WORKSPACE_NAME } from '../shared/client-types';
 
 export interface ChatSessionInterface {
   sendMessage(content: string): Promise<void>;

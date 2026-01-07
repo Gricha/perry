@@ -10,10 +10,9 @@ import type {
   ExecResult,
   PortMapping,
 } from './types';
+import { CONTAINER_PREFIX } from '../shared/constants';
 
 export * from './types';
-
-const CONTAINER_PREFIX = 'workspace-';
 
 export function getContainerName(name: string): string {
   return `${CONTAINER_PREFIX}${name}`;

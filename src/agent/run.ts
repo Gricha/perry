@@ -2,7 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { RPCHandler } from '@orpc/server/node';
 import { loadAgentConfig, getConfigDir, ensureConfigDir } from '../config/loader';
 import type { AgentConfig } from '../shared/types';
-import { HOST_WORKSPACE_NAME } from '../shared/types';
+import { HOST_WORKSPACE_NAME } from '../shared/client-types';
 import { DEFAULT_AGENT_PORT } from '../shared/constants';
 import { WorkspaceManager } from '../workspace/manager';
 import { containerRunning, getContainerName } from '../docker';
