@@ -77,11 +77,6 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
         },
-        {
-          href: 'https://www.npmjs.com/package/@gricha/perry',
-          label: 'npm',
-          position: 'right',
-        },
       ],
     },
     footer: {
