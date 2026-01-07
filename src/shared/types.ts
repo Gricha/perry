@@ -41,8 +41,6 @@ export interface AgentConfig {
   ssh?: SSHSettings;
 }
 
-export const HOST_WORKSPACE_NAME = '@host';
-
 export interface ClientConfig {
   worker: string;
 }
