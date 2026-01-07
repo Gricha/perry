@@ -218,8 +218,8 @@ export default function Home(): ReactNode {
       description="Docker containers with SSH access, AI coding assistants, and Tailscale integration. Self-hosted, remote-accessible development environments.">
       <HomepageHeader />
       <main>
-        <HomepageFeatures />
         <RemoteAccess />
+        <HomepageFeatures />
         <CodeExample />
         <CallToAction />
       </main>
