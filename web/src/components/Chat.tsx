@@ -540,6 +540,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
             if (match) {
               const newSessionId = match[1].replace(/\.+$/, '')
               setSessionId(newSessionId)
+              hasLoadedHistoryRef.current = true
               onSessionIdRef.current?.(newSessionId)
             }
             return
@@ -719,14 +720,14 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
       )}
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        {isLoadingHistory && (
+        {isLoadingHistory && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
             <Loader2 className="h-8 w-8 animate-spin mb-4" />
             <p className="text-center">Loading conversation history...</p>
           </div>
         )}
 
-        {!isLoadingHistory && messages.length === 0 && !isStreaming && (
+        {messages.length === 0 && !isLoadingHistory && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
             <Sparkles className="h-12 w-12 mb-4 opacity-20" />
             <p className="text-center">
@@ -738,7 +739,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
           </div>
         )}
 
-        {!isLoadingHistory && messages.length > 0 && containerMounted && (
+        {messages.length > 0 && containerMounted && (
           <>
             {isLoadingMore && (
               <div className="flex justify-center py-4">
@@ -786,7 +787,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
           </>
         )}
 
-        {!isLoadingHistory && messages.length > 0 && !containerMounted && (
+        {messages.length > 0 && !containerMounted && (
           <div className="space-y-4 p-4">
             {messages.map((msg, idx) => (
               <MessageBubble key={idx} message={msg} />
@@ -794,7 +795,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, onSessionId, 
           </div>
         )}
 
-        {isStreaming && (
+        {isStreaming && messages.length > 0 && (
           <div className="p-4 pt-0">
             <StreamingMessage parts={streamingParts} />
           </div>
