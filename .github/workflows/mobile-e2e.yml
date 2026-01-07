@@ -17,7 +17,7 @@ on:
 jobs:
   maestro-ios:
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -32,14 +32,38 @@ jobs:
         with:
           path: |
             ~/.bun/install/cache
+            node_modules
             mobile/node_modules
-          key: ${{ runner.os }}-bun-mobile-${{ hashFiles('mobile/bun.lock') }}
+            web/node_modules
+          key: ${{ runner.os }}-bun-all-${{ hashFiles('bun.lock', 'mobile/bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-mobile-
+            ${{ runner.os }}-bun-all-
 
       - name: Install dependencies
-        working-directory: mobile
-        run: bun install
+        run: |
+          bun install
+          cd mobile && bun install
+          cd ../web && bun install
+
+      - name: Install Docker via Colima
+        run: |
+          brew install colima docker
+          colima start --cpu 4 --memory 8 --disk 20
+          docker info
+
+      - name: Build workspace image
+        run: docker build -t perry:latest ./perry
+
+      - name: Start Perry agent
+        run: |
+          bun run src/index.ts agent run --port 7391 &
+          sleep 5
+          curl -s http://localhost:7391/health || (echo "Agent failed to start" && exit 1)
+
+      - name: Create test workspace
+        run: |
+          bun run src/index.ts start test
+          bun run src/index.ts list
 
       - name: Select Xcode version
         run: |
