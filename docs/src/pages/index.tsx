@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 
@@ -98,6 +99,10 @@ function HomepageFeatures(): ReactNode {
 }
 
 function RemoteAccess(): ReactNode {
+  const terminalMobileImg = useBaseUrl('/img/demo-terminal-mobile.gif');
+  const chatMobileImg = useBaseUrl('/img/demo-chat-mobile.gif');
+  const demoImg = useBaseUrl('/img/demo.gif');
+
   return (
     <section className={styles.remoteAccess}>
       <div className="container">
@@ -109,16 +114,16 @@ function RemoteAccess(): ReactNode {
         </p>
         <div className={styles.demoGrid}>
           <div className={styles.demoItem}>
-            <img src="/img/demo-terminal-mobile.gif" alt="Terminal on mobile" />
+            <img src={terminalMobileImg} alt="Terminal on mobile" />
             <p>Mobile terminal</p>
           </div>
           <div className={styles.demoItem}>
-            <img src="/img/demo-chat-mobile.gif" alt="AI chat on mobile" />
+            <img src={chatMobileImg} alt="AI chat on mobile" />
             <p>AI sessions on the go</p>
           </div>
         </div>
         <div className={styles.demoWeb}>
-          <img src="/img/demo.gif" alt="Web UI demo" />
+          <img src={demoImg} alt="Web UI demo" />
           <p>Full Web UI for desktop</p>
         </div>
       </div>
