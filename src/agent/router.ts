@@ -100,6 +100,13 @@ const SSHKeyInfoSchema = z.object({
   hasPrivateKey: z.boolean(),
 });
 
+export interface TailscaleInfo {
+  running: boolean;
+  dnsName?: string;
+  serveActive: boolean;
+  httpsUrl?: string;
+}
+
 export interface RouterContext {
   workspaces: WorkspaceManager;
   config: { get: () => AgentConfig; set: (config: AgentConfig) => void };
@@ -109,6 +116,7 @@ export interface RouterContext {
   terminalServer: TerminalWebSocketServer;
   sessionsCache: SessionsCacheManager;
   modelCache: ModelCacheManager;
+  tailscale?: TailscaleInfo;
 }
 
 function mapErrorToORPC(err: unknown, defaultMessage: string): never {
@@ -261,6 +269,7 @@ export function createRouter(ctx: RouterContext) {
       workspacesCount: allWorkspaces.length,
       dockerVersion,
       terminalConnections: ctx.terminalServer.getConnectionCount(),
+      tailscale: ctx.tailscale,
     };
   });
 
