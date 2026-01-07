@@ -541,7 +541,7 @@ export function WorkspaceDetail() {
                     <span className="text-sm font-medium">Agent Terminal</span>
                   </div>
                   <div className="flex-1">
-                    <Terminal workspaceName={name!} initialCommand={chatMode.command} />
+                    <Terminal key={`agent-${name}`} workspaceName={name!} initialCommand={chatMode.command} />
                   </div>
                 </div>
               )
@@ -666,7 +666,7 @@ export function WorkspaceDetail() {
             {!isRunning ? (
               renderStartPrompt()
             ) : (
-              <Terminal key={isHostWorkspace ? HOST_WORKSPACE_NAME : workspace!.name} workspaceName={isHostWorkspace ? HOST_WORKSPACE_NAME : workspace!.name} />
+              <Terminal key={`terminal-${isHostWorkspace ? HOST_WORKSPACE_NAME : workspace!.name}`} workspaceName={isHostWorkspace ? HOST_WORKSPACE_NAME : workspace!.name} />
             )}
           </div>
         )}

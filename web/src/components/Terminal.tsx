@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
-import { init, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web'
+import { useEffect, useRef, useState } from 'react'
+import { Ghostty, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web'
 import { getTerminalUrl } from '@/lib/api'
 
 interface TerminalProps {
@@ -7,22 +7,10 @@ interface TerminalProps {
   initialCommand?: string
 }
 
-let ghosttyInitialized = false
-let ghosttyInitPromise: Promise<void> | null = null
-
-async function ensureGhosttyInit(): Promise<void> {
-  if (ghosttyInitialized) return
-  if (ghosttyInitPromise) return ghosttyInitPromise
-
-  ghosttyInitPromise = init().then(() => {
-    ghosttyInitialized = true
-  })
-  return ghosttyInitPromise
-}
-
-export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
+function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<GhosttyTerminal | null>(null)
+  const ghosttyRef = useRef<Ghostty | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const initialCommandSent = useRef(false)
@@ -31,136 +19,141 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
   const [isInitialized, setIsInitialized] = useState(false)
   const [hasReceivedData, setHasReceivedData] = useState(false)
 
-  const connect = useCallback(async () => {
-    if (!terminalRef.current) return
-
-    // Dispose any existing terminal and clear DOM
-    if (termRef.current) {
-      termRef.current.dispose()
-      termRef.current = null
-    }
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
-    terminalRef.current.innerHTML = ''
-
-    await ensureGhosttyInit()
-    setIsInitialized(true)
-
-    const term = new GhosttyTerminal({
-      cursorBlink: false,
-      cursorStyle: 'block',
-      fontSize: 14,
-      fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      scrollback: 10000,
-      theme: {
-        background: '#0d1117',
-        foreground: '#c9d1d9',
-        cursor: '#58a6ff',
-        cursorAccent: '#0d1117',
-        selectionBackground: '#264f78',
-        selectionForeground: '#ffffff',
-        black: '#484f58',
-        red: '#ff7b72',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#bc8cff',
-        cyan: '#39c5cf',
-        white: '#b1bac4',
-        brightBlack: '#6e7681',
-        brightRed: '#ffa198',
-        brightGreen: '#56d364',
-        brightYellow: '#e3b341',
-        brightBlue: '#79c0ff',
-        brightMagenta: '#d2a8ff',
-        brightCyan: '#56d4dd',
-        brightWhite: '#f0f6fc',
-      },
-    })
-    termRef.current = term
-
-    const fitAddon = new FitAddon()
-    fitAddonRef.current = fitAddon
-    term.loadAddon(fitAddon)
-
-    term.open(terminalRef.current)
-
-    if (term.textarea) {
-      term.textarea.style.opacity = '0'
-      term.textarea.style.position = 'absolute'
-      term.textarea.style.left = '-9999px'
-      term.textarea.style.top = '-9999px'
-    }
-
-    requestAnimationFrame(() => {
-      fitAddon.fit()
-    })
-
-    const wsUrl = getTerminalUrl(workspaceName)
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      setIsConnected(true)
-      const { cols, rows } = term
-      ws.send(JSON.stringify({ type: 'resize', cols, rows }))
-
-      if (initialCommand && !initialCommandSent.current) {
-        initialCommandSent.current = true
-        setTimeout(() => {
-          ws.send(initialCommand + '\n')
-        }, 500)
-      }
-    }
-
-    ws.onmessage = (event) => {
-      setHasReceivedData(true)
-      if (event.data instanceof Blob) {
-        event.data.text().then((text) => {
-          term.write(text)
-        })
-      } else if (event.data instanceof ArrayBuffer) {
-        term.write(new Uint8Array(event.data))
-      } else {
-        term.write(event.data)
-      }
-    }
-
-    ws.onclose = (event) => {
-      setIsConnected(false)
-      term.writeln('')
-      if (event.code === 1000) {
-        term.writeln('\x1b[38;5;245mSession ended\x1b[0m')
-      } else if (event.code === 404 || event.reason?.includes('not found')) {
-        term.writeln('\x1b[31mWorkspace not found or not running\x1b[0m')
-      } else {
-        term.writeln(`\x1b[31mDisconnected (code: ${event.code})\x1b[0m`)
-      }
-    }
-
-    ws.onerror = () => {
-      setIsConnected(false)
-      term.writeln('\x1b[31mConnection error - is the workspace running?\x1b[0m')
-    }
-
-    term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data)
-      }
-    })
-
-    term.onResize(({ cols, rows }) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'resize', cols, rows }))
-      }
-    })
-
-    term.focus()
-  }, [workspaceName, initialCommand])
-
   useEffect(() => {
+    let cancelled = false
+
+    const connect = async () => {
+      if (!terminalRef.current || cancelled) return
+
+      const ghostty = await Ghostty.load()
+      if (cancelled) return
+
+      ghosttyRef.current = ghostty
+      setIsInitialized(true)
+
+      const term = new GhosttyTerminal({
+        ghostty,
+        cursorBlink: false,
+        cursorStyle: 'block',
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        scrollback: 10000,
+        theme: {
+          background: '#0d1117',
+          foreground: '#c9d1d9',
+          cursor: '#58a6ff',
+          cursorAccent: '#0d1117',
+          selectionBackground: '#264f78',
+          selectionForeground: '#ffffff',
+          black: '#484f58',
+          red: '#ff7b72',
+          green: '#3fb950',
+          yellow: '#d29922',
+          blue: '#58a6ff',
+          magenta: '#bc8cff',
+          cyan: '#39c5cf',
+          white: '#b1bac4',
+          brightBlack: '#6e7681',
+          brightRed: '#ffa198',
+          brightGreen: '#56d364',
+          brightYellow: '#e3b341',
+          brightBlue: '#79c0ff',
+          brightMagenta: '#d2a8ff',
+          brightCyan: '#56d4dd',
+          brightWhite: '#f0f6fc',
+        },
+      })
+
+      if (cancelled) {
+        term.dispose()
+        return
+      }
+
+      termRef.current = term
+
+      const fitAddon = new FitAddon()
+      fitAddonRef.current = fitAddon
+      term.loadAddon(fitAddon)
+
+      term.open(terminalRef.current)
+
+      if (term.textarea) {
+        term.textarea.style.opacity = '0'
+        term.textarea.style.position = 'absolute'
+        term.textarea.style.left = '-9999px'
+        term.textarea.style.top = '-9999px'
+      }
+
+      requestAnimationFrame(() => {
+        if (!cancelled) fitAddon.fit()
+      })
+
+      const wsUrl = getTerminalUrl(workspaceName)
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        if (cancelled) return
+        setIsConnected(true)
+        const { cols, rows } = term
+        ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+
+        if (initialCommand && !initialCommandSent.current) {
+          initialCommandSent.current = true
+          setTimeout(() => {
+            if (!cancelled) ws.send(initialCommand + '\n')
+          }, 500)
+        }
+      }
+
+      ws.onmessage = (event) => {
+        if (cancelled) return
+        setHasReceivedData(true)
+        if (event.data instanceof Blob) {
+          event.data.text().then((text) => {
+            if (!cancelled) term.write(text)
+          })
+        } else if (event.data instanceof ArrayBuffer) {
+          term.write(new Uint8Array(event.data))
+        } else {
+          term.write(event.data)
+        }
+      }
+
+      ws.onclose = (event) => {
+        if (cancelled) return
+        setIsConnected(false)
+        term.writeln('')
+        if (event.code === 1000) {
+          term.writeln('\x1b[38;5;245mSession ended\x1b[0m')
+        } else if (event.code === 404 || event.reason?.includes('not found')) {
+          term.writeln('\x1b[31mWorkspace not found or not running\x1b[0m')
+        } else {
+          term.writeln(`\x1b[31mDisconnected (code: ${event.code})\x1b[0m`)
+        }
+      }
+
+      ws.onerror = () => {
+        if (cancelled) return
+        setIsConnected(false)
+        term.writeln('\x1b[31mConnection error - is the workspace running?\x1b[0m')
+      }
+
+      term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data)
+        }
+      })
+
+      term.onResize(({ cols, rows }) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+        }
+      })
+
+      term.focus()
+    }
+
     connect()
 
     const handleFit = () => {
@@ -184,21 +177,21 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
     window.addEventListener('resize', debouncedFit)
 
     return () => {
+      cancelled = true
       window.removeEventListener('resize', debouncedFit)
-      if (resizeObserverRef.current) {
-        resizeObserverRef.current.disconnect()
-      }
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-      if (termRef.current) {
-        termRef.current.dispose()
-      }
+      resizeObserverRef.current?.disconnect()
+      resizeObserverRef.current = null
+      wsRef.current?.close()
+      wsRef.current = null
+      termRef.current?.dispose()
+      termRef.current = null
+      fitAddonRef.current = null
+      ghosttyRef.current = null
     }
-  }, [connect])
+  }, [workspaceName, initialCommand])
 
   return (
-    <div className="relative h-full w-full bg-[#0d1117] rounded-lg overflow-hidden cursor-default" data-testid="terminal-container">
+    <>
       <div
         ref={terminalRef}
         className="absolute inset-0"
@@ -221,6 +214,18 @@ export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
           </span>
         </div>
       )}
+    </>
+  )
+}
+
+export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
+  return (
+    <div className="relative h-full w-full bg-[#0d1117] rounded-lg overflow-hidden cursor-default" data-testid="terminal-container">
+      <TerminalInstance
+        key={workspaceName}
+        workspaceName={workspaceName}
+        initialCommand={initialCommand}
+      />
     </div>
   )
 }

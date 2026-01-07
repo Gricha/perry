@@ -10,4 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    allowedHosts: true,
+    proxy: {
+      '/rpc': {
+        target: 'http://localhost:3111',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
 })
