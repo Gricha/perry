@@ -308,6 +308,12 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
 
     console.log('[agent] Shutting down...');
 
+    const forceExitTimeout = setTimeout(() => {
+      console.log('[agent] Force exit after timeout');
+      process.exit(0);
+    }, 3000);
+    forceExitTimeout.unref();
+
     stopEagerImagePull();
     fileWatcher.stop();
 
@@ -321,12 +327,6 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
     terminalServer.close();
 
     server.closeAllConnections();
-
-    const forceExitTimeout = setTimeout(() => {
-      console.log('[agent] Force exit after timeout');
-      process.exit(0);
-    }, 3000);
-    forceExitTimeout.unref();
 
     server.close(() => {
       clearTimeout(forceExitTimeout);
