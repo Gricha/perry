@@ -1,14 +1,15 @@
 name: Mobile E2E Tests
 
 on:
+  # Only run on push to main or manual trigger to avoid slow CI on every PR
   push:
     branches: [main]
     paths:
       - 'mobile/**'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mobile/**'
+  workflow_dispatch:
+  # Weekly run to catch regressions
+  schedule:
+    - cron: '0 9 * * 1'  # Monday 9am UTC
 
 jobs:
   maestro-ios:
@@ -85,12 +86,20 @@ jobs:
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
+      - name: Cache Xcode build
+        uses: actions/cache@v4
+        with:
+          path: mobile/ios/build
+          key: ${{ runner.os }}-xcode-${{ hashFiles('mobile/ios/Podfile.lock', 'mobile/src/**/*.ts', 'mobile/src/**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-
+
       - name: Build iOS app for simulator
         working-directory: mobile/ios
         run: |
           xcodebuild -workspace Perry.xcworkspace \
             -scheme Perry \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination "id=${{ env.DEVICE_ID }}" \
             -derivedDataPath build \
@@ -106,6 +115,13 @@ jobs:
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
+      - name: Launch app and take debug screenshot
+        run: |
+          export PATH="$HOME/.maestro/bin:$PATH"
+          xcrun simctl launch "${{ env.DEVICE_ID }}" com.gricha.perry || true
+          sleep 5
+          xcrun simctl io "${{ env.DEVICE_ID }}" screenshot /tmp/app-launch-debug.png || true
+
       - name: Run Maestro tests
         working-directory: mobile
         run: |
@@ -113,6 +129,14 @@ jobs:
           maestro test .maestro/flows/ --format junit --output maestro-report.xml
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+
+      - name: Upload debug screenshot
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: debug-screenshot
+          path: /tmp/app-launch-debug.png
+          retention-days: 7
 
       - name: Upload Maestro report
         uses: actions/upload-artifact@v4
