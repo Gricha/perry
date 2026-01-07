@@ -435,7 +435,7 @@ export function WorkspaceDetail() {
         <Button variant="ghost" size="sm" className="h-9 w-9 p-0 flex-shrink-0" onClick={() => navigate('/workspaces')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold truncate">{displayName}</span>
           {isHostWorkspace ? (
             <Badge variant="secondary" className="text-xs flex-shrink-0 bg-amber-500/10 text-amber-600 border-amber-500/20">
@@ -451,70 +451,37 @@ export function WorkspaceDetail() {
             <Badge variant="muted" className="text-xs flex-shrink-0">stopped</Badge>
           )}
         </div>
-        {!isHostWorkspace && (
-          isRunning ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => stopMutation.mutate()}
-              disabled={stopMutation.isPending}
-              className="text-muted-foreground hover:text-destructive h-9 px-2 sm:px-3 flex-shrink-0"
-            >
-              <Square className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">{stopMutation.isPending ? 'Stopping...' : 'Stop'}</span>
-            </Button>
-          ) : isCreating ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled
-              className="h-9 px-2 sm:px-3 flex-shrink-0 text-amber-600"
-            >
-              <Loader2 className="h-4 w-4 sm:mr-1 animate-spin" />
-              <span className="hidden sm:inline">Starting...</span>
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => startMutation.mutate()}
-              disabled={startMutation.isPending}
-              className="h-9 px-2 sm:px-3 flex-shrink-0"
-            >
-              {startMutation.isPending ? (
-                <Loader2 className="h-4 w-4 sm:mr-1 animate-spin" />
-              ) : isError ? (
-                <RefreshCw className="h-4 w-4 sm:mr-1" />
-              ) : (
-                <Play className="h-4 w-4 sm:mr-1" />
+        <div className="flex items-center ml-8 border-l border-border">
+          {tabs.filter(tab => tab.id !== 'settings').map((tab, index) => (
+            <button
+              key={tab.id}
+              onClick={() => setTab(tab.id)}
+              className={cn(
+                'px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
+                currentTab === tab.id
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/30',
+                index > 0 && 'border-l border-border'
               )}
-              <span className="hidden sm:inline">
-                {startMutation.isPending
-                  ? isError ? 'Recovering...' : 'Starting...'
-                  : isError ? 'Recover' : 'Start'}
-              </span>
-            </Button>
-          )
-        )}
-      </div>
-
-      <div className="flex border-b border-border/50 bg-card/30">
-        {tabs.map((tab) => (
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {tabs.some(tab => tab.id === 'settings') && (
           <button
-            key={tab.id}
-            onClick={() => setTab(tab.id)}
+            onClick={() => setTab('settings')}
             className={cn(
-              'flex items-center justify-center gap-2 px-3 sm:px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]',
-              currentTab === tab.id
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50'
+              'ml-auto p-2 rounded-md transition-colors',
+              currentTab === 'settings'
+                ? 'text-foreground bg-accent'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
             )}
-            title={tab.label}
+            title="Settings"
           >
-            <tab.icon className="h-4 w-4" />
-            <span className="hidden sm:inline">{tab.label}</span>
+            <Settings className="h-5 w-5" />
           </button>
-        ))}
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden">
