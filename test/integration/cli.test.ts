@@ -54,17 +54,51 @@ describe('CLI commands', () => {
       await agent.api.deleteWorkspace(name);
     });
 
-    it('creates workspace with --clone option', async () => {
+    it('creates workspace with --clone option and clones the repository', async () => {
       const name = generateTestWorkspaceName();
-      const result = await runCLI(['start', name, '--clone', 'https://github.com/example/repo'], {
+      const repoUrl = 'https://github.com/octocat/Hello-World';
+      const result = await runCLI(['start', name, '--clone', repoUrl], {
         env: cliEnv(),
-        timeout: 30000,
+        timeout: 90000,
       });
       expect(result.code).toBe(0);
       expect(result.stdout).toContain(`Workspace '${name}' started`);
 
+      const { execInContainer } = await import('../../src/docker');
+      const containerName = `workspace-${name}`;
+
+      const waitForInit = async (maxWait = 60000) => {
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+          const check = await execInContainer(
+            containerName,
+            ['test', '-f', '/home/workspace/.workspace-initialized'],
+            { user: 'workspace' }
+          );
+          if (check.exitCode === 0) return true;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        return false;
+      };
+
+      const initComplete = await waitForInit();
+      expect(initComplete).toBe(true);
+
+      const lsResult = await execInContainer(containerName, ['ls', '-la', '/home/workspace'], {
+        user: 'root',
+      });
+      expect(lsResult.exitCode).toBe(0);
+      expect(lsResult.stdout).toContain('Hello-World');
+
+      const gitDirResult = await execInContainer(
+        containerName,
+        ['test', '-d', '/home/workspace/Hello-World/.git'],
+        { user: 'root' }
+      );
+      expect(gitDirResult.exitCode).toBe(0);
+
       await agent.api.deleteWorkspace(name);
-    });
+    }, 120000);
 
     it('starts existing workspace without error', async () => {
       const name = generateTestWorkspaceName();

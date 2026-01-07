@@ -1,4 +1,5 @@
 import { addSshKeys } from "./add-ssh-key";
+import { runInit } from "./init";
 import { syncUserWithHost } from "./sync-user";
 import { ensureDockerd, monitorServices, startSshd, tailDockerdLogs, waitForDocker } from "../lib/services";
 
@@ -18,6 +19,8 @@ export const runEntrypoint = async () => {
     process.exit(1);
     return;
   }
+  console.log("[entrypoint] Running workspace initialization...");
+  await runInit();
   console.log("[entrypoint] Starting SSH daemon...");
   await startSshd();
   void monitorServices();
