@@ -52,12 +52,16 @@ export function createDockerFileCopier(): FileCopier {
         await docker.execInContainer(containerName, ['rm', '/tmp/agent-sync.tar'], {
           user: 'workspace',
         });
-        await docker.execInContainer(containerName, ['chmod', '-R', '644', dir.dest], {
-          user: 'workspace',
-        });
-        await docker.execInContainer(containerName, ['chmod', '755', dir.dest], {
-          user: 'workspace',
-        });
+        await docker.execInContainer(
+          containerName,
+          ['find', dir.dest, '-type', 'f', '-exec', 'chmod', '644', '{}', '+'],
+          { user: 'workspace' }
+        );
+        await docker.execInContainer(
+          containerName,
+          ['find', dir.dest, '-type', 'd', '-exec', 'chmod', '755', '{}', '+'],
+          { user: 'workspace' }
+        );
       } finally {
         await fs.unlink(tempTar).catch(() => {});
       }
