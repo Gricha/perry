@@ -61,7 +61,8 @@ const CredentialsSchema = z.object({
 });
 
 const ScriptsSchema = z.object({
-  post_start: z.string().optional(),
+  post_start: z.array(z.string()).optional(),
+  fail_on_error: z.boolean().optional(),
 });
 
 const CodingAgentsSchema = z.object({

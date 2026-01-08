@@ -11,7 +11,8 @@ export interface WorkspaceCredentials {
 }
 
 export interface WorkspaceScripts {
-  post_start?: string;
+  post_start?: string[];
+  fail_on_error?: boolean;
 }
 
 export interface CodingAgents {

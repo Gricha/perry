@@ -36,7 +36,8 @@ export interface Credentials {
 }
 
 export interface Scripts {
-  post_start?: string;
+  post_start?: string[];
+  fail_on_error?: boolean;
 }
 
 export interface CodingAgents {

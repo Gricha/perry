@@ -413,33 +413,85 @@ export class WorkspaceManager {
     });
   }
 
-  private async runPostStartScript(containerName: string): Promise<void> {
-    const scriptPath = this.config.scripts.post_start;
-    if (!scriptPath) {
+  private async runUserScripts(containerName: string): Promise<void> {
+    const scriptPaths = this.config.scripts.post_start;
+    if (!scriptPaths || scriptPaths.length === 0) {
       return;
     }
 
-    const expandedPath = expandPath(scriptPath);
+    const failOnError = this.config.scripts.fail_on_error ?? false;
+
+    for (const scriptPath of scriptPaths) {
+      const expandedPath = expandPath(scriptPath);
+
+      try {
+        const stat = await fs.stat(expandedPath);
+
+        if (stat.isDirectory()) {
+          await this.runScriptsFromDirectory(containerName, expandedPath, failOnError);
+        } else if (stat.isFile()) {
+          await this.runSingleScript(containerName, expandedPath, failOnError);
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          continue;
+        }
+        console.warn(`Error accessing script path ${expandedPath}:`, err);
+        if (failOnError) {
+          throw err;
+        }
+      }
+    }
+  }
+
+  private async runScriptsFromDirectory(
+    containerName: string,
+    dirPath: string,
+    failOnError: boolean
+  ): Promise<void> {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const scripts = entries
+      .filter((e) => e.isFile() && e.name.endsWith('.sh'))
+      .map((e) => e.name)
+      .sort();
+
+    for (const scriptName of scripts) {
+      const scriptPath = path.join(dirPath, scriptName);
+      await this.runSingleScript(containerName, scriptPath, failOnError);
+    }
+  }
+
+  private async runSingleScript(
+    containerName: string,
+    scriptPath: string,
+    failOnError: boolean
+  ): Promise<void> {
+    const scriptName = path.basename(scriptPath);
+    const destPath = `/workspace/.perry-script-${scriptName}`;
 
     try {
-      await fs.access(expandedPath);
-    } catch {
-      console.warn(`Post-start script not found, skipping: ${expandedPath}`);
-      return;
+      await docker.copyToContainer(containerName, scriptPath, destPath);
+      await docker.execInContainer(containerName, ['chown', 'workspace:workspace', destPath], {
+        user: 'root',
+      });
+      await docker.execInContainer(containerName, ['chmod', '+x', destPath], {
+        user: 'workspace',
+      });
+
+      console.log(`[scripts] Running: ${scriptPath}`);
+      await docker.execInContainer(containerName, ['bash', destPath], {
+        user: 'workspace',
+      });
+
+      await docker.execInContainer(containerName, ['rm', '-f', destPath], {
+        user: 'workspace',
+      });
+    } catch (err) {
+      console.warn(`[scripts] Error running ${scriptPath}:`, err);
+      if (failOnError) {
+        throw err;
+      }
     }
-
-    const destPath = '/workspace/post-start.sh';
-    await docker.copyToContainer(containerName, expandedPath, destPath);
-    await docker.execInContainer(containerName, ['chown', 'workspace:workspace', destPath], {
-      user: 'root',
-    });
-    await docker.execInContainer(containerName, ['chmod', '+x', destPath], {
-      user: 'workspace',
-    });
-
-    await docker.execInContainer(containerName, ['bash', destPath], {
-      user: 'workspace',
-    });
   }
 
   private async syncWorkspaceStatus(workspace: Workspace): Promise<void> {
@@ -573,7 +625,7 @@ export class WorkspaceManager {
       workspace.status = 'running';
       await this.state.setWorkspace(workspace);
 
-      await this.runPostStartScript(containerName);
+      await this.runUserScripts(containerName);
 
       return workspace;
     } catch (err) {
@@ -672,7 +724,7 @@ export class WorkspaceManager {
       workspace.lastUsed = new Date().toISOString();
       await this.state.setWorkspace(workspace);
 
-      await this.runPostStartScript(containerName);
+      await this.runUserScripts(containerName);
 
       return workspace;
     } catch (err) {
