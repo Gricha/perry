@@ -239,12 +239,10 @@ function ThinkingDots() {
 }
 
 function StreamingBubble({ parts }: { parts: MessagePart[] }) {
-  const hasContent = parts.some(p => p.content.length > 0)
-
   return (
     <View style={styles.partsContainer}>
       {renderPartsWithPairedTools(parts)}
-      {!hasContent && <ThinkingDots />}
+      <ThinkingDots />
     </View>
   )
 }
