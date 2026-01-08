@@ -18,6 +18,16 @@ import type {
   ModelInfo,
 } from '@shared/client-types'
 
+export interface GitHubRepo {
+  name: string
+  fullName: string
+  cloneUrl: string
+  sshUrl: string
+  private: boolean
+  description: string | null
+  updatedAt: string
+}
+
 export type {
   WorkspaceInfo,
   InfoResponse,
@@ -80,6 +90,13 @@ const client = createORPCClient<{
   }
   models: {
     list: (input: { agentType: 'claude-code' | 'opencode'; workspaceName?: string }) => Promise<{ models: ModelInfo[] }>
+  }
+  github: {
+    listRepos: (input: { search?: string; perPage?: number; page?: number }) => Promise<{
+      configured: boolean
+      repos: GitHubRepo[]
+      hasMore: boolean
+    }>
   }
   info: () => Promise<InfoResponse>
   host: {
@@ -152,6 +169,8 @@ export const api = {
   listSSHKeys: () => client.config.ssh.listKeys(),
   listModels: (agentType: 'claude-code' | 'opencode', workspaceName?: string) =>
     client.models.list({ agentType, workspaceName }),
+  listGitHubRepos: (search?: string, perPage?: number, page?: number) =>
+    client.github.listRepos({ search, perPage, page }),
 }
 
 export function getTerminalUrl(name: string): string {

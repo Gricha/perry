@@ -76,6 +76,34 @@ test.describe('Web UI - Workspace Operations', () => {
   }, 120000);
 });
 
+test.describe('Web UI - Create Workspace', () => {
+  test('create workspace form shows name and repo inputs', async ({ agent, page }) => {
+    await page.goto(`http://127.0.0.1:${agent.port}/workspaces`);
+    await page.waitForLoadState('networkidle');
+
+    const newWorkspaceButton = page.getByRole('button', { name: /new workspace/i });
+    await newWorkspaceButton.click();
+
+    await expect(page.getByLabel('Name')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByPlaceholder('my-project')).toBeVisible();
+    await expect(page.getByPlaceholder('https://github.com/user/repo')).toBeVisible();
+  });
+
+  test('repo selector allows manual URL entry', async ({ agent, page }) => {
+    await page.goto(`http://127.0.0.1:${agent.port}/workspaces`);
+    await page.waitForLoadState('networkidle');
+
+    const newWorkspaceButton = page.getByRole('button', { name: /new workspace/i });
+    await newWorkspaceButton.click();
+
+    const repoInput = page.getByPlaceholder('https://github.com/user/repo');
+    await expect(repoInput).toBeVisible({ timeout: 10000 });
+
+    await repoInput.fill('https://github.com/test/repo');
+    await expect(repoInput).toHaveValue('https://github.com/test/repo');
+  });
+});
+
 test.describe('Web UI - Settings Pages', () => {
   test('environment settings page loads', async ({ agent, page }) => {
     await page.goto(`http://127.0.0.1:${agent.port}/settings/environment`);

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RepoSelector } from '@/components/RepoSelector'
 import { cn } from '@/lib/utils'
 
 function StatCard({ value, label, accent }: { value: number | string; label: string; accent?: boolean }) {
@@ -291,11 +292,9 @@ export function WorkspaceList() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="repo">Repository <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input
-                    id="repo"
-                    type="text"
+                  <RepoSelector
                     value={newRepo}
-                    onChange={(e) => setNewRepo(e.target.value)}
+                    onChange={setNewRepo}
                     placeholder="https://github.com/user/repo"
                   />
                 </div>

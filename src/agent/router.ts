@@ -394,6 +394,100 @@ export function createRouter(ctx: RouterContext) {
     return discoverSSHKeys();
   });
 
+  const GitHubRepoSchema = z.object({
+    name: z.string(),
+    fullName: z.string(),
+    cloneUrl: z.string(),
+    sshUrl: z.string(),
+    private: z.boolean(),
+    description: z.string().nullable(),
+    updatedAt: z.string(),
+  });
+
+  const listGitHubRepos = os
+    .input(
+      z.object({
+        search: z.string().optional(),
+        perPage: z.number().optional().default(30),
+        page: z.number().optional().default(1),
+      })
+    )
+    .output(
+      z.object({
+        configured: z.boolean(),
+        repos: z.array(GitHubRepoSchema),
+        hasMore: z.boolean(),
+      })
+    )
+    .handler(async ({ input }) => {
+      const config = ctx.config.get();
+      const token = config.agents?.github?.token;
+
+      if (!token) {
+        return { configured: false, repos: [], hasMore: false };
+      }
+
+      try {
+        const params = new URLSearchParams({
+          per_page: String(input.perPage),
+          page: String(input.page),
+          sort: 'updated',
+          direction: 'desc',
+        });
+
+        const url = input.search
+          ? `https://api.github.com/search/repositories?q=${encodeURIComponent(input.search)}+user:@me&${params}`
+          : `https://api.github.com/user/repos?${params}`;
+
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            return { configured: false, repos: [], hasMore: false };
+          }
+          throw new Error(`GitHub API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const items = input.search ? data.items : data;
+
+        const repos = items.map(
+          (repo: {
+            name: string;
+            full_name: string;
+            clone_url: string;
+            ssh_url: string;
+            private: boolean;
+            description: string | null;
+            updated_at: string;
+          }) => ({
+            name: repo.name,
+            fullName: repo.full_name,
+            cloneUrl: repo.clone_url,
+            sshUrl: repo.ssh_url,
+            private: repo.private,
+            description: repo.description,
+            updatedAt: repo.updated_at,
+          })
+        );
+
+        const linkHeader = response.headers.get('Link');
+        const hasMore = linkHeader?.includes('rel="next"') ?? false;
+
+        return { configured: true, repos, hasMore };
+      } catch (err) {
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: `Failed to fetch GitHub repos: ${(err as Error).message}`,
+        });
+      }
+    });
+
   type ListSessionsInput = {
     workspaceName: string;
     agentType?: 'claude-code' | 'opencode' | 'codex';
@@ -1119,6 +1213,9 @@ export function createRouter(ctx: RouterContext) {
     },
     models: {
       list: listModels,
+    },
+    github: {
+      listRepos: listGitHubRepos,
     },
     host: {
       info: getHostInfo,
