@@ -441,9 +441,7 @@ export class OpenCodeServerSession {
           console.error(
             `[opencode-server] No heartbeat received for ${timeSinceLastHeartbeat}ms, connection may be lost`
           );
-          this.streamError = new Error(
-            'Connection to OpenCode server lost. Please try again.'
-          );
+          this.streamError = new Error('Connection to OpenCode server lost. Please try again.');
           proc.kill();
           resolveDone!();
         }
