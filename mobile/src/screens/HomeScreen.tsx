@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, WorkspaceInfo, HOST_WORKSPACE_NAME, CreateWorkspaceRequest } from '../lib/api'
 import { useNetwork, parseNetworkError } from '../lib/network'
 import { useTheme } from '../contexts/ThemeContext'
+import { RepoSelector } from '../components/RepoSelector'
 
 function StatusDot({ status }: { status: WorkspaceInfo['status'] | 'host' }) {
   const colors = {
@@ -271,19 +272,11 @@ export function HomeScreen() {
                 autoFocus
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Repository (optional)</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: colors.surface, color: colors.text }]}
-                value={newRepo}
-                onChangeText={setNewRepo}
-                placeholder="https://github.com/user/repo"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-            </View>
+            <RepoSelector
+              value={newRepo}
+              onChange={setNewRepo}
+              placeholder="https://github.com/user/repo"
+            />
           </View>
         </KeyboardAvoidingView>
       </Modal>

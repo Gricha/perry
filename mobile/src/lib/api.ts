@@ -98,6 +98,16 @@ export interface RecentSession {
   lastAccessed: string
 }
 
+export interface GitHubRepo {
+  name: string
+  fullName: string
+  cloneUrl: string
+  sshUrl: string
+  private: boolean
+  description: string | null
+  updatedAt: string
+}
+
 const DEFAULT_PORT = 7391
 const STORAGE_KEY = 'perry_server_config'
 
@@ -196,6 +206,13 @@ function createClient() {
     models: {
       list: (input: { agentType: 'claude-code' | 'opencode'; workspaceName?: string }) => Promise<{ models: ModelInfo[] }>
     }
+    github: {
+      listRepos: (input: { search?: string; perPage?: number; page?: number }) => Promise<{
+        configured: boolean
+        repos: GitHubRepo[]
+        hasMore: boolean
+      }>
+    }
   }>(link)
 }
 
@@ -260,4 +277,6 @@ export const api = {
   updateAgents: (data: CodingAgents) => client.config.agents.update(data),
   listModels: (agentType: 'claude-code' | 'opencode', workspaceName?: string) =>
     client.models.list({ agentType, workspaceName }),
+  listGitHubRepos: (search?: string, perPage?: number, page?: number) =>
+    client.github.listRepos({ search, perPage, page }),
 }

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RepoSelector } from '@/components/RepoSelector'
 import { cn } from '@/lib/utils'
 
 function StatCard({ value, label, accent }: { value: number | string; label: string; accent?: boolean }) {
@@ -257,29 +258,22 @@ export function WorkspaceList() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="my-project"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="repo">Repository <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input
-                    id="repo"
-                    type="text"
-                    value={newRepo}
-                    onChange={(e) => setNewRepo(e.target.value)}
-                    placeholder="https://github.com/user/repo"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="my-project"
+                  autoFocus
+                />
               </div>
+              <RepoSelector
+                value={newRepo}
+                onChange={setNewRepo}
+                placeholder="https://github.com/user/repo"
+              />
               <div className="flex gap-2 pt-2">
                 <Button type="submit" disabled={createMutation.isPending || !newName.trim()}>
                   {createMutation.isPending ? 'Creating...' : 'Create Workspace'}
