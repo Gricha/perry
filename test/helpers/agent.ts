@@ -297,6 +297,17 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
 
   const api = createApiClient(baseUrl);
 
+  // Track workspaces created by this agent instance for cleanup
+  const createdWorkspaces: string[] = [];
+  const originalCreateWorkspace = api.createWorkspace.bind(api);
+  api.createWorkspace = async (data: CreateWorkspaceRequest) => {
+    const result = await originalCreateWorkspace(data);
+    if (result.status === 201) {
+      createdWorkspaces.push(data.name);
+    }
+    return result;
+  };
+
   return {
     port,
     baseUrl,
@@ -309,6 +320,28 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
     },
 
     async cleanup(): Promise<void> {
+      // Get all workspaces from this agent (includes CLI-created ones)
+      let allWorkspaces: string[] = [...createdWorkspaces];
+      try {
+        const workspaces = await api.listWorkspaces();
+        for (const ws of workspaces) {
+          if (!allWorkspaces.includes(ws.name)) {
+            allWorkspaces.push(ws.name);
+          }
+        }
+      } catch {
+        // Agent may already be down
+      }
+
+      // Delete workspaces through the API (cleanest approach)
+      for (const name of allWorkspaces) {
+        try {
+          await api.deleteWorkspace(name);
+        } catch {
+          // Workspace may already be deleted or agent may be down
+        }
+      }
+
       proc.kill('SIGTERM');
 
       await new Promise<void>((resolve) => {
@@ -316,8 +349,11 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
         setTimeout(resolve, 2000);
       });
 
-      await cleanupContainers('workspace-test-');
-      await cleanupVolumes('workspace-test-');
+      // Clean up only our own containers and volumes by specific names
+      for (const name of allWorkspaces) {
+        await cleanupContainers(`workspace-${name}`);
+        await cleanupVolumes(`workspace-${name}`);
+      }
 
       await fs.rm(configDir, { recursive: true, force: true });
     },
