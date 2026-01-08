@@ -595,37 +595,54 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
     }
   }, [connect])
 
-  const reloadMessages = useCallback(async () => {
-    if (!sessionId || !workspaceName) return
-    try {
-      const detail = await api.getSession(workspaceName, sessionId, agentType, MESSAGES_PER_PAGE, 0)
-      if (detail?.messages) {
-        const historicalMessages = parseMessages(detail.messages as SessionMessage[])
-        setMessages(historicalMessages)
-        setHasMoreMessages(detail.hasMore)
-        setMessageOffset(MESSAGES_PER_PAGE)
-        setTimeout(() => {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
-          }
-        }, 100)
-      }
-    } catch {}
-  }, [sessionId, workspaceName, agentType, parseMessages])
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const reconnectingRef = useRef(false)
+  const wasHiddenRef = useRef(false)
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'hidden') {
+        wasHiddenRef.current = true
+        return
+      }
+
+      if (document.visibilityState === 'visible' && wasHiddenRef.current && !reconnectingRef.current) {
+        wasHiddenRef.current = false
+
+        const socketDead = !wsRef.current ||
+          wsRef.current.readyState === WebSocket.CLOSED ||
+          wsRef.current.readyState === WebSocket.CLOSING
+
+        if (socketDead && sessionId) {
+          reconnectingRef.current = true
+          setIsReconnecting(true)
+
           wsRef.current?.close()
+
+          try {
+            const detail = await api.getSession(workspaceName, sessionId, agentType, MESSAGES_PER_PAGE, 0)
+            if (detail?.messages) {
+              const historicalMessages = parseMessages(detail.messages as SessionMessage[])
+              setMessages(historicalMessages)
+              setHasMoreMessages(detail.hasMore)
+              setMessageOffset(MESSAGES_PER_PAGE)
+              setTimeout(() => {
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+                }
+              }, 100)
+            }
+          } catch {}
+
           connect()
-          reloadMessages()
+          setIsReconnecting(false)
+          reconnectingRef.current = false
         }
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [connect, reloadMessages])
+  }, [sessionId, workspaceName, agentType, parseMessages, connect])
 
   useEffect(() => {
     onConnectionChange?.(isConnected)
@@ -739,7 +756,12 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
                 </SelectContent>
               </Select>
             )}
-            {isConnected ? (
+            {isReconnecting ? (
+              <span className="flex items-center gap-1 text-xs text-yellow-500">
+                <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                Reconnecting...
+              </span>
+            ) : isConnected ? (
               <span className="flex items-center gap-1 text-xs text-success">
                 <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                 Connected

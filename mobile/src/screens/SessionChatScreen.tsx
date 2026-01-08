@@ -315,32 +315,111 @@ export function SessionChatScreen({ route, navigation }: any) {
     }
   }, [])
 
-  const reloadMessages = useCallback(async () => {
-    if (!currentSessionId) return
-    try {
-      const fresh = await api.getSession(workspaceName, currentSessionId, agentType, MESSAGES_PER_PAGE, 0)
-      if (fresh?.messages) {
-        const converted = parseMessages(fresh.messages)
-        setMessages(converted)
-        setHasMoreMessages(fresh.hasMore || false)
-        setMessageOffset(fresh.messages.length)
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100)
-      }
-    } catch {}
-  }, [currentSessionId, workspaceName, agentType, parseMessages])
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const appStateRef = useRef(AppState.currentState)
+  const reconnectingRef = useRef(false)
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      const wasBackground = appStateRef.current?.match(/inactive|background/)
+      appStateRef.current = nextState
+
+      if (nextState === 'active' && wasBackground && !reconnectingRef.current) {
+        const socketDead = !wsRef.current ||
+          wsRef.current.readyState === WebSocket.CLOSED ||
+          wsRef.current.readyState === WebSocket.CLOSING
+
+        if (socketDead && currentSessionId) {
+          reconnectingRef.current = true
+          setIsReconnecting(true)
+
           wsRef.current?.close()
-          connect()
-          reloadMessages()
+
+          try {
+            const fresh = await api.getSession(workspaceName, currentSessionId, agentType, MESSAGES_PER_PAGE, 0)
+            if (fresh?.messages) {
+              const converted: ChatMessage[] = []
+              let currentParts: MessagePart[] = []
+              let idCounter = 0
+
+              const flush = () => {
+                if (currentParts.length > 0) {
+                  converted.push({
+                    role: 'assistant',
+                    content: currentParts.filter(p => p.type === 'text').map(p => p.content).join(''),
+                    id: `reload-${idCounter++}`,
+                    parts: [...currentParts],
+                  })
+                  currentParts = []
+                }
+              }
+
+              for (const m of fresh.messages) {
+                if (m.type === 'user' && m.content) {
+                  flush()
+                  converted.push({ role: 'user', content: m.content, id: `reload-${idCounter++}` })
+                } else if (m.type === 'assistant' && m.content) {
+                  currentParts.push({ type: 'text', content: m.content })
+                } else if (m.type === 'tool_use') {
+                  currentParts.push({ type: 'tool_use', content: m.toolInput || '', toolName: m.toolName, toolId: m.toolId })
+                } else if (m.type === 'tool_result') {
+                  currentParts.push({ type: 'tool_result', content: m.content || '', toolId: m.toolId })
+                }
+              }
+              flush()
+
+              setMessages(converted)
+              setHasMoreMessages(fresh.hasMore || false)
+              setMessageOffset(fresh.messages.length)
+              setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100)
+            }
+          } catch {}
+
+          const url = getChatUrl(workspaceName, agentType as AgentType)
+          const ws = new WebSocket(url)
+          wsRef.current = ws
+          ws.onopen = () => setConnected(true)
+          ws.onclose = () => { setConnected(false); setIsStreaming(false) }
+          ws.onerror = () => { setConnected(false); setIsStreaming(false) }
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data)
+              if (msg.type === 'connected') return
+              if (msg.type === 'system') {
+                const match = msg.content?.match(/Session (\S+)/)
+                if (match) setCurrentSessionId(match[1])
+                return
+              }
+              if (msg.type === 'done') {
+                const parts = [...streamingPartsRef.current]
+                if (parts.length > 0) {
+                  setMessages((prev) => [...prev, {
+                    role: 'assistant',
+                    content: parts.filter(p => p.type === 'text').map(p => p.content).join(''),
+                    id: `msg-done-${Date.now()}`,
+                    parts,
+                  }])
+                }
+                streamingPartsRef.current = []
+                setStreamingParts([])
+                setIsStreaming(false)
+                return
+              }
+              if (msg.type === 'error') {
+                setMessages((prev) => [...prev, { role: 'system', content: `Error: ${msg.content}`, id: `msg-err-${Date.now()}` }])
+                setIsStreaming(false)
+                return
+              }
+            } catch {}
+          }
+
+          setIsReconnecting(false)
+          reconnectingRef.current = false
         }
       }
     })
     return () => subscription.remove()
-  }, [connect, reloadMessages])
+  }, [currentSessionId, workspaceName, agentType])
 
   const generateId = useCallback(() => {
     messageIdCounter.current += 1
@@ -670,7 +749,7 @@ export function SessionChatScreen({ route, navigation }: any) {
             <Text style={[styles.headerTitle, workspaceName === HOST_WORKSPACE_NAME && styles.hostTitle]}>
               {workspaceName === HOST_WORKSPACE_NAME ? 'Host' : workspaceName}
             </Text>
-            <View style={[styles.connectionDot, { backgroundColor: connected ? '#34c759' : '#ff3b30' }]} />
+            <View style={[styles.connectionDot, { backgroundColor: isReconnecting ? '#f59e0b' : connected ? '#34c759' : '#ff3b30' }]} />
           </View>
           <Text style={styles.headerSubtitle}>{agentLabels[agentType as AgentType]}</Text>
         </View>
@@ -724,7 +803,7 @@ export function SessionChatScreen({ route, navigation }: any) {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder={connected ? 'Message...' : 'Connecting...'}
+          placeholder={isReconnecting ? 'Reconnecting...' : connected ? 'Message...' : 'Connecting...'}
           placeholderTextColor="#636366"
           multiline
           maxLength={4000}
