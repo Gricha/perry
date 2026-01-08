@@ -7,6 +7,7 @@ export interface WorkspaceInfo {
   ports: {
     ssh: number;
     http?: number;
+    forwards?: number[];
   };
   lastUsed?: string;
 }

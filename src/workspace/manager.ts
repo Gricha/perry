@@ -819,4 +819,23 @@ export class WorkspaceManager {
 
     await this.setupWorkspaceCredentials(containerName, name);
   }
+
+  async setPortForwards(name: string, forwards: number[]): Promise<Workspace> {
+    const workspace = await this.state.getWorkspace(name);
+    if (!workspace) {
+      throw new Error(`Workspace '${name}' not found`);
+    }
+
+    workspace.ports.forwards = forwards;
+    await this.state.setWorkspace(workspace);
+    return workspace;
+  }
+
+  async getPortForwards(name: string): Promise<number[]> {
+    const workspace = await this.state.getWorkspace(name);
+    if (!workspace) {
+      throw new Error(`Workspace '${name}' not found`);
+    }
+    return workspace.ports.forwards || [];
+  }
 }

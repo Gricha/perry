@@ -59,6 +59,8 @@ const client = createORPCClient<{
     sync: (input: { name: string }) => Promise<{ success: boolean }>
     syncAll: () => Promise<{ synced: number; failed: number; results: { name: string; success: boolean; error?: string }[] }>
     touch: (input: { name: string }) => Promise<WorkspaceInfo>
+    getPortForwards: (input: { name: string }) => Promise<{ forwards: number[] }>
+    setPortForwards: (input: { name: string; forwards: number[] }) => Promise<WorkspaceInfo>
   }
   sessions: {
     list: (input: {
@@ -116,6 +118,8 @@ export const api = {
   syncWorkspace: (name: string) => client.workspaces.sync({ name }),
   syncAllWorkspaces: () => client.workspaces.syncAll(),
   touchWorkspace: (name: string) => client.workspaces.touch({ name }),
+  getPortForwards: (name: string) => client.workspaces.getPortForwards({ name }),
+  setPortForwards: (name: string, forwards: number[]) => client.workspaces.setPortForwards({ name, forwards }),
   listSessions: (workspaceName: string, agentType?: AgentType, limit?: number, offset?: number) =>
     client.sessions.list({ workspaceName, agentType, limit, offset }),
   getRecentSessions: (limit?: number) => client.sessions.getRecent({ limit }),

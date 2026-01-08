@@ -29,6 +29,7 @@ With [Tailscale Serve](https://tailscale.com/kb/1312/serve) configured, Perry au
 - **Manage workspaces** - Create, start, stop, and delete workspaces
 - **Web terminal** - Full terminal access to any workspace
 - **AI sessions** - View and resume Claude Code, OpenCode, and Codex sessions
+- **Port forwarding** - Configure ports for each workspace (used by `perry proxy`)
 - **Settings** - Configure environment variables, SSH keys, file sync, and agent credentials
 
 ### Host Access

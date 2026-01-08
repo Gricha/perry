@@ -58,6 +58,7 @@ export type WorkspaceStatus = 'running' | 'stopped' | 'creating' | 'error';
 export interface WorkspacePorts {
   ssh: number;
   http?: number;
+  forwards?: number[];
 }
 
 export interface WorkspaceInfo {

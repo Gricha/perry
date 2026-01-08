@@ -157,15 +157,30 @@ perry sync myproject
 
 Use after updating configuration to apply changes without restarting.
 
+### `perry ports <name> [ports...]`
+
+Configure ports to forward for a workspace. Once configured, `perry proxy` will use these ports automatically.
+
+```bash
+perry ports myproject                # Show configured ports
+perry ports myproject 3000 5173      # Configure ports 3000 and 5173
+perry ports myproject 3000 5173 8080 # Update to new set of ports
+```
+
+Ports are stored per-workspace and persist across restarts. You can also configure ports via the Web UI in the workspace settings tab.
+
 ### `perry proxy <name> [ports...]`
 
 Forward ports from workspace to local machine.
 
 ```bash
-perry proxy myproject 3000           # Forward port 3000
+perry proxy myproject                # Use configured ports (from `perry ports`)
+perry proxy myproject 3000           # Forward port 3000 (overrides config)
 perry proxy myproject 8080:3000      # Local 8080 -> remote 3000
 perry proxy myproject 3000 5173      # Multiple ports
 ```
+
+If no ports are specified and none are configured, shows usage help.
 
 ## Build Commands
 
