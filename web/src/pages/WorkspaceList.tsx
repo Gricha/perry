@@ -81,54 +81,17 @@ function WorkspaceRow({ workspace, onClick }: { workspace: WorkspaceInfo; onClic
   )
 }
 
-function HostSection({ hostInfo, onNavigate, onToggle, isToggling }: {
+function HostSection({ hostInfo, onNavigate }: {
   hostInfo: HostInfo
   onNavigate: () => void
-  onToggle: () => void
-  isToggling: boolean
 }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+  if (!hostInfo.enabled) {
+    return (
+      <div className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
           Host Machine
         </h2>
-        {hostInfo.enabled && (
-          <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-3 w-3" />
-            Direct access enabled
-          </span>
-        )}
-      </div>
-
-      <div className={cn(
-        "rounded-lg border overflow-hidden transition-colors",
-        hostInfo.enabled
-          ? "border-amber-500/50 bg-amber-500/5"
-          : "border-border/50 bg-card/50"
-      )}>
-        {hostInfo.enabled ? (
-          <button
-            onClick={onNavigate}
-            className="w-full flex items-center gap-4 px-4 py-4 hover:bg-accent/50 transition-colors text-left group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <Monitor className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground">{hostInfo.hostname}</span>
-                <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-medium">
-                  Active
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {hostInfo.username}@{hostInfo.hostname} &middot; {hostInfo.homeDir}
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-          </button>
-        ) : (
+        <div className="rounded-lg border border-border/50 bg-card/50 overflow-hidden">
           <div className="px-4 py-4">
             <div className="flex items-start gap-4">
               <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0">
@@ -137,28 +100,54 @@ function HostSection({ hostInfo, onNavigate, onToggle, isToggling }: {
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-foreground">Host Access Disabled</div>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Enable to run agents and terminals directly on {hostInfo.hostname}
+                  Run with <code className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs">--host-access</code> to enable direct access to {hostInfo.hostname}
                 </p>
               </div>
             </div>
           </div>
-        )}
-        <div className={cn(
-          "px-4 py-3 border-t flex items-center justify-between",
-          hostInfo.enabled ? "border-amber-500/30 bg-amber-500/5" : "border-border/50 bg-muted/20"
-        )}>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          Host Machine
+        </h2>
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3" />
+          Direct access enabled
+        </span>
+      </div>
+
+      <div className="rounded-lg border border-amber-500/50 bg-amber-500/5 overflow-hidden">
+        <button
+          onClick={onNavigate}
+          className="w-full flex items-center gap-4 px-4 py-4 hover:bg-accent/50 transition-colors text-left group"
+        >
+          <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <Monitor className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">{hostInfo.hostname}</span>
+              <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-medium">
+                Active
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {hostInfo.username}@{hostInfo.hostname} &middot; {hostInfo.homeDir}
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+        </button>
+        <div className="px-4 py-3 border-t border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <AlertTriangle className="h-3.5 w-3.5" />
             <span>Commands run directly on your machine without isolation</span>
           </div>
-          <Button
-            variant={hostInfo.enabled ? "outline" : "default"}
-            size="sm"
-            onClick={onToggle}
-            disabled={isToggling}
-          >
-            {isToggling ? 'Updating...' : hostInfo.enabled ? 'Disable' : 'Enable'}
-          </Button>
         </div>
       </div>
     </div>
@@ -180,13 +169,6 @@ export function WorkspaceList() {
   const { data: hostInfo } = useQuery({
     queryKey: ['hostInfo'],
     queryFn: api.getHostInfo,
-  })
-
-  const hostToggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => api.updateHostAccess(enabled),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hostInfo'] })
-    },
   })
 
   const createMutation = useMutation({
@@ -263,8 +245,6 @@ export function WorkspaceList() {
         <HostSection
           hostInfo={hostInfo}
           onNavigate={() => navigate(`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`)}
-          onToggle={() => hostToggleMutation.mutate(!hostInfo.enabled)}
-          isToggling={hostToggleMutation.isPending}
         />
       )}
 

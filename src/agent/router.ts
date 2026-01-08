@@ -1016,21 +1016,6 @@ export function createRouter(ctx: RouterContext) {
     };
   });
 
-  const updateHostAccess = os
-    .input(z.object({ enabled: z.boolean() }))
-    .handler(async ({ input }) => {
-      const currentConfig = ctx.config.get();
-      const newConfig = { ...currentConfig, allowHostAccess: input.enabled };
-      ctx.config.set(newConfig);
-      await saveAgentConfig(newConfig, ctx.configDir);
-      return {
-        enabled: input.enabled,
-        hostname: os_module.hostname(),
-        username: os_module.userInfo().username,
-        homeDir: os_module.homedir(),
-      };
-    });
-
   const listModels = os
     .input(
       z.object({
@@ -1122,7 +1107,6 @@ export function createRouter(ctx: RouterContext) {
     },
     host: {
       info: getHostInfo,
-      updateAccess: updateHostAccess,
     },
     info: getInfo,
     config: {

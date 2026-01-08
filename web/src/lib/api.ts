@@ -146,7 +146,6 @@ export const api = {
   getAgents: () => client.config.agents.get(),
   updateAgents: (data: CodingAgents) => client.config.agents.update(data),
   getHostInfo: () => client.host.info(),
-  updateHostAccess: (enabled: boolean) => client.host.updateAccess({ enabled }),
   getSSHSettings: () => client.config.ssh.get(),
   updateSSHSettings: (data: SSHSettings) => client.config.ssh.update(data),
   listSSHKeys: () => client.config.ssh.listKeys(),
