@@ -278,26 +278,24 @@ export function WorkspaceList() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="my-project"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="repo">Repository <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <RepoSelector
-                    value={newRepo}
-                    onChange={setNewRepo}
-                    placeholder="https://github.com/user/repo"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="my-project"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Repository <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <RepoSelector
+                  value={newRepo}
+                  onChange={setNewRepo}
+                  placeholder="https://github.com/user/repo"
+                />
               </div>
               <div className="flex gap-2 pt-2">
                 <Button type="submit" disabled={createMutation.isPending || !newName.trim()}>

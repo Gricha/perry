@@ -272,14 +272,11 @@ export function HomeScreen() {
                 autoFocus
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Repository (optional)</Text>
-              <RepoSelector
-                value={newRepo}
-                onChange={setNewRepo}
-                placeholder="https://github.com/user/repo"
-              />
-            </View>
+            <RepoSelector
+              value={newRepo}
+              onChange={setNewRepo}
+              placeholder="https://github.com/user/repo"
+            />
           </View>
         </KeyboardAvoidingView>
       </Modal>

@@ -67,23 +67,37 @@ export function RepoSelector({
   }
 
   return (
-    <View>
-      <TouchableOpacity
-        style={[styles.selector, { backgroundColor: colors.surface }]}
-        onPress={() => setIsOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[
-            styles.selectorText,
-            { color: value ? colors.text : colors.textMuted },
-          ]}
-          numberOfLines={1}
+    <View style={styles.container}>
+      <View style={styles.fieldGroup}>
+        <View style={styles.labelRow}>
+          <Text style={[styles.githubIcon, { color: colors.text }]}>GH</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>Search your repositories</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.searchButton, { backgroundColor: colors.surface }]}
+          onPress={() => setIsOpen(true)}
+          activeOpacity={0.7}
         >
-          {value || placeholder}
-        </Text>
-        <Text style={[styles.chevron, { color: colors.textMuted }]}>▼</Text>
-      </TouchableOpacity>
+          <Text style={[styles.searchIcon, { color: colors.textMuted }]}>🔍</Text>
+          <Text style={[styles.searchPlaceholder, { color: colors.textMuted }]}>
+            Search repositories...
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.fieldGroup}>
+        <Text style={[styles.label, { color: colors.textMuted }]}>Or enter URL directly</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+      </View>
 
       <Modal
         visible={isOpen}
@@ -111,23 +125,16 @@ export function RepoSelector({
               autoCorrect={false}
               autoFocus
             />
+            {isLoading && (
+              <ActivityIndicator
+                size="small"
+                color={colors.accent}
+                style={styles.searchLoader}
+              />
+            )}
           </View>
 
-          <View style={[styles.manualEntry, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.manualLabel, { color: colors.textMuted }]}>Or enter URL manually:</Text>
-            <TextInput
-              style={[styles.manualInput, { backgroundColor: colors.surface, color: colors.text }]}
-              value={value}
-              onChangeText={onChange}
-              placeholder={placeholder}
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-          </View>
-
-          {isLoading ? (
+          {isLoading && !search ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.accent} />
             </View>
@@ -171,24 +178,44 @@ export function RepoSelector({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    gap: 16,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  githubIcon: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  label: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   input: {
     borderRadius: 10,
     padding: 14,
     fontSize: 17,
   },
-  selector: {
+  searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 10,
     padding: 14,
+    gap: 8,
   },
-  selectorText: {
-    flex: 1,
+  searchIcon: {
+    fontSize: 16,
+  },
+  searchPlaceholder: {
     fontSize: 17,
-  },
-  chevron: {
-    fontSize: 12,
-    marginLeft: 8,
   },
   modalContainer: {
     flex: 1,
@@ -214,26 +241,18 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: 16,
     borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   searchInput: {
+    flex: 1,
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
   },
-  manualEntry: {
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  manualLabel: {
-    fontSize: 13,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  manualInput: {
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
+  searchLoader: {
+    position: 'absolute',
+    right: 28,
   },
   loadingContainer: {
     flex: 1,
