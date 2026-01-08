@@ -89,7 +89,7 @@ export function RepoSelector({ value, onChange, placeholder = 'https://github.co
         <button
           type="button"
           onClick={switchToGithub}
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          className="text-xs text-primary hover:underline flex items-center gap-1.5"
         >
           <Github className="h-3 w-3" />
           or select from GitHub
@@ -172,7 +172,7 @@ export function RepoSelector({ value, onChange, placeholder = 'https://github.co
       <button
         type="button"
         onClick={switchToManual}
-        className="text-xs text-muted-foreground hover:text-foreground"
+        className="text-xs text-primary hover:underline"
       >
         or type in any repository URL
       </button>

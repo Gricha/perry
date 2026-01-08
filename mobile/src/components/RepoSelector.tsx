@@ -96,8 +96,8 @@ export function RepoSelector({
           keyboardType="url"
         />
         <TouchableOpacity onPress={switchToGithub} style={styles.switchButton}>
-          <Text style={[styles.githubIcon, { color: colors.textMuted }]}>GH</Text>
-          <Text style={[styles.switchText, { color: colors.textMuted }]}>or select from GitHub</Text>
+          <Text style={[styles.githubIcon, { color: colors.accent }]}>GH</Text>
+          <Text style={[styles.switchText, { color: colors.accent }]}>or select from GitHub</Text>
         </TouchableOpacity>
       </View>
     )
@@ -121,7 +121,7 @@ export function RepoSelector({
       </TouchableOpacity>
 
       <TouchableOpacity onPress={switchToManual} style={styles.switchButton}>
-        <Text style={[styles.switchText, { color: colors.textMuted }]}>or type in any repository URL</Text>
+        <Text style={[styles.switchText, { color: colors.accent }]}>or type in any repository URL</Text>
       </TouchableOpacity>
 
       <Modal
