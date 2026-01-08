@@ -49,15 +49,18 @@ export interface TestAgent {
   port: number;
   baseUrl: string;
   configDir: string;
+  testId: string;
   api: ApiClient;
   process: ChildProcess;
   exec(workspaceName: string, command: string): Promise<ExecResult>;
   cleanup(): Promise<void>;
   getOutput(): string;
+  generateWorkspaceName(): string;
 }
 
 interface TestAgentOptions {
   config?: Partial<AgentConfig>;
+  testId?: string;
 }
 
 export async function getRandomPort(): Promise<number> {
@@ -302,6 +305,9 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
   const port = options.config?.port || (await getRandomPort());
   const configDir = await createTempConfig({ ...options.config, port });
   const baseUrl = `http://127.0.0.1:${port}`;
+  // Generate a unique testId for this agent instance to scope cleanup
+  const testId =
+    options.testId || `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
   const agentPath = path.join(process.cwd(), 'dist/agent/index.js');
 
@@ -330,10 +336,22 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
 
   const api = createApiClient(baseUrl);
 
+  // Track workspaces created by this agent instance for cleanup
+  const createdWorkspaces: string[] = [];
+  const originalCreateWorkspace = api.createWorkspace.bind(api);
+  api.createWorkspace = async (data: CreateWorkspaceRequest) => {
+    const result = await originalCreateWorkspace(data);
+    if (result.status === 201) {
+      createdWorkspaces.push(data.name);
+    }
+    return result;
+  };
+
   return {
     port,
     baseUrl,
     configDir,
+    testId,
     api,
     process: proc,
 
@@ -341,7 +359,34 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
       return execInWorkspace(`workspace-${workspaceName}`, command);
     },
 
+    generateWorkspaceName(): string {
+      // Workspace names include testId prefix for scoped cleanup
+      return `${testId}-${Math.random().toString(36).slice(2, 8)}`;
+    },
+
     async cleanup(): Promise<void> {
+      // Get all workspaces from this agent (includes CLI-created ones)
+      let allWorkspaces: string[] = [...createdWorkspaces];
+      try {
+        const workspaces = await api.listWorkspaces();
+        for (const ws of workspaces) {
+          if (!allWorkspaces.includes(ws.name)) {
+            allWorkspaces.push(ws.name);
+          }
+        }
+      } catch {
+        // Agent may already be down
+      }
+
+      // Delete workspaces through the API (cleanest approach)
+      for (const name of allWorkspaces) {
+        try {
+          await api.deleteWorkspace(name);
+        } catch {
+          // Workspace may already be deleted or agent may be down
+        }
+      }
+
       proc.kill('SIGTERM');
 
       await new Promise<void>((resolve) => {
@@ -349,8 +394,9 @@ export async function startTestAgent(options: TestAgentOptions = {}): Promise<Te
         setTimeout(resolve, 2000);
       });
 
-      await cleanupContainers('workspace-test-');
-      await cleanupVolumes('workspace-test-');
+      // Clean up containers/volumes matching this agent's testId prefix
+      await cleanupContainers(`workspace-${testId}-`);
+      await cleanupVolumes(`workspace-${testId}-`);
 
       await fs.rm(configDir, { recursive: true, force: true });
     },
