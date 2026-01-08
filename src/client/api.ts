@@ -119,6 +119,23 @@ export class ApiClient {
     }
   }
 
+  async getPortForwards(name: string): Promise<number[]> {
+    try {
+      const result = await this.client.workspaces.getPortForwards({ name });
+      return result.forwards;
+    } catch (err) {
+      throw this.wrapError(err);
+    }
+  }
+
+  async setPortForwards(name: string, forwards: number[]): Promise<WorkspaceInfo> {
+    try {
+      return await this.client.workspaces.setPortForwards({ name, forwards });
+    } catch (err) {
+      throw this.wrapError(err);
+    }
+  }
+
   getTerminalUrl(name: string): string {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws');
     return `${wsUrl}/rpc/terminal/${encodeURIComponent(name)}`;

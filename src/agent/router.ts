@@ -43,6 +43,7 @@ const WorkspaceStatusSchema = z.enum(['running', 'stopped', 'creating', 'error']
 const WorkspacePortsSchema = z.object({
   ssh: z.number(),
   http: z.number().optional(),
+  forwards: z.array(z.number()).optional(),
 });
 
 const WorkspaceInfoSchema = z.object({
@@ -257,6 +258,29 @@ export function createRouter(ctx: RouterContext) {
         throw new ORPCError('NOT_FOUND', { message: 'Workspace not found' });
       }
       return workspace;
+    });
+
+  const getPortForwards = os
+    .input(z.object({ name: z.string() }))
+    .output(z.object({ forwards: z.array(z.number()) }))
+    .handler(async ({ input }) => {
+      try {
+        const forwards = await ctx.workspaces.getPortForwards(input.name);
+        return { forwards };
+      } catch (err) {
+        mapErrorToORPC(err, 'Failed to get port forwards');
+      }
+    });
+
+  const setPortForwards = os
+    .input(z.object({ name: z.string(), forwards: z.array(z.number()) }))
+    .output(WorkspaceInfoSchema)
+    .handler(async ({ input }) => {
+      try {
+        return await ctx.workspaces.setPortForwards(input.name, input.forwards);
+      } catch (err) {
+        mapErrorToORPC(err, 'Failed to set port forwards');
+      }
     });
 
   const getInfo = os.handler(async () => {
@@ -1063,6 +1087,8 @@ export function createRouter(ctx: RouterContext) {
       sync: syncWorkspace,
       syncAll: syncAllWorkspaces,
       touch: touchWorkspace,
+      getPortForwards: getPortForwards,
+      setPortForwards: setPortForwards,
     },
     sessions: {
       list: listSessions,

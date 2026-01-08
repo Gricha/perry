@@ -316,15 +316,21 @@ program
         process.exit(1);
       }
 
+      let effectivePorts = ports;
       if (ports.length === 0) {
-        console.log(`Workspace '${name}' is running.`);
-        console.log('');
-        console.log('Usage: perry proxy <name> <port> [<port>...]');
-        console.log('  Examples:');
-        console.log('    perry proxy alpha 3000         # Forward port 3000');
-        console.log('    perry proxy alpha 8080:3000    # Forward local 8080 to remote 3000');
-        console.log('    perry proxy alpha 3000 5173    # Forward multiple ports');
-        return;
+        const configuredForwards = workspace.ports.forwards || [];
+        if (configuredForwards.length === 0) {
+          console.log(`No ports configured for workspace '${name}'.`);
+          console.log('');
+          console.log('Configure ports with: perry ports <name> <port> [<port>...]');
+          console.log('  Example: perry ports ' + name + ' 3000 5173');
+          console.log('');
+          console.log('Or specify ports directly: perry proxy <name> <port> [<port>...]');
+          console.log('  Example: perry proxy ' + name + ' 3000 5173');
+          return;
+        }
+        effectivePorts = configuredForwards.map((p) => String(p));
+        console.log(`Using configured ports: ${configuredForwards.join(', ')}`);
       }
 
       if (isLocalWorker(worker)) {
@@ -335,7 +341,7 @@ program
           process.exit(1);
         }
 
-        const forwards = ports.map(parseDockerPortForward);
+        const forwards = effectivePorts.map(parseDockerPortForward);
         console.log(`Forwarding ports: ${formatDockerPortForwards(forwards)}`);
         console.log(`Container IP: ${containerIp}`);
         console.log('Press Ctrl+C to stop.');
@@ -362,7 +368,7 @@ program
 
         await new Promise(() => {});
       } else {
-        const forwards = ports.map(parsePortForward);
+        const forwards = effectivePorts.map(parsePortForward);
 
         console.log(`Forwarding ports: ${formatPortForwards(forwards)}`);
         console.log('Press Ctrl+C to stop.');
@@ -383,6 +389,50 @@ program
           },
         });
       }
+    } catch (err) {
+      handleError(err);
+    }
+  });
+
+program
+  .command('ports <name> [ports...]')
+  .description('Configure ports to forward for a workspace')
+  .action(async (name, ports: string[]) => {
+    try {
+      const client = await getClient();
+
+      const workspace = await client.getWorkspace(name);
+      if (!workspace) {
+        console.error(`Workspace '${name}' not found`);
+        process.exit(1);
+      }
+
+      if (ports.length === 0) {
+        const currentPorts = workspace.ports.forwards || [];
+        if (currentPorts.length === 0) {
+          console.log(`No ports configured for workspace '${name}'.`);
+          console.log('');
+          console.log('Usage: perry ports <name> <port> [<port>...]');
+          console.log('  Example: perry ports ' + name + ' 3000 5173 8080');
+        } else {
+          console.log(`Ports configured for '${name}': ${currentPorts.join(', ')}`);
+        }
+        return;
+      }
+
+      const portNumbers = ports.map((p) => {
+        const num = parseInt(p, 10);
+        if (isNaN(num) || num < 1 || num > 65535) {
+          console.error(`Invalid port number: ${p}`);
+          process.exit(1);
+        }
+        return num;
+      });
+
+      await client.setPortForwards(name, portNumbers);
+      console.log(`Ports configured for '${name}': ${portNumbers.join(', ')}`);
+      console.log('');
+      console.log(`Run 'perry proxy ${name}' to start forwarding.`);
     } catch (err) {
       handleError(err);
     }

@@ -144,6 +144,114 @@ function CopyableSessionId({ sessionId }: { sessionId: string }) {
   )
 }
 
+function PortForwardsCard({ workspaceName, currentPorts }: { workspaceName: string; currentPorts: number[] }) {
+  const [ports, setPorts] = useState<number[]>(currentPorts)
+  const [newPort, setNewPort] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    setPorts(currentPorts)
+  }, [currentPorts])
+
+  const mutation = useMutation({
+    mutationFn: (newPorts: number[]) => api.setPortForwards(workspaceName, newPorts),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspaceName] })
+      setError(null)
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
+  const handleAddPort = () => {
+    const portNum = parseInt(newPort, 10)
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      setError('Invalid port number (1-65535)')
+      return
+    }
+    if (ports.includes(portNum)) {
+      setError('Port already configured')
+      return
+    }
+    const updated = [...ports, portNum].sort((a, b) => a - b)
+    setPorts(updated)
+    setNewPort('')
+    setError(null)
+    mutation.mutate(updated)
+  }
+
+  const handleRemovePort = (port: number) => {
+    const updated = ports.filter(p => p !== port)
+    setPorts(updated)
+    mutation.mutate(updated)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAddPort()
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Hash className="h-4 w-4 text-muted-foreground" />
+          Port Forwarding
+        </CardTitle>
+        <CardDescription>
+          Configure ports to forward when running <code className="text-xs bg-muted px-1 py-0.5 rounded">perry proxy {workspaceName}</code>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Port number (e.g. 3000)"
+            value={newPort}
+            onChange={(e) => setNewPort(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="flex-1"
+            min={1}
+            max={65535}
+          />
+          <Button onClick={handleAddPort} disabled={mutation.isPending || !newPort}>
+            Add
+          </Button>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {ports.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {ports.map((port) => (
+              <Badge key={port} variant="secondary" className="text-sm py-1 px-3 gap-2">
+                {port}
+                <button
+                  onClick={() => handleRemovePort(port)}
+                  className="hover:text-destructive transition-colors"
+                  title="Remove port"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No ports configured. Add ports above to use with <code className="text-xs bg-muted px-1 py-0.5 rounded">perry proxy</code>.</p>
+        )}
+        {mutation.isPending && (
+          <p className="text-sm text-muted-foreground flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Saving...
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function SessionListItem({
   session,
   onClick,
@@ -826,6 +934,8 @@ export function WorkspaceDetail() {
                   )}
                 </CardContent>
               </Card>
+
+              <PortForwardsCard workspaceName={name!} currentPorts={workspace.ports.forwards || []} />
 
               <Card className="border-destructive/30">
                 <CardHeader className="pb-3">
