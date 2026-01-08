@@ -437,8 +437,15 @@ configCmd
     for (const [dest, src] of Object.entries(config.credentials.files)) {
       console.log(`    - ${dest} <- ${src}`);
     }
-    if (config.scripts.post_start) {
-      console.log(`  Post-start Script: ${config.scripts.post_start}`);
+    const scripts = config.scripts.post_start;
+    if (scripts && scripts.length > 0) {
+      console.log(`  Post-start Scripts: ${scripts.length}`);
+      for (const script of scripts) {
+        console.log(`    - ${script}`);
+      }
+    }
+    if (config.scripts.fail_on_error) {
+      console.log(`  Scripts Fail on Error: enabled`);
     }
   });
 

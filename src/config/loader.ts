@@ -19,7 +19,10 @@ export function createDefaultAgentConfig(): AgentConfig {
       env: {},
       files: {},
     },
-    scripts: {},
+    scripts: {
+      post_start: ['~/.perry/userscripts'],
+      fail_on_error: false,
+    },
     agents: {},
     allowHostAccess: true,
     ssh: {
@@ -31,6 +34,19 @@ export function createDefaultAgentConfig(): AgentConfig {
       workspaces: {},
     },
   };
+}
+
+function migratePostStart(value: unknown): string[] {
+  if (!value) {
+    return ['~/.perry/userscripts'];
+  }
+  if (typeof value === 'string') {
+    return [value, '~/.perry/userscripts'];
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value : ['~/.perry/userscripts'];
+  }
+  return ['~/.perry/userscripts'];
 }
 
 export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> {
@@ -46,7 +62,10 @@ export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> 
         env: config.credentials?.env || {},
         files: config.credentials?.files || {},
       },
-      scripts: config.scripts || {},
+      scripts: {
+        post_start: migratePostStart(config.scripts?.post_start),
+        fail_on_error: config.scripts?.fail_on_error ?? false,
+      },
       agents: config.agents || {},
       allowHostAccess: config.allowHostAccess ?? true,
       ssh: {

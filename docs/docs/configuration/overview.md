@@ -50,7 +50,11 @@ Location: `~/.config/perry/config.json`
     "workspaces": {}
   },
   "scripts": {
-    "post_start": "~/.config/perry/scripts/post-start.sh"
+    "post_start": [
+      "~/.perry/userscripts",
+      "~/scripts/setup.sh"
+    ],
+    "fail_on_error": false
   },
   "allowHostAccess": true
 }
@@ -103,6 +107,7 @@ perry config worker myserver.tail1234.ts.net
 
 - [Environment Variables](./environment.md) - Inject env vars into workspaces
 - [Files](./files.md) - Copy files into workspaces
+- [Scripts](./scripts.md) - Run scripts after workspace starts
 - [GitHub](./github.md) - GitHub token and SSH key setup
 - [AI Agents](./ai-agents.md) - Claude Code, OpenCode, Codex CLI
 - [Tailscale](./tailscale.md) - Remote access via Tailscale
