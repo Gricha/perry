@@ -38,6 +38,10 @@ const SKIP_NAMES = new Set([
   'onError',
   'onClose',
   'onOpen',
+  // Cross-platform duplicates (src/ vs mobile/ can't share code)
+  'formatUptime',
+  // Different signature/purpose variants
+  'runCommand',
 ])
 
 // Minimum name length to avoid flagging very short/generic names
