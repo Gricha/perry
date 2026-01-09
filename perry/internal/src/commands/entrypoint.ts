@@ -1,7 +1,7 @@
 import { addSshKeys } from "./add-ssh-key";
-import { runInit } from "./init";
 import { syncUserWithHost } from "./sync-user";
 import { ensureDockerd, monitorServices, startSshd, tailDockerdLogs, waitForDocker } from "../lib/services";
+import { runCommand } from "../lib/process";
 
 export const runEntrypoint = async () => {
   console.log("[entrypoint] Syncing user with host...");
@@ -19,9 +19,11 @@ export const runEntrypoint = async () => {
     process.exit(1);
     return;
   }
-  console.log("[entrypoint] Running workspace initialization...");
+  console.log("[entrypoint] Running workspace initialization as workspace user...");
   try {
-    await runInit();
+    await runCommand("sudo", ["-u", "workspace", "-E", "/usr/local/bin/workspace-internal", "init"], {
+      env: process.env,
+    });
   } catch (error) {
     console.log(`[entrypoint] Initialization failed (non-fatal): ${(error as Error).message}`);
     console.log("[entrypoint] SSH will still start - connect to debug the issue");
