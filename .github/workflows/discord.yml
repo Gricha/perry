@@ -19,6 +19,7 @@ jobs:
           {
             "embeds": [{
               "title": "Perry ${{ github.event.release.tag_name }}",
+              "description": "Run \`perry update\` to upgrade",
               "url": "${{ github.event.release.html_url }}",
               "color": 5025616
             }]
