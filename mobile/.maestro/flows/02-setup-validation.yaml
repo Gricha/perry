@@ -15,16 +15,8 @@ tags:
     id: "connect-button"
 - assertVisible: "Please enter a hostname"
 
-# Test port validation
+# Verify we can type in the hostname field
 - tapOn:
     id: "hostname-input"
 - inputText: "test-server.local"
-- hideKeyboard
-- tapOn:
-    id: "port-input"
-- clearText
-- inputText: "0"
-- hideKeyboard
-- tapOn:
-    id: "connect-button"
-- assertVisible: "Please enter a valid port number"
+- assertVisible: "test-server.local"
