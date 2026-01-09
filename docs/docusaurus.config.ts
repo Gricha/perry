@@ -73,6 +73,12 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          href: 'https://discord.gg/s2KX8kTvGX',
+          position: 'right',
+          className: 'header-discord-link',
+          'aria-label': 'Discord server',
+        },
+        {
           href: 'https://github.com/gricha/perry',
           position: 'right',
           className: 'header-github-link',
@@ -101,8 +107,12 @@ const config: Config = {
           ],
         },
         {
-          title: 'Resources',
+          title: 'Community',
           items: [
+            {
+              label: 'Discord',
+              href: 'https://discord.gg/s2KX8kTvGX',
+            },
             {
               label: 'GitHub',
               href: 'https://github.com/gricha/perry',
