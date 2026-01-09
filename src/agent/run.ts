@@ -299,7 +299,9 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<void>
     console.log(`[agent] oRPC endpoint: http://localhost:${port}/rpc`);
     console.log(`[agent] WebSocket terminal: ws://localhost:${port}/rpc/terminal/:name`);
     console.log(`[agent] WebSocket chat (Claude): ws://localhost:${port}/rpc/live/claude/:name`);
-    console.log(`[agent] WebSocket chat (OpenCode): ws://localhost:${port}/rpc/live/opencode/:name`);
+    console.log(
+      `[agent] WebSocket chat (OpenCode): ws://localhost:${port}/rpc/live/opencode/:name`
+    );
 
     startEagerImagePull();
   });
