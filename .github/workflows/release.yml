@@ -280,3 +280,4 @@ jobs:
             dist-binaries/*.zip
             dist-binaries/checksums.txt
           fail_on_unmatched_files: true
+          generate_release_notes: true
