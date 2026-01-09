@@ -18,16 +18,9 @@ jobs:
             -d @- << 'EOF'
           {
             "embeds": [{
-              "title": "Perry ${{ github.event.release.tag_name }} Released",
+              "title": "Perry ${{ github.event.release.tag_name }}",
               "url": "${{ github.event.release.html_url }}",
-              "color": 5025616,
-              "fields": [
-                {
-                  "name": "Install",
-                  "value": "```\nbunx @gricha/perry@${{ github.event.release.tag_name }}\n```",
-                  "inline": false
-                }
-              ]
+              "color": 5025616
             }]
           }
           EOF
