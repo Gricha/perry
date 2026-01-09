@@ -255,13 +255,16 @@ export function SessionChatScreen({ route, navigation }: any) {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(initialSessionId || null)
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+  const [agentSessionId, setAgentSessionId] = useState<string | null>(initialSessionId || null)
   const [streamingParts, setStreamingParts] = useState<MessagePart[]>([])
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [messageOffset, setMessageOffset] = useState(0)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined)
+  const selectedModelRef = useRef<string | undefined>(undefined)
+  selectedModelRef.current = selectedModel
   const wsRef = useRef<WebSocket | null>(null)
   const flatListRef = useRef<FlatList>(null)
   const streamingPartsRef = useRef<MessagePart[]>([])
@@ -411,6 +414,23 @@ export function SessionChatScreen({ route, navigation }: any) {
 
     ws.onopen = () => {
       setConnected(true)
+      const connectMsg: Record<string, unknown> = {
+        type: 'connect',
+        agentType: agentType === 'opencode' ? 'opencode' : 'claude',
+      }
+      // Send sessionId for session lookup - prefer liveSessionId (internal ID), fall back to agentSessionId
+      // Backend's findSession() can look up by either ID type
+      const sessionIdForLookup = liveSessionId || agentSessionId
+      if (sessionIdForLookup) {
+        connectMsg.sessionId = sessionIdForLookup
+      }
+      if (selectedModelRef.current) {
+        connectMsg.model = selectedModelRef.current
+      }
+      if (projectPath) {
+        connectMsg.projectPath = projectPath
+      }
+      ws.send(JSON.stringify(connectMsg))
     }
 
     ws.onmessage = (event) => {
@@ -421,13 +441,46 @@ export function SessionChatScreen({ route, navigation }: any) {
           return
         }
 
-        if (msg.type === 'system') {
-          if (msg.content?.startsWith('Session started') || msg.content?.includes('Session ')) {
-            const match = msg.content.match(/Session (\S+)/)
-            if (match) {
-              setCurrentSessionId(match[1])
-            }
+        if (msg.type === 'session_started' || msg.type === 'session_joined') {
+          if (msg.sessionId) {
+            setLiveSessionId(msg.sessionId)
           }
+          if (msg.agentSessionId) {
+            setAgentSessionId(msg.agentSessionId)
+            // Record session access so it shows in the sessions list
+            api.recordSessionAccess(workspaceName, msg.agentSessionId, agentType).catch(() => {})
+          }
+          if (msg.type === 'session_joined' && msg.status === 'running') {
+            setIsStreaming(true)
+            setStreamingParts([...streamingPartsRef.current])
+          }
+          return
+        }
+
+        if (msg.type === 'system') {
+          try {
+            const parsed = JSON.parse(msg.content)
+            if (parsed.agentSessionId) {
+              setAgentSessionId(parsed.agentSessionId)
+              return
+            }
+          } catch {
+            // Not JSON, check for skip patterns
+          }
+          if (msg.content?.startsWith('Session started') || msg.content?.startsWith('Connected to session')) {
+            return
+          }
+          return
+        }
+
+        if (msg.type === 'user') {
+          setMessages((prev) => {
+            const lastUserMsg = [...prev].reverse().find(m => m.role === 'user')
+            if (lastUserMsg && lastUserMsg.content === msg.content) {
+              return prev
+            }
+            return [...prev, { role: 'user', content: msg.content || '', id: `msg-replay-${Date.now()}-${Math.random()}` }]
+          })
           return
         }
 
@@ -512,13 +565,15 @@ export function SessionChatScreen({ route, navigation }: any) {
     }
 
     ws.onerror = () => {
-      setConnected(false)
-      setIsStreaming(false)
-      setMessages((prev) => [...prev, { role: 'system', content: 'Connection error', id: `msg-conn-err-${Date.now()}` }])
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        setConnected(false)
+        setIsStreaming(false)
+        setMessages((prev) => [...prev, { role: 'system', content: 'Connection error', id: `msg-conn-err-${Date.now()}` }])
+      }
     }
 
     return () => ws.close()
-  }, [workspaceName, agentType])
+  }, [workspaceName, agentType, liveSessionId, agentSessionId, projectPath])
 
   useEffect(() => {
     const cleanup = connect()
@@ -556,15 +611,6 @@ export function SessionChatScreen({ route, navigation }: any) {
     const payload: Record<string, unknown> = {
       type: 'message',
       content: msg,
-      sessionId: currentSessionId,
-    }
-
-    if (selectedModel) {
-      payload.model = selectedModel
-    }
-
-    if (projectPath) {
-      payload.projectPath = projectPath
     }
 
     wsRef.current.send(JSON.stringify(payload))
@@ -580,7 +626,7 @@ export function SessionChatScreen({ route, navigation }: any) {
   const showModelPicker = () => {
     if (availableModels.length === 0) return
     if (isStreaming) return
-    if (agentType === 'opencode' && currentSessionId) return
+    if (agentType === 'opencode' && agentSessionId) return
 
     const options = [...availableModels.map(m => m.name), 'Cancel']
     ActionSheetIOS.showActionSheetWithOptions(
@@ -594,8 +640,9 @@ export function SessionChatScreen({ route, navigation }: any) {
           const newModel = availableModels[buttonIndex].id
           if (newModel !== selectedModel) {
             setSelectedModel(newModel)
-            if (agentType !== 'opencode' && currentSessionId) {
-              setCurrentSessionId(null)
+            if (agentType !== 'opencode' && agentSessionId) {
+              setAgentSessionId(null)
+              setLiveSessionId(null)
               setMessages(prev => [...prev, {
                 role: 'system',
                 content: `Switching to model: ${availableModels[buttonIndex].name}`,
@@ -609,7 +656,7 @@ export function SessionChatScreen({ route, navigation }: any) {
   }
 
   const selectedModelName = availableModels.find(m => m.id === selectedModel)?.name || 'Model'
-  const canChangeModel = !isStreaming && !(agentType === 'opencode' && currentSessionId)
+  const canChangeModel = !isStreaming && !(agentType === 'opencode' && agentSessionId)
 
   const agentLabels: Record<AgentType, string> = {
     'claude-code': 'Claude Code',

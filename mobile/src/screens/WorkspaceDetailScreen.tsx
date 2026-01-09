@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
 import { api, SessionInfo, AgentType, HOST_WORKSPACE_NAME } from '../lib/api'
 
@@ -135,11 +136,19 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
   const isRunning = isHost ? true : workspace?.status === 'running'
   const isCreating = isHost ? false : workspace?.status === 'creating'
 
-  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
+  const { data: sessionsData, isLoading: sessionsLoading, refetch: refetchSessions } = useQuery({
     queryKey: ['sessions', name, agentFilter],
     queryFn: () => api.listSessions(name, agentFilter, 50),
     enabled: isRunning,
   })
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isRunning) {
+        refetchSessions()
+      }
+    }, [isRunning, refetchSessions])
+  )
 
   const groupedSessions = useMemo(() => {
     if (!sessionsData?.sessions) return null

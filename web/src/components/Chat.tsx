@@ -24,7 +24,17 @@ interface ChatMessage {
 }
 
 interface RawMessage {
-  type: 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'connected'
+  type:
+    | 'user'
+    | 'assistant'
+    | 'system'
+    | 'tool_use'
+    | 'tool_result'
+    | 'error'
+    | 'done'
+    | 'connected'
+    | 'session_started'
+    | 'session_joined'
   content: string
   timestamp: string
   toolName?: string
@@ -250,6 +260,10 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
   const [messageOffset, setMessageOffset] = useState(0)
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined)
+  const selectedModelRef = useRef<string | undefined>(undefined)
+  selectedModelRef.current = selectedModel
+  const sessionIdRef = useRef<string | undefined>(initialSessionId)
+  sessionIdRef.current = sessionId
   const onSessionIdRef = useRef(onSessionId)
   onSessionIdRef.current = onSessionId
 
@@ -473,13 +487,64 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
 
     ws.onopen = () => {
       setIsConnected(true)
+      const connectMsg: Record<string, unknown> = {
+        type: 'connect',
+        agentType: agentType === 'opencode' ? 'opencode' : 'claude',
+      }
+      if (sessionIdRef.current) {
+        // Send as sessionId for session manager lookup
+        connectMsg.sessionId = sessionIdRef.current
+      }
+      if (selectedModelRef.current) {
+        connectMsg.model = selectedModelRef.current
+      }
+      if (projectPath) {
+        connectMsg.projectPath = projectPath
+      }
+      ws.send(JSON.stringify(connectMsg))
     }
 
     ws.onmessage = (event) => {
       try {
-        const msg: RawMessage = JSON.parse(event.data)
+        const msg: RawMessage & { sessionId?: string; status?: string; agentSessionId?: string } = JSON.parse(event.data)
 
         if (msg.type === 'connected') {
+          return
+        }
+
+        if (msg.type === 'session_started' || msg.type === 'session_joined') {
+          // Use sessionId (internal session manager ID) for reconnection
+          // Fall back to agentSessionId for backwards compatibility
+          const newSessionId = msg.sessionId || msg.agentSessionId
+          if (newSessionId) {
+            setSessionId(newSessionId)
+            hasLoadedHistoryRef.current = true
+            onSessionIdRef.current?.(msg.agentSessionId || newSessionId)
+          }
+          // If rejoining a running session, show streaming indicator
+          if (msg.type === 'session_joined' && msg.status === 'running') {
+            setIsStreaming(true)
+            // Trigger re-render with any accumulated streaming parts
+            setStreamingParts([...streamingPartsRef.current])
+          }
+          return
+        }
+
+        // Handle replayed user messages from server (on reconnect)
+        // Skip if we already have this message (it was added locally when sent)
+        if (msg.type === 'user') {
+          setMessages(prev => {
+            const lastUserMsg = [...prev].reverse().find(m => m.type === 'user')
+            // Skip if the last user message has the same content (avoid duplicates)
+            if (lastUserMsg && lastUserMsg.content === msg.content) {
+              return prev
+            }
+            return [...prev, {
+              type: 'user',
+              content: msg.content,
+              timestamp: msg.timestamp,
+            }]
+          })
           return
         }
 
@@ -534,14 +599,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
         }
 
         if (msg.type === 'system') {
-          if (msg.content.startsWith('Session started')) {
-            const match = msg.content.match(/Session started:?\s+(\S+)/)
-            if (match) {
-              const newSessionId = match[1].replace(/\.+$/, '')
-              setSessionId(newSessionId)
-              hasLoadedHistoryRef.current = true
-              onSessionIdRef.current?.(newSessionId)
-            }
+          if (msg.content.startsWith('Session started') || msg.content.startsWith('Connected to session')) {
             return
           }
           if (msg.content === 'Processing your message...') {
@@ -559,6 +617,17 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
         }
 
         if (msg.type === 'system') {
+          try {
+            const parsed = JSON.parse(msg.content)
+            if (parsed.agentSessionId) {
+              setSessionId(parsed.agentSessionId)
+              onSessionIdRef.current?.(parsed.agentSessionId)
+              return
+            }
+          } catch {
+            // Not JSON, treat as regular system message
+          }
+
           setMessages(prev => [...prev, {
             type: 'system',
             content: msg.content,
@@ -577,15 +646,18 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
 
     ws.onerror = (error) => {
       console.error('Chat WebSocket error:', error)
-      setMessages(prev => [...prev, {
-        type: 'error',
-        content: 'Connection error - is the workspace running?',
-        timestamp: new Date().toISOString(),
-      }])
+      // Only show error if connection is actually closed/closing, not during transient issues
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        setMessages(prev => [...prev, {
+          type: 'error',
+          content: 'Connection error - is the workspace running?',
+          timestamp: new Date().toISOString(),
+        }])
+      }
     }
 
     return ws
-  }, [workspaceName, agentType, finalizeStreaming])
+  }, [workspaceName, agentType, finalizeStreaming, projectPath])
 
   useEffect(() => {
     const ws = connect()
@@ -618,15 +690,6 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
     const messagePayload: Record<string, unknown> = {
       type: 'message',
       content: input.trim(),
-      sessionId,
-    }
-
-    if (selectedModel) {
-      messagePayload.model = selectedModel
-    }
-
-    if (projectPath) {
-      messagePayload.projectPath = projectPath
     }
 
     wsRef.current.send(JSON.stringify(messagePayload))
@@ -635,7 +698,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
     setIsStreaming(true)
     streamingPartsRef.current = []
     setStreamingParts([])
-  }, [input, sessionId, selectedModel, projectPath])
+  }, [input])
 
   const interrupt = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
