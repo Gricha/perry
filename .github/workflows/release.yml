@@ -282,22 +282,55 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: true
 
+  notify:
+    needs: [merge, npm, release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify npm package is available
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Verifying perry@$VERSION is available on npm..."
+          for i in {1..30}; do
+            if npm view perry@$VERSION version 2>/dev/null; then
+              echo "Package perry@$VERSION is available on npm"
+              exit 0
+            fi
+            echo "Attempt $i/30: Package not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "ERROR: Package perry@$VERSION not available after 5 minutes"
+          exit 1
+
       - name: Notify Discord
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Fetch release notes from GitHub
-          RELEASE_BODY=$(gh release view ${{ github.ref_name }} --json body -q .body | head -c 1500)
+          VERSION=${GITHUB_REF#refs/tags/v}
 
-          # Escape for JSON
-          RELEASE_BODY_ESCAPED=$(echo "$RELEASE_BODY" | jq -Rs '.')
+          # Fetch release notes from GitHub
+          RELEASE_BODY=$(gh release view ${{ github.ref_name }} --json body -q .body 2>/dev/null || echo "")
+
+          # Fallback if empty
+          if [ -z "$RELEASE_BODY" ]; then
+            RELEASE_BODY="New release available. See the release page for details."
+          fi
+
+          # Truncate if too long (Discord embed limit)
+          if [ ${#RELEASE_BODY} -gt 1500 ]; then
+            RELEASE_BODY="${RELEASE_BODY:0:1497}..."
+          fi
 
           # Build and send Discord message
           jq -n \
             --arg title "Perry ${{ github.ref_name }}" \
             --arg url "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" \
-            --argjson desc "$RELEASE_BODY_ESCAPED" \
+            --arg desc "$RELEASE_BODY" \
             '{embeds:[{title:$title,description:$desc,url:$url,color:5025616}]}' | \
-          curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+          curl -sf -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
             -H "Content-Type: application/json" \
             -d @-
