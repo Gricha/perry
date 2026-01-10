@@ -302,21 +302,35 @@ class SessionIndex {
 
   private convertClaudeEntry(entry: ClaudeLogEntry): Message[] | null {
     if (entry.type === 'user' || entry.type === 'human') {
-      const textContent = entry.message?.content?.find((c) => c.type === 'text');
-      if (textContent?.text) {
+      const content = entry.message?.content;
+      if (typeof content === 'string' && content.trim()) {
         return [
           {
             type: 'user',
-            content: textContent.text,
+            content: content,
             timestamp: entry.timestamp,
           },
         ];
+      } else if (Array.isArray(content)) {
+        const textContent = content.find((c) => c.type === 'text');
+        if (textContent?.text) {
+          return [
+            {
+              type: 'user',
+              content: textContent.text,
+              timestamp: entry.timestamp,
+            },
+          ];
+        }
       }
     }
 
     if (entry.type === 'assistant') {
+      const content = entry.message?.content;
+      if (!Array.isArray(content)) return null;
+
       const messages: Message[] = [];
-      for (const block of entry.message?.content || []) {
+      for (const block of content) {
         if (block.type === 'text' && block.text) {
           messages.push({
             type: 'assistant',
@@ -393,13 +407,15 @@ interface ClaudeLogEntry {
   type: string;
   timestamp?: string;
   message?: {
-    content?: Array<{
-      type: string;
-      text?: string;
-      name?: string;
-      id?: string;
-      input?: unknown;
-    }>;
+    content?:
+      | string
+      | Array<{
+          type: string;
+          text?: string;
+          name?: string;
+          id?: string;
+          input?: unknown;
+        }>;
   };
   content?: unknown;
   tool_use_id?: string;
