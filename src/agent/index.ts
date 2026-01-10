@@ -9,6 +9,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (err) => {
   console.error('[agent] Uncaught exception:', err);
+  process.exit(1);
 });
 
 startAgent().catch((err) => {
