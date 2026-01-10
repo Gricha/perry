@@ -430,7 +430,7 @@ export function SessionChatScreen({ route, navigation }: any) {
 
   const { data: sessionData, isLoading: sessionLoading } = useQuery({
     queryKey: ['session', workspaceName, initialSessionId, 'initial'],
-    queryFn: () => api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, 0),
+    queryFn: () => api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, 0, projectPath),
     enabled: !!initialSessionId && !isNew,
   })
 
@@ -455,7 +455,7 @@ export function SessionChatScreen({ route, navigation }: any) {
 
     setIsLoadingMore(true)
     try {
-      const moreData = await api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, messageOffset)
+      const moreData = await api.getSession(workspaceName, initialSessionId, agentType, MESSAGES_PER_PAGE, messageOffset, projectPath)
       if (moreData?.messages) {
         const olderMessages = parseMessages(moreData.messages)
         setMessages(prev => [...olderMessages, ...prev])
@@ -467,7 +467,7 @@ export function SessionChatScreen({ route, navigation }: any) {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [hasMoreMessages, isLoadingMore, initialSessionId, workspaceName, agentType, messageOffset, parseMessages])
+  }, [hasMoreMessages, isLoadingMore, initialSessionId, workspaceName, agentType, messageOffset, parseMessages, projectPath])
 
   const connect = useCallback(() => {
     const url = getChatUrl(workspaceName, agentType as AgentType)
@@ -726,14 +726,6 @@ export function SessionChatScreen({ route, navigation }: any) {
     codex: 'Codex',
   }
 
-  if (sessionLoading && !isNew) {
-    return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    )
-  }
-
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}
@@ -767,6 +759,11 @@ export function SessionChatScreen({ route, navigation }: any) {
         {availableModels.length === 0 && <View style={styles.placeholder} />}
       </View>
 
+      {sessionLoading && !isNew ? (
+        <View style={[styles.loadingContainer]}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : (
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -797,6 +794,7 @@ export function SessionChatScreen({ route, navigation }: any) {
         onScrollToIndexFailed={() => {}}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
+      )}
 
       <View style={[styles.inputContainer, { paddingBottom: keyboardVisible ? 8 : insets.bottom + 8, borderTopColor: colors.border }]}>
         <TextInput
@@ -835,6 +833,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

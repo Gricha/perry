@@ -774,17 +774,19 @@ export function createRouter(ctx: RouterContext) {
       .sort((a, b) => b.mtime - a.mtime);
 
     const paginatedRawSessions = filteredSessions.slice(offset, offset + limit);
-    const sessions = [];
 
-    for (const rawSession of paginatedRawSessions) {
-      const details = await getAgentSessionDetails(containerName, rawSession, execInContainer);
-      if (details) {
-        sessions.push({
-          ...details,
-          name: customNames[details.id] || details.name,
-        });
-      }
-    }
+    const detailsResults = await Promise.all(
+      paginatedRawSessions.map((rawSession) =>
+        getAgentSessionDetails(containerName, rawSession, execInContainer)
+      )
+    );
+
+    const sessions = detailsResults
+      .filter((details): details is NonNullable<typeof details> => details !== null)
+      .map((details) => ({
+        ...details,
+        name: customNames[details.id] || details.name,
+      }));
 
     return {
       sessions,
@@ -812,6 +814,7 @@ export function createRouter(ctx: RouterContext) {
         workspaceName: z.string(),
         sessionId: z.string(),
         agentType: z.enum(['claude-code', 'opencode', 'codex']).optional(),
+        projectPath: z.string().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
       })
@@ -842,7 +845,8 @@ export function createRouter(ctx: RouterContext) {
               containerName,
               input.sessionId,
               input.agentType,
-              execInContainer
+              execInContainer,
+              input.projectPath
             )
           : await findSessionMessages(containerName, input.sessionId, execInContainer);
       }
