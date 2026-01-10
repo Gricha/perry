@@ -63,12 +63,6 @@ const AGENT_LABELS: Record<AgentType | 'all', string> = {
   codex: 'Codex',
 }
 
-const AGENT_COLORS: Record<AgentType, string> = {
-  'claude-code': 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  opencode: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  codex: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-}
-
 type DateGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older'
 
 function getDateGroup(dateString: string): DateGroup {
