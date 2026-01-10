@@ -66,7 +66,12 @@ export async function startEagerImagePull(): Promise<void> {
       if (attempt === 1) {
         console.log('[agent] Docker not available - will retry in background');
       }
-      const timer = setTimeout(() => attemptPull(attempt + 1), RETRY_INTERVAL_MS);
+      const timer = setTimeout(() => {
+        attemptPull(attempt + 1).catch((err) => {
+          console.error('[agent] Error during image pull retry:', err);
+          pullInProgress = false;
+        });
+      }, RETRY_INTERVAL_MS);
       timer.unref();
       return;
     }
@@ -77,12 +82,20 @@ export async function startEagerImagePull(): Promise<void> {
       pullComplete = true;
       pullInProgress = false;
     } else if (!signal.aborted) {
-      const timer = setTimeout(() => attemptPull(attempt + 1), RETRY_INTERVAL_MS);
+      const timer = setTimeout(() => {
+        attemptPull(attempt + 1).catch((err) => {
+          console.error('[agent] Error during image pull retry:', err);
+          pullInProgress = false;
+        });
+      }, RETRY_INTERVAL_MS);
       timer.unref();
     }
   };
 
-  attemptPull(1);
+  attemptPull(1).catch((err) => {
+    console.error('[agent] Error during initial image pull:', err);
+    pullInProgress = false;
+  });
 }
 
 export function stopEagerImagePull(): void {

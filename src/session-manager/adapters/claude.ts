@@ -108,9 +108,14 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
     this.terminal = this.process.terminal!;
 
-    this.process.exited.then((code) => {
-      this.handleProcessExit(code);
-    });
+    this.process.exited
+      .then((code) => {
+        this.handleProcessExit(code);
+      })
+      .catch((err) => {
+        console.error('[claude] Process exit error:', err);
+        this.handleProcessExit(1);
+      });
   }
 
   private buildCommand(userMessage: string): string[] {

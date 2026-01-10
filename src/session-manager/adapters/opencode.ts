@@ -482,7 +482,13 @@ export class OpenCodeAdapter implements AgentAdapter {
           resolved = true;
           reject(new Error('SSE stream ended unexpectedly without session.idle'));
         }
-      })();
+      })().catch((err) => {
+        clearTimeout(timeout);
+        if (!resolved) {
+          resolved = true;
+          reject(err);
+        }
+      });
     });
   }
 
