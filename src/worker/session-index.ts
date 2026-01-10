@@ -224,8 +224,10 @@ class SessionIndex {
           clearTimeout(entry.debounceTimer);
         }
 
-        const timer = setTimeout(async () => {
-          await this.handleFileChange(dir, filename, agentType);
+        const timer = setTimeout(() => {
+          this.handleFileChange(dir, filename, agentType).catch((err) => {
+            console.error('[session-index] Error handling file change:', err);
+          });
         }, 100);
 
         if (entry) {

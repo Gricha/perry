@@ -50,13 +50,22 @@ export abstract class BaseTerminalSession {
 
     this.terminal = this.process.terminal!;
 
-    this.process.exited.then((code) => {
-      this.process = null;
-      this.terminal = null;
-      if (this.onExit) {
-        this.onExit(code);
-      }
-    });
+    this.process.exited
+      .then((code) => {
+        this.process = null;
+        this.terminal = null;
+        if (this.onExit) {
+          this.onExit(code);
+        }
+      })
+      .catch((err) => {
+        console.error('[terminal] Process exit error:', err);
+        this.process = null;
+        this.terminal = null;
+        if (this.onExit) {
+          this.onExit(1);
+        }
+      });
   }
 
   write(data: Buffer | string): void {
