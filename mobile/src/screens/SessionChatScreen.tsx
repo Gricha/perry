@@ -726,14 +726,6 @@ export function SessionChatScreen({ route, navigation }: any) {
     codex: 'Codex',
   }
 
-  if (sessionLoading && !isNew) {
-    return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    )
-  }
-
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}
@@ -767,6 +759,11 @@ export function SessionChatScreen({ route, navigation }: any) {
         {availableModels.length === 0 && <View style={styles.placeholder} />}
       </View>
 
+      {sessionLoading && !isNew ? (
+        <View style={[styles.loadingContainer]}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : (
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -797,6 +794,7 @@ export function SessionChatScreen({ route, navigation }: any) {
         onScrollToIndexFailed={() => {}}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
+      )}
 
       <View style={[styles.inputContainer, { paddingBottom: keyboardVisible ? 8 : insets.bottom + 8, borderTopColor: colors.border }]}>
         <TextInput
@@ -835,6 +833,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
