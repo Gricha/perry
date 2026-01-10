@@ -34,6 +34,7 @@ import { Label } from '@/components/ui/label'
 import { Terminal } from '@/components/Terminal'
 import { Chat } from '@/components/Chat'
 import { cn } from '@/lib/utils'
+import { AgentIcon } from '@/components/AgentIcon'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,12 +61,6 @@ const AGENT_LABELS: Record<AgentType | 'all', string> = {
   'claude-code': 'Claude Code',
   opencode: 'OpenCode',
   codex: 'Codex',
-}
-
-const AGENT_BADGES: Record<AgentType, string> = {
-  'claude-code': 'CC',
-  opencode: 'OC',
-  codex: 'CX',
 }
 
 const AGENT_COLORS: Record<AgentType, string> = {
@@ -275,15 +270,10 @@ function SessionListItem({
       )}
     >
       <button onClick={onClick} className="flex-1 flex items-center gap-2 sm:gap-4 min-w-0">
-        <span
-          className={cn(
-            'shrink-0 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded',
-            AGENT_COLORS[session.agentType]
-          )}
+        <AgentIcon
+          agentType={session.agentType}
           data-testid="agent-badge"
-        >
-          [{AGENT_BADGES[session.agentType]}]
-        </span>
+        />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
