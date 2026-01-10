@@ -1,257 +1,188 @@
-> **VISION DOCUMENT**: This document describes the aspirational v2 architecture.
-> Some features are implemented, others are planned. For current capabilities,
-> see README.md. For implementation tasks, see TODO.md.
-
-# Workspace v2: Distributed Development Environment
+# Perry: Distributed Development Environment
 
 ## Overview
 
-Transform the workspace CLI from a local-only Docker manager into a distributed development environment orchestrator. Run workspaces on any machine, access them from anywhere—laptop, browser, or mobile.
+Perry is a distributed development environment orchestrator that creates isolated Docker-in-Docker containers accessible from multiple clients (CLI, Web UI, Mobile). It transforms development workflows by enabling remote workspace management with local-like performance.
+
+## Architecture Status
+
+**Implemented Core Features:**
+- ✅ Agent daemon with HTTP/WebSocket API  
+- ✅ oRPC type-safe client-server communication
+- ✅ CLI client with TUI
+- ✅ React web UI with real-time terminal
+- ✅ React Native mobile app
+- ✅ Session management and tracking
+- ✅ Worker binary pattern for container operations
+- ✅ State persistence and locking
 
 ## Core Principles
 
-1. **Top-notch DX**: One command to set up a node. One command to create a workspace. Zero friction.
-2. **Simplicity over features**: Start with single-worker model, extend later.
-3. **Tailscale-invisible**: Works on Tailscale networks but doesn't require API keys or special setup.
-4. **Testability**: Good tests that catch real bugs, not coverage theater.
+1. **Developer Experience**: One command setup, zero friction workspace creation
+2. **Network Simplicity**: Works across any network, Tailscale-optimized but not required  
+3. **Real Testing**: Integration tests with actual Docker containers
+4. **Type Safety**: oRPC provides compile-time API validation
 
 ---
 
-## One Command Setup (DX Goal)
+## Quick Start
 
-### Worker Setup
-
-```bash
-$ ws --agent
-# First run: no config exists
-Creating default config at ~/.config/workspace/config.json
-Building workspace image... done
-Starting agent on port 7391...
-Agent running at http://my-desktop:7391
-
-# No credentials configured yet - that's fine, add them later
-```
-
-That's it. One command, agent is running.
-
-### Client Setup
+### Agent Setup
 
 ```bash
-$ ws
-# First run: no worker configured
-? Enter worker hostname: my-desktop.tail1234.ts.net
-Connecting to my-desktop.tail1234.ts.net:7391... OK
-Saved to ~/.config/workspace/client.json
-
-# Shows TUI with empty workspace list
-No workspaces. Press 'n' to create one.
+$ perry agent run
+# Starts agent on port 7391, creates default config if needed
+Agent running at http://hostname:7391
 ```
 
-Or non-interactively:
+### Client Usage
+
 ```bash
-$ ws start alpha
-? No worker configured. Enter worker hostname: my-desktop
-Creating workspace 'alpha'... done
+$ perry list                    # List workspaces
+$ perry start myproject         # Create and start workspace  
+$ perry shell myproject         # Interactive terminal
+$ perry config worker <host>    # Set agent hostname
 ```
 
-### Adding Credentials
+### Web UI
 
-Via TUI/Web UI settings, or direct config edit:
-```bash
-$ ws config set env.ANTHROPIC_API_KEY sk-ant-...
-$ ws config set env.OPENAI_API_KEY sk-...
-$ ws config set files."~/.ssh/id_ed25519" ~/.ssh/id_ed25519
-```
+Navigate to `http://agent-host:7391` for browser-based management with integrated terminal.
 
-Or edit `~/.config/workspace/config.json` directly.
+### Mobile Access
+
+Install Perry mobile app, configure agent hostname for workspace management on the go.
 
 ---
 
 ## Architecture
 
-### High-Level View
+### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Tailscale Network                        │
-│           (or any network with connectivity)                │
+│                    Network (Tailscale/Internet)            │
 │                                                             │
 │   ┌───────────────────────────────────────────────────┐    │
-│   │              Worker Machine                        │    │
+│   │              Agent Machine                         │    │
 │   │                                                    │    │
 │   │   ┌────────────────────────────────────────────┐  │    │
-│   │   │           ws --agent (daemon)              │  │    │
+│   │   │         perry agent run (daemon)           │  │    │
 │   │   │                                            │  │    │
 │   │   │  ┌─────────────┐  ┌─────────────────────┐ │  │    │
-│   │   │  │  HTTP API   │  │  WebSocket Terminal │ │  │    │
-│   │   │  │   :7391     │  │       Server        │ │  │    │
+│   │   │  │  oRPC API   │  │  WebSocket Terminal │ │  │    │
+│   │   │  │   :7391     │  │  Session Manager    │ │  │    │
 │   │   │  └─────────────┘  └─────────────────────┘ │  │    │
 │   │   │                                            │  │    │
 │   │   │  ┌─────────────────────────────────────┐  │  │    │
 │   │   │  │     Docker Engine                   │  │    │
 │   │   │  │  ┌─────────┐ ┌─────────┐            │  │  │    │
-│   │   │  │  │  alpha  │ │  beta   │  ...       │  │  │    │
+│   │   │  │  │workspace│ │workspace│  ...       │  │  │    │
+│   │   │  │  │  -alpha │ │  -beta  │            │  │  │    │
 │   │   │  │  └─────────┘ └─────────┘            │  │  │    │
 │   │   │  └─────────────────────────────────────┘  │  │    │
 │   │   │                                            │  │    │
 │   │   │  ┌─────────────────────────────────────┐  │  │    │
-│   │   │  │  Config & State (JSON)              │  │  │    │
-│   │   │  │  - credentials (env, files)         │  │  │    │
-│   │   │  │  - user scripts                     │  │  │    │
-│   │   │  │  - workspace state                  │  │  │    │
+│   │   │  │  State & Config                     │  │  │    │
+│   │   │  │  ~/.config/perry/state.json        │  │  │    │
+│   │   │  │  (file-locked, persistent)          │  │  │    │
 │   │   │  └─────────────────────────────────────┘  │  │    │
 │   │   └────────────────────────────────────────────┘  │    │
 │   └───────────────────────────────────────────────────┘    │
 │                            ▲                                │
-│                            │ HTTP/WebSocket                 │
+│                            │ HTTP/WebSocket/oRPC            │
 │          ┌─────────────────┼─────────────────┐             │
 │          │                 │                 │             │
 │    ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐       │
-│    │  Laptop   │    │  Browser  │    │   Phone   │       │
-│    │   CLI     │    │  Web UI   │    │   App     │       │
-│    │   TUI     │    │           │    │ (future)  │       │
+│    │  Client   │    │  Browser  │    │  Mobile   │       │
+│    │perry CLI  │    │  Web UI   │    │   App     │       │
+│    │+ TUI      │    │(React SPA)│    │(React NV) │       │
 │    └───────────┘    └───────────┘    └───────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Components
 
-#### 1. Agent Daemon (`ws --agent`)
+#### 1. Agent Daemon (`perry agent run`)
 
-Long-running process on the worker machine. Responsibilities:
-- HTTP API server (port 7391 default, configurable)
-- WebSocket server for interactive terminals
-- Docker container lifecycle management
-- Config and state persistence
-- Serves Web UI as static files
+Long-running process managing workspaces and serving clients:
+- **oRPC API server** (port 7391, type-safe client/server communication)  
+- **WebSocket terminal server** with session management
+- **Docker lifecycle management** (create, start, stop, delete workspaces)
+- **State persistence** with file locking
+- **Web UI hosting** (serves React SPA as static files)
 
-Installation:
 ```bash
-# Manual start (foreground)
-ws --agent
-
-# Install as systemd service
-ws agent install
-systemctl start workspace-agent
+perry agent run                   # Start agent (foreground)
+perry agent install              # Install systemd service
 ```
 
-#### 2. CLI Client
+#### 2. CLI Client  
 
-Commands connect to configured worker over HTTP/WebSocket:
+Type-safe commands via oRPC:
 ```bash
-ws start alpha                    # Create and start workspace (empty)
-ws start alpha --clone=git@...    # Clone repo into workspace
-ws stop alpha                     # Stop workspace
-ws shell alpha                    # Interactive terminal
-ws list                           # List all workspaces
-ws delete alpha                   # Remove workspace
-ws config                         # Manage configuration
+perry start myproject             # Create and start workspace
+perry stop myproject              # Stop workspace  
+perry shell myproject             # Interactive terminal via WebSocket
+perry list                        # List all workspaces
+perry delete myproject            # Remove workspace and volumes
+perry config worker <host>        # Configure agent connection
 ```
 
-#### 3. TUI Dashboard
+#### 3. Web UI
 
-Interactive terminal UI using OpenTUI:
-```bash
-ws                                # Launch TUI
-```
+React SPA with real-time capabilities:
+- **Framework**: React + Vite + shadcn/ui  
+- **Terminal**: xterm.js with WebSocket connection
+- **API**: oRPC client with type safety
+- **Features**: Full workspace lifecycle, real-time session tracking
 
-Features:
-- List all workspaces with status
-- Create/start/stop/delete workspaces
-- Select repository to clone (optional)
-- Integrated terminal
-- Config management
+#### 4. Mobile App
 
-#### 4. Web UI
-
-Single-page application served by agent:
-- **Framework**: React + react-router + shadcn/ui
-- **Runtime**: Node or Bun
-- Same capabilities as TUI
-- Accessible from any browser
-- Terminal via xterm.js
-
-#### 5. Mobile App (Future)
-
-React Native + Expo application:
-- Connect to worker
-- View/manage workspaces
-- Terminal access
+React Native + Expo production app:
+- **Platform**: iOS and Android
+- **Features**: Workspace management, terminal access
+- **API**: Same oRPC endpoints as web UI
+- **Real-time**: Session updates via WebSocket
 
 ---
 
-## Data Model
+## Data Models
 
-### Worker Configuration
+### Agent Configuration
 
-Location: `~/.config/workspace/config.json`
+Location: `~/.config/perry/config.json`
 
 ```json
 {
   "port": 7391,
-  "credentials": {
-    "env": {
-      "ANTHROPIC_API_KEY": "sk-ant-...",
-      "OPENAI_API_KEY": "sk-...",
-      "GITHUB_TOKEN": "ghp_...",
-      "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-..."
-    },
-    "files": {
-      "~/.ssh/id_ed25519": "~/.ssh/id_ed25519",
-      "~/.ssh/id_ed25519.pub": "~/.ssh/id_ed25519.pub",
-      "~/.gitconfig": "~/.gitconfig"
-    }
-  },
-  "scripts": {
-    "post_start": "~/.config/workspace/scripts/post-start.sh"
-  }
+  "workspacePrefix": "workspace-",
+  "imageTag": "workspace-base"
 }
 ```
 
-The `files` map uses `"destination_in_container": "source_on_worker"` format.
+### Client Configuration  
 
-All configured credentials are always injected into every workspace. No profiles, no selection—simple default that works.
-
-**First-run behavior**: If config doesn't exist, create empty one with sensible defaults. Agent starts with no credentials configured—user adds them later via TUI/Web UI.
-
-### User Scripts
-
-Location: `~/.config/workspace/scripts/`
-
-**post-start.sh** (runs after every workspace starts):
-```bash
-#!/bin/bash
-# Keep coding tools up to date
-claude update 2>/dev/null || true
-codex update 2>/dev/null || true
-opencode update 2>/dev/null || true
-```
-
-Users can customize this script for their needs.
-
-### Client Configuration
-
-Location: `~/.config/workspace/client.json`
+Location: `~/.config/perry/client.json`
 
 ```json
 {
-  "worker": "my-desktop.tail1234.ts.net"
+  "worker": "my-desktop.example.com:7391"
 }
 ```
 
 ### Workspace State
 
-Location: `~/.config/workspace/state.json` (on worker)
+Location: `~/.config/perry/state.json` (agent machine)
 
 ```json
 {
   "workspaces": {
-    "alpha": {
-      "name": "alpha",
+    "myproject": {
+      "name": "myproject",
       "status": "running",
-      "containerId": "abc123def456...",
-      "created": "2025-01-15T10:30:00Z",
-      "repo": "git@github.com:user/project.git",
+      "containerId": "abc123def456...", 
+      "created": "2025-01-10T15:30:00Z",
+      "image": "workspace-base",
       "ports": {
         "ssh": 22001,
         "http": 22080
@@ -261,678 +192,291 @@ Location: `~/.config/workspace/state.json` (on worker)
 }
 ```
 
+State is managed with file locking (`proper-lockfile`) for safe concurrent access.
+
 ---
 
 ## API Specification
 
-The agent uses [oRPC](https://orpc.unnoq.com/) for type-safe RPC communication. oRPC provides automatic TypeScript type inference between client and server, making API calls type-safe at compile time.
+Perry uses [oRPC](https://orpc.unnoq.com/) for type-safe RPC communication. The API provides compile-time type safety between client and server.
 
 ### Base URL
 
-`http://<worker>:7391/rpc`
+`http://<agent-host>:7391/rpc`
 
-### oRPC Router Structure
+### Current oRPC Router
 
-The API is organized as a nested router with the following structure:
+Based on implementation in `src/agent/router.ts`:
 
 ```typescript
 {
   workspaces: {
-    list: () => WorkspaceInfo[]
-    get: ({ name: string }) => WorkspaceInfo
-    create: ({ name: string, clone?: string, env?: Record<string, string> }) => WorkspaceInfo
+    list: () => Workspace[]
+    get: ({ name: string }) => Workspace  
+    create: ({ name: string }) => Workspace
     delete: ({ name: string }) => { success: boolean }
-    start: ({ name: string }) => WorkspaceInfo
-    stop: ({ name: string }) => WorkspaceInfo
-    logs: ({ name: string, tail?: number }) => string
+    start: ({ name: string }) => Workspace
+    stop: ({ name: string }) => Workspace
+    sync: ({ name: string }) => void
   },
-  info: () => InfoResponse,
+  sessions: {
+    list: ({ workspaceName: string }) => SessionInfo[]
+    messages: ({ workspaceName: string, sessionId: string }) => Message[]
+  },
+  agent: {
+    info: () => AgentInfo
+    kill: () => void
+  },
   config: {
-    credentials: {
-      get: () => Credentials
-      update: (Credentials) => Credentials
-    },
-    scripts: {
-      get: () => Scripts
-      update: (Scripts) => Scripts
-    }
+    get: () => Config
+    setWorker: ({ worker: string }) => Config
   }
 }
 ```
 
-### Data Types
+### Core Types
 
 ```typescript
-interface WorkspaceInfo {
+interface Workspace {
   name: string
   status: 'running' | 'stopped' | 'creating' | 'error'
-  containerId: string
-  created: string  // ISO 8601 timestamp
-  repo?: string
-  ports: { ssh: number, http?: number }
+  containerId?: string
+  created: string
+  ports: { ssh: number }
 }
 
-interface InfoResponse {
+interface SessionInfo {
+  sessionId: string
+  title: string
+  agent: string
+  messageCount: number
+  lastActivity: string
+}
+
+interface AgentInfo {
+  version: string
   hostname: string
-  uptime: number  // seconds
+  uptime: number
   workspacesCount: number
-  dockerVersion: string
-  terminalConnections: number
-}
-
-interface Credentials {
-  env: Record<string, string>   // environment variables
-  files: Record<string, string> // destination -> source path mapping
-}
-
-interface Scripts {
-  post_start?: string  // path to post-start script
 }
 ```
 
-### Error Handling
+### WebSocket Endpoints
 
-oRPC errors use standard codes:
-- `NOT_FOUND` - Workspace doesn't exist
-- `CONFLICT` - Workspace name already exists
-- `INTERNAL_SERVER_ERROR` - Unexpected errors
-
-### Client Usage
-
-```typescript
-import { createORPCClient } from '@orpc/client'
-import type { AppRouter } from './router'
-
-const client = createORPCClient<AppRouter>({
-  baseURL: 'http://worker:7391/rpc'
-})
-
-// Type-safe API calls
-const workspaces = await client.workspaces.list()
-const workspace = await client.workspaces.create({ name: 'alpha', clone: 'git@github.com:user/repo' })
-await client.workspaces.stop({ name: 'alpha' })
+**Terminal Access:**
 ```
-
-### Terminal WebSocket
-
-Terminal access is still via WebSocket (not oRPC):
-
-```
-GET /terminal/:name
+GET /terminal/:workspaceName
 Upgrade: WebSocket
-
-Binary protocol:
-- Client → Server: stdin bytes
-- Server → Client: stdout bytes
-- Control frames: { "type": "resize", "cols": 80, "rows": 24 }
 ```
+
+**Session Streaming:**  
+```
+GET /sessions/:workspaceName
+Upgrade: WebSocket
+```
+
+Real-time session updates and terminal I/O via WebSocket with binary message protocol.
 
 ---
 
-## Credential System
+## Workspace Lifecycle
 
-### The Problem
-
-Three categories of credentials:
-
-1. **API Keys** (easy): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN`
-   - Store in config `credentials.env` section
-   - Inject as environment variables
-
-2. **Files** (medium): SSH keys, `.gitconfig`, AWS credentials
-   - Store paths in config `credentials.files` section
-   - Copy into workspace at creation via Docker API
-
-3. **OAuth Tokens** (solved): Claude Code, GitHub Copilot, Codex CLI
-   - **Claude Code**: Use `CLAUDE_CODE_OAUTH_TOKEN` env var (designed for containers)
-     - User runs `claude setup-token` once on their machine
-     - Gets long-lived token, adds to config's `credentials.env`
-     - Alternative: Copy `~/.claude/.credentials.json` (Linux only, tokens portable)
-   - **OpenCode**: Just needs `OPENAI_API_KEY` env var
-   - **Codex CLI**: Needs research (likely similar pattern)
-
-### Credential Flow
+### Creation Flow
 
 ```
-1. User creates workspace: ws start alpha
+perry start myproject
 
-2. Agent reads credentials from config
-
-3. Agent creates Docker container:
-   - docker create with env vars from credentials.env
-   - docker cp files from credentials.files into container
-   - docker start
-
-4. Container entrypoint runs:
-   - Sets up SSH keys permissions
-   - Starts Docker daemon (DinD)
-   - Starts SSH daemon
-
-5. Init runs (if repo specified):
-   - git clone <repo>
-   - Run post_start.sh script
+1. Validate workspace name (unique, valid format)
+2. Allocate SSH port from available range  
+3. Create Docker container:
+   - Image: workspace-base (pre-built with development tools)
+   - Volumes: Named volume for /home/workspace persistence
+   - Network: Custom bridge for container isolation
+   - Port mapping: SSH port for external access
+4. Start container and wait for SSH availability
+5. Copy perry worker binary for container-side operations
+6. Update state.json with workspace metadata
+7. Return workspace info via oRPC
 ```
 
-### Workspace Creation Flow (Detailed)
+### Storage Strategy
 
-```
-User runs: ws start alpha --clone=git@github.com:user/project.git
+**Named Volumes per Workspace:**
+- `workspace-{name}-home`: Persistent /home/workspace directory
+- `workspace-{name}-docker`: Docker-in-Docker storage
+- Volumes persist across container restarts
+- Deleted only when workspace is explicitly removed
 
-1. Check name uniqueness → 409 if "alpha" exists
-2. Allocate ports (SSH, HTTP forwarding)
-3. docker create workspace-base \
-     -e ANTHROPIC_API_KEY=... \
-     -e OPENAI_API_KEY=... \
-     -e GITHUB_TOKEN=... \
-     -e CLAUDE_CODE_OAUTH_TOKEN=... \
-     -e WORKSPACE_REPO_URL=git@github.com:user/project.git \
-     -v workspace-alpha-home:/home/workspace \
-     --privileged
-4. docker cp ssh_keys/ container:/home/workspace/.ssh/
-5. docker cp .gitconfig container:/home/workspace/.gitconfig
-6. docker cp post-start.sh container:/workspace/post-start.sh
-7. docker start container
-8. Wait for healthy (SSH available)
-9. Return workspace info
-```
-
-### Volume Strategy
-
-Each workspace gets a named volume for `/home/workspace`:
-- `workspace-{name}-home` - persists across container restarts
-- Deleted when workspace is deleted
-- Contains: cloned repos, user files, tool configs
+**Container Image:**
+- Pre-built `workspace-base` with development tools
+- Includes: Node.js, Python, Go, Docker-in-Docker setup, SSH server
+- Workspace-specific setup via environment variables
 
 ---
 
-## Terminal Implementation
+## Session Management 
 
-### Basic Implementation
+Perry provides real-time tracking and management of development tool sessions (Claude, OpenCode, etc.) within workspaces.
 
-WebSocket connection to agent, bidirectional byte stream to container's PTY.
+### Architecture
 
-### Client Libraries
+**Session Discovery:**
+- `perry worker` binary runs inside containers
+- Scans for session files/directories (e.g., `/tmp/opencode-sessions/`)
+- HTTP server provides session data to agent via internal API
 
-- CLI/TUI: node-pty for local terminal emulation
-- Web UI: xterm.js with WebGL renderer
-- Mobile: react-native-terminal or similar
+**Agent Aggregation:**  
+- Agent polls container session endpoints
+- Maintains centralized session index with WebSocket broadcasting
+- Clients receive real-time session updates
+
+**Client Integration:**
+- Web UI shows live session list with message counts
+- Mobile app displays active sessions per workspace  
+- CLI provides session inspection commands
+
+### Implementation
+
+- **Container Side**: `src/worker/` - HTTP server with session scanning
+- **Agent Side**: `src/session-manager/` - Aggregation and WebSocket broadcasting  
+- **Client Side**: Real-time session updates via WebSocket connection
 
 ---
 
 ## Testing Strategy
 
-### Philosophy
-
-- Tests catch real bugs, not checkbox compliance
-- Fast feedback loop
-- Real Docker, minimal mocking
-- Each feature has tests before/during implementation
+Perry's testing approach emphasizes real-world validation over test coverage metrics.
 
 ### Test Categories
 
-#### Unit Tests
-
-Pure function testing, no Docker needed:
-- Config parsing and validation
-- Credential resolution (path expansion, etc.)
-- API request/response serialization
-- Command argument parsing
-
-Example:
-```javascript
-test('expandPath resolves home directory', () => {
-  const result = expandPath('~/.ssh/id_ed25519', '/home/user');
-  expect(result).toBe('/home/user/.ssh/id_ed25519');
-});
-```
-
-#### Integration Tests
-
-Agent + Docker, no network:
-- Agent starts and serves API
-- Workspace CRUD operations
-- Terminal WebSocket functionality
-- Credential injection
-
-Example:
-```javascript
-test('creating workspace injects environment variables', async () => {
-  const agent = await startAgent({ port: 0 }); // random port
-
-  await agent.api.post('/workspaces', { name: 'test-ws' });
-
-  const result = await agent.exec('test-ws', 'echo $GITHUB_TOKEN');
-  expect(result.stdout).toBe('ghp_test123');
-
-  await agent.cleanup();
-});
-```
-
-#### E2E Tests
-
-Full system, simulates real usage:
-- Client CLI → Agent API → Docker
-- TUI interaction (where feasible)
-- Web UI basic flows (Playwright)
-
-Example:
-```javascript
-test('full workflow: create, shell, delete', async () => {
-  const agent = await startTestAgent();
-
-  await cli('config', 'set', 'worker', `localhost:${agent.port}`);
-  await cli('start', 'e2e-test');
-
-  const result = await cli('shell', 'e2e-test', '-c', 'whoami');
-  expect(result.stdout).toContain('workspace');
-
-  await cli('delete', 'e2e-test');
-  await agent.stop();
-});
-```
-
-### Test Harness
-
-```javascript
-// test/helpers/agent.js
-export async function startTestAgent(config = {}) {
-  const port = await getRandomPort();
-  const configDir = await createTempConfig(config);
-
-  const process = spawn('node', ['src/agent/index.js'], {
-    env: { ...process.env, WS_CONFIG_DIR: configDir, WS_PORT: port }
-  });
-
-  await waitForHealthy(`http://localhost:${port}`);
-
-  return {
-    port,
-    api: createApiClient(`http://localhost:${port}`),
-    exec: (workspace, cmd) => execInWorkspace(port, workspace, cmd),
-    cleanup: async () => {
-      process.kill();
-      await cleanupContainers('test-');
-      await fs.rm(configDir, { recursive: true });
-    }
-  };
-}
-```
-
-### CI Considerations
-
-- Unit tests: Run everywhere, fast
-- Integration tests: Require Docker, run on Linux CI
-- E2E tests: Require Docker, may need longer timeout
-- Tailscale-dependent tests: Skip in CI or mock
-
----
-
-## Development Phases
-
-### Phase 0: Foundation
-
-**Goal**: Refactor existing code, establish architecture.
-
-Tasks:
-- [ ] Extract Docker operations into reusable module
-- [ ] Define TypeScript-style interfaces (JSDoc for now)
-- [ ] Set up test harness
-- [ ] Create project structure for new components
-
-Tests:
-- Existing tests still pass
-- New test harness works
-
-### Phase 1: Agent Daemon
-
-**Goal**: Worker runs daemon, serves API.
-
-Tasks:
-- [ ] HTTP server with health endpoint
-- [ ] Workspace CRUD endpoints
-- [ ] State persistence (JSON)
-- [ ] systemd service installation (`ws agent install`)
-
-Tests:
-- Agent starts and responds to health check
-- Can create/list/delete workspace via API
-- State persists across restart
-
-### Phase 2: Terminal
-
-**Goal**: Interactive terminal via WebSocket.
-
-Tasks:
-- [ ] WebSocket endpoint for terminal
-- [ ] PTY management in container
-- [ ] Resize handling
-- [ ] Connection cleanup on disconnect
-
-Tests:
-- Can open terminal, run command, see output
-- Resize works
-- Multiple simultaneous terminals
-
-### Phase 3: CLI Client
-
-**Goal**: CLI commands work against remote worker.
-
-Tasks:
-- [ ] Client config management (`ws config`)
-- [ ] Refactor commands to use API client
-- [ ] `ws start`, `ws stop`, `ws list`, `ws delete`
-- [ ] `ws shell` with local terminal emulation
-
-Tests:
-- CLI connects to remote agent
-- All commands work end-to-end
-
-### Phase 4: Credential System
-
-**Goal**: Credentials injected into workspaces.
-
-Tasks:
-- [ ] Config schema and validation
-- [ ] Environment variable injection
-- [ ] File copying into containers
-- [ ] Directory copying for OAuth tokens
-- [ ] Post-start script execution
-
-Tests:
-- Env vars present in workspace
-- Files copied to correct locations
-- Post-start script runs
-
-### Phase 5: TUI
-
-**Goal**: Interactive dashboard in terminal.
-
-Tasks:
-- [ ] OpenTUI setup
-- [ ] Workspace list view
-- [ ] Create workspace form (with optional repo selection)
-- [ ] Integrated terminal
-- [ ] Config management UI
-
-Tests:
-- TUI renders without errors
-- Navigation works
-- Actions trigger correct API calls
-
-### Phase 6: Web UI
-
-**Goal**: Browser-based management.
-
-Tasks:
-- [ ] React + react-router + shadcn/ui setup
-- [ ] Workspace list and management
-- [ ] xterm.js terminal
-- [ ] Bundle into agent (served as static files)
-
-Tests:
-- Page loads
-- Workspace operations work
-- Terminal functional (Playwright)
-
-### Phase 7: Polish
-
-**Goal**: Production-ready quality.
-
-Tasks:
-- [ ] Error handling and user feedback
-- [ ] Documentation
-- [ ] Docker image publishing
-
----
-
-## Research Items
-
-Items that need investigation before or during implementation:
-
-### OAuth Token Locations & Portability (RESOLVED)
-
-| Tool | Auth Method | Portable? | Notes |
-|------|-------------|-----------|-------|
-| Claude Code | `CLAUDE_CODE_OAUTH_TOKEN` env var | ✓ | Use `claude setup-token` to generate |
-| Claude Code | `~/.claude/.credentials.json` | ✓ | Linux only, tokens not machine-bound |
-| OpenCode | `OPENAI_API_KEY` env var | ✓ | Just API key |
-| GitHub Copilot | `~/.config/github-copilot/` | TBD | Research still needed |
-| Codex CLI | TBD | TBD | Research still needed |
-
-**Recommendation**: Use `CLAUDE_CODE_OAUTH_TOKEN` for Claude Code (designed for containers/CI).
-
-### Codex CLI Authentication (Priority: Medium)
-
-Need to research:
-- How Codex CLI authenticates
-- Where tokens stored
-- Portability for containers
-
-### Terminal Latency Optimization (Priority: Low)
-
-Research from prior art for later implementation:
-- Mosh-style local echo
-- Predictive rendering for common operations
-- Compression strategies
-- Binary protocol optimizations
-
-### Token Usage Tracking (Priority: Medium)
-
-Research document: [RESEARCH_TOKEN_USAGE.md](./RESEARCH_TOKEN_USAGE.md)
-
-Track API token usage across workspaces to help users monitor costs:
-- Log-based collection from workspaces
-- SQLite storage on agent
-- Per-agent and per-workspace breakdown
-- Cost estimation based on model pricing
-- Dashboard UI with time-series visualization
-
----
-
-## Container Image Changes
-
-The existing Dockerfile (`workspace/Dockerfile`) is mostly suitable. It already includes:
-- Docker-in-Docker setup
-- Node.js, Bun, Go, Python, etc.
-- Claude Code pre-installed (`claude.ai/install.sh`)
-- SSH server
-- `workspace` user with sudo
-
-### Current Host Mount Dependencies
-
-The internal scripts (`workspace/internal/`) currently expect these host mounts:
-
-| Mount | Current Use | New Approach |
-|-------|-------------|--------------|
-| `/host/home/.ssh` | Copy SSH keys | `docker cp` at creation |
-| `/host/home/.gitconfig` | Copy git config | `docker cp` at creation |
-| `/workspace/config/runtime.json` | Runtime config | Pass via env vars |
-| `/workspace/userconfig` | User scripts | `docker cp` post-start.sh |
-| `/ssh-agent` | SSH agent socket | Not needed - copy keys instead |
-| `HOST_UID/HOST_GID` | Sync user IDs | Optional - already skipped if unset |
-
-### Required Script Changes
-
-**`workspace/internal/src/commands/add-ssh-key.ts`**:
-- Currently copies from `/host/home/.ssh`
-- Change: Work with pre-copied keys (already partially supports this)
-- The `SSH_PUBLIC_KEY` env var path already works
-
-**`workspace/internal/src/commands/init.ts`**:
-- Currently expects runtime.json mount
-- Change: Accept `WORKSPACE_REPO_URL` env var (already supports this)
-- Change: Look for post-start.sh in predictable location
-
-**`workspace/internal/src/lib/bootstrap.ts`**:
-- Currently looks in `/workspace/userconfig`
-- Change: Support `/workspace/post-start.sh` as simpler path
-
-### Minimal Changes Needed
-
-1. Make `/host/home` references optional (fallback gracefully)
-2. Support env var-only configuration
-3. Add predictable post-start.sh location
-
-The good news: Most of the logic is already there, just needs relaxed assumptions about host mounts.
-
----
-
-## Follow-up Items
-
-Features explicitly deferred to later phases:
-
-### Multi-Worker Support
-
-Not in initial scope, but architecture should allow:
-- Config lists multiple workers
-- CLI can target specific worker: `ws start alpha --on=beefy-server`
-- TUI/Web UI shows workspaces across workers
-- Discovery via Tailscale API (optional feature)
-
-### Mobile App (React Native + Expo)
-
-Architecture supports it now:
-- API is HTTP/WebSocket, works from mobile
-- Auth: Tailscale handles network-level security
-- Terminal: react-native-terminal or similar
-
-### DevContainer Support
-
-Potential future addition:
-- Read `devcontainer.json` from repo
-- Apply Features
-- Provides ecosystem compatibility
-
-### Docker Image Hosting
-
-Currently using locally-built image. Future options:
-- Host on Docker Hub / GitHub Container Registry
-- Pre-pull during `ws agent install`
-- Versioned releases
-
-### Authentication Layer
-
-Currently none (Tailscale-trusted). Future options if needed:
-- Bearer tokens
-- mTLS
-- Integration with Tailscale ACLs
-
----
-
-## Appendix: perry worker Pattern
-
-### Overview
-
-The `perry worker` subcommand runs inside containers to handle container-specific operations like session discovery. It's designed to be updated independently of the Docker image - the compiled binary is copied during `perry sync`, avoiding the need to rebuild images for bug fixes.
-
-### Architecture
-
-```
-src/
-├── index.ts                           # Main CLI with 'worker' subcommand
-├── sessions/agents/
-│   ├── opencode-storage.ts            # Shared session reading logic
-│   └── opencode.ts                    # Container provider (calls perry worker)
-└── workspace/
-    └── manager.ts                     # copyPerryWorker() syncs binary to container
-
-dist/
-├── index.js                           # Main perry CLI
-└── perry-worker                       # Compiled standalone binary (bun build --compile)
-```
-
-### Key Principle: No Bifurcation
-
-The same code (`opencode-storage.ts`) handles OpenCode session reading everywhere:
-- **Host**: Imported directly in `router.ts`
-- **Container**: Called via `perry worker sessions list/messages`
-
-This eliminates duplicate implementations and ensures consistent behavior.
-
-### Build & Sync
-
-The worker binary is compiled during build and copied during sync:
+**Unit Tests** (`test/unit/`):
+- Pure functions, config parsing, validation logic
+- Fast execution, no external dependencies
+
+**Integration Tests** (`test/integration/`):  
+- Agent + Docker interaction
+- oRPC API functionality
+- Workspace lifecycle operations
+- Requires Docker daemon
+
+**E2E Tests** (`test/e2e/`, `web/e2e/`):
+- Full system workflows: CLI → Agent → Docker
+- Web UI interactions (Playwright)
+- Real network communication
+
+### Validation Command
 
 ```bash
-# Build (in package.json scripts)
+bun run validate    # Complete test suite + linting + builds
+```
+
+**Components:**
+- `bun run check` - Linting and type checking  
+- `bun run build` - CLI, worker binary, and web UI builds
+- `bun run test` - Unit and integration tests
+- `bun run test:web` - Playwright e2e web tests
+
+### Philosophy
+
+Tests must catch real bugs, not satisfy coverage metrics. Manual verification remains essential for validating user experience and complex integration scenarios.
+
+---
+
+## Container Architecture
+
+Perry uses a pre-built Docker image (`workspace-base`) with development tools and Docker-in-Docker capability.
+
+### Base Image Features
+
+**Pre-installed Tools:**
+- Node.js, Bun, Go, Python development environments
+- Docker-in-Docker for nested container workflows  
+- SSH server for terminal access
+- Development tools (git, curl, etc.)
+
+**Container Setup:**
+- User: `workspace` with sudo privileges
+- Persistent volumes for /home/workspace 
+- SSH port allocation for external access
+- Internal Docker daemon for development workflows
+
+### Worker Binary Pattern
+
+The `perry worker` binary enables container-side operations:
+
+**Build Process:**
+```bash
 bun build src/index.ts --compile --outfile dist/perry-worker --target=bun
-
-# Sync copies binary to container (in WorkspaceManager.copyPerryWorker)
-docker cp dist/perry-worker container:/usr/local/bin/perry
 ```
 
-### Usage
+**Deployment:**
+- Binary copied to containers during `perry sync`
+- Enables session discovery and container management
+- Self-contained, no npm dependencies in container
 
+**Usage:**
 ```bash
-# List all OpenCode sessions (JSON output)
-perry worker sessions list
-
-# Get messages for a session (JSON output)
-perry worker sessions messages <session_id>
+# Inside container
+perry worker sessions list      # Discover active tool sessions
+perry worker sessions messages  # Get session message history
 ```
 
-### Why This Pattern?
-
-1. **Independent Updates**: Fix bugs in session reading, rebuild, sync - no Docker image rebuild needed
-2. **Single Source of Truth**: Same TypeScript code used on host and in container
-3. **Instant Propagation**: `perry sync` updates all workspaces immediately
-4. **No External Dependencies**: Self-contained binary, no npm install in container
-
-### Adding New Commands
-
-To add new functionality:
-
-1. Add shared logic to `src/sessions/agents/` or appropriate module
-2. Add subcommand to `perry worker` in `src/index.ts`
-3. Import shared module in both host code and worker command
+This pattern allows rapid updates without rebuilding Docker images.
 
 ---
 
-## Appendix: Port Selection
+## Future Enhancements
 
-Default port: **7391**
+### Multi-Agent Support
+- Connect to multiple perry agents from single client
+- Workspace distribution across machines  
+- Load balancing and failover capabilities
 
-Rationale:
-- Not sequential (avoids 3000, 4000, 5000, 8000, 8080)
-- Not used by common development tools
-- Memorable enough (7-3-9-1)
-- Configurable via `ws agent install --port=XXXX`
+### Enhanced Session Management
+- Session persistence across workspace restarts
+- Session sharing and collaboration features
+- Advanced filtering and search capabilities
 
-## Appendix: File Structure
+### DevContainer Integration
+- Support for `.devcontainer.json` configuration
+- VS Code DevContainer feature compatibility
+- Custom container images per workspace
+
+### Network Optimizations
+- Terminal latency improvements (local echo, compression)
+- Session data compression and caching
+- Offline capability for cached data
+
+### Authentication & Security
+- Optional bearer token authentication
+- Integration with Tailscale ACLs
+- Role-based workspace access control
+
+---
+
+## Project Structure
 
 ```
-workspace/
+perry/
 ├── src/
-│   ├── agent/
-│   │   ├── index.js          # Agent entry point
-│   │   ├── server.js         # HTTP/WS server
-│   │   ├── docker.js         # Docker operations
-│   │   ├── terminal.js       # PTY/WebSocket handling
-│   │   └── state.js          # State persistence
-│   ├── cli/
-│   │   ├── index.js          # CLI entry point
-│   │   ├── commands/         # Command implementations
-│   │   └── tui/              # OpenTUI components
-│   ├── client/
-│   │   └── api.js            # HTTP client for agent
-│   ├── config/
-│   │   ├── schema.js         # Config validation
-│   │   └── loader.js         # Load/save config
-│   └── shared/
-│       └── types.js          # Shared types/constants
-├── web/                      # Web UI (separate build)
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── routes/
-│   │   └── components/       # shadcn/ui components
-│   └── dist/                 # Built, served by agent
+│   ├── agent/              # oRPC server and HTTP endpoints
+│   ├── workspace/          # Docker container lifecycle management  
+│   ├── session-manager/    # Real-time session tracking
+│   ├── worker/             # Container-side HTTP server
+│   ├── terminal/           # WebSocket terminal implementation
+│   ├── docker/             # Docker CLI interface
+│   ├── client/             # oRPC client utilities
+│   └── index.ts            # Main CLI entry point
+├── web/                    # React SPA served by agent
+│   ├── src/components/     # shadcn/ui component library
+│   ├── src/lib/           # oRPC client configuration
+│   └── dist/              # Built assets served statically
+├── mobile/                 # React Native + Expo app
+│   └── src/               # Mobile UI components and navigation
 ├── test/
-│   ├── unit/
-│   ├── integration/
-│   ├── e2e/
-│   ├── fixtures/
-│   └── helpers/
-├── Dockerfile
-├── DESIGN.md                 # This document
-└── CLAUDE.md                 # Agent instructions
+│   ├── unit/              # Pure function tests
+│   ├── integration/       # Agent + Docker tests  
+│   └── e2e/               # Full system tests
+├── DESIGN.md              # Architecture documentation
+└── AGENTS.md              # Implementation guidelines
 ```

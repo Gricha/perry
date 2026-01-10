@@ -1,159 +1,100 @@
 # Agent Instructions
 
-## Research Tasks
+## Architecture Reference
 
-Research tasks are always allowed and encouraged. When the TODO list contains research tasks, you should:
-- Investigate the topic thoroughly using web search, documentation, and code exploration
-- Document findings in dedicated research files (e.g., `RESEARCH_<TOPIC>.md`)
-- Update TODO.md with concrete implementation tasks based on research findings
-- Research tasks help inform implementation decisions and should not be skipped
+Read `DESIGN.md` for comprehensive architecture, data models, and API specifications. This document provides implementation guidelines.
 
-## Quick Reference
+## Validation
+
+**Required validation before marking any task complete:**
 
 ```bash
-bun run validate  # Run everything: lint, typecheck, build, test
-bun run check     # Lint + format check + typecheck only
-bun run build     # Build CLI and web UI
-bun run test      # Run tests (requires Docker)
+bun run validate  # Complete validation suite: lint + build + test + web tests
 ```
 
-## Task Management
+**Incremental validation during development:**
 
-**Document Hierarchy:**
+```bash
+bun run check     # Quick: lint + format + typecheck
+bun run build     # Build CLI, worker binary, and web UI
+bun run test      # Unit/integration tests (requires Docker)
+```
 
-| Document | Purpose |
-|----------|---------|
-| `DESIGN.md` | High-level architecture and goals |
-| `REQUIREMENTS.md` | Developer feedback - issues found, things to improve |
-| `TODO.md` | Concrete tasks to implement (the work conduit) |
-| `docs/` | User-facing Docusaurus documentation site |
-| `research/` | Internal research notes (if needed) |
+**Manual verification required:**
+- CLI: Test actual commands with Docker containers
+- Web UI: Test in browser with real agent
+- API: Test HTTP/WebSocket endpoints
+- Agent: Test daemon startup, workspace lifecycle
 
-**Workflow:**
-
-1. Check `REQUIREMENTS.md` for new developer feedback
-2. Research requirements as needed (create `research/RESEARCH_<TOPIC>.md` files)
-3. Convert requirements into concrete tasks in `TODO.md`
-4. Implement tasks from `TODO.md`
-5. Remove completed tasks from `TODO.md`
-
-**Guidelines:**
-
-- Choose tasks based on priority - no strict ordering required
-- Tasks should be detailed enough for a contextless agent but not overly granular
-- Remove tasks when completed (don't leave checked items)
-- Add speculative ideas to "Considerations" section in TODO.md
+**Critical**: Automated tests catch basic issues but cannot verify complete functionality. Always test your changes manually.
 
 ## Project Overview
 
-Perry creates isolated Docker-in-Docker development environments. Distributed architecture: agent daemon, oRPC API, multiple clients (CLI, Web UI, Mobile).
+Perry is a distributed development environment orchestrator using Docker-in-Docker containers. Architecture: agent daemon with oRPC API, multiple clients (CLI, Web UI, Mobile).
 
-**Runtime**: Bun (not Node.js)
-**Language**: TypeScript with ES modules
-**Docs**: Docusaurus site in `docs/` for users, root `.md` files for developers
+- **Runtime**: Bun (not Node.js)  
+- **Language**: TypeScript with ES modules
+- **API**: oRPC server with WebSocket terminals
+- **Clients**: CLI with TUI, React web UI, React Native mobile app
 
-**Mobile Parity**: React Native app (`mobile/`) should match web UI features: workspace list/details, start/stop, settings, sessions.
+See `DESIGN.md` for detailed architecture.
 
-## Key Patterns
+## Implementation Patterns
 
-- **Docker via CLI**: Spawned commands, not SDK (`src/docker/`)
-- **State**: `~/.config/perry/state.json` with file locking (`proper-lockfile`)
-- **API**: oRPC server (`src/agent/`), client (`src/client/api.ts`)
-- **Web UI**: React + Vite + shadcn/ui (`web/`)
-- **Docs**: Docusaurus (`docs/`)
+- **Docker Operations**: CLI spawning (`src/docker/`), not Docker SDK
+- **State Management**: File-locked JSON (`~/.config/perry/state.json`)
+- **oRPC API**: Type-safe client/server communication
+- **Session Management**: Real-time agent session tracking via WebSocket
+- **Worker Binary**: Compiled bun binary synced to containers for container-side operations
 
-## Code Style
+## Code Requirements
 
 - Minimal dependencies
-- No comments in code
-- Early returns, fail fast
+- Early returns, fail fast  
+- TypeScript strict mode
 - Use `withLock()` for state mutations
+- No comments in code (self-documenting)
 
-## Testing
+## Testing Guidelines
 
-**CRITICAL**: You must actually test your changes before claiming they work. Passing `bun run validate` is necessary but NOT sufficient. Automated tests cannot catch everything.
-
-**Testing Protocol:**
-
-1. `bun run validate` - all tests must pass
-2. **Manually verify**:
-   - CLI: Run command, verify output
-   - Web UI: Test in browser
-   - API: curl/test scripts
-   - WebSocket: Test client
-3. Mark complete only when verified
-
-**Test Infrastructure:**
-- Real Docker containers
-- E2E: `test/e2e/`
-- Integration: `test/integration/`
-- Web UI: Playwright (`web/e2e/`)
-
-If modifying Dockerfile/init scripts, run `perry build` first.
-
-### Manual Agent Testing
-
-When manually testing agent changes, use a dedicated test port to avoid conflicts with any running production agent:
-
+**Manual Testing Protocol:**
 ```bash
-# Kill any existing agents and start test agent on port 7391
+# Use isolated test agent to avoid conflicts
 pkill -f "perry agent" 2>/dev/null
 perry agent run --port 7391 &
 
-# Configure CLI to use test agent
+# Configure test client  
 perry config worker localhost:7391
 
-# Test your changes
+# Test workspace lifecycle
 perry list
 perry sync <workspace-name>
 
-# Verify in container (example: testing perry worker binary)
-docker exec -u workspace workspace-<name> perry --version
+# Test worker binary in containers
 docker exec -u workspace workspace-<name> perry worker sessions list
 
-# Test API directly
-curl -s -X POST "http://localhost:7391/rpc/sessions/list" \
+# Test oRPC API
+curl -X POST "http://localhost:7391/rpc/sessions/list" \
   -H "Content-Type: application/json" \
   -d '{"json":{"workspaceName":"<name>"}}'
 ```
 
-**Important**: Always kill the test agent when done, or it will conflict with automated tests.
+**UI Testing Requirements:**
+- Web: Playwright e2e tests required
+- Mobile: Must test on real devices/simulators  
+- APIs: Test HTTP and WebSocket endpoints
 
-### UI Testing
+## Requirements
 
-**Critical**: UI (Web, mobile) MUST have e2e tests. Unit/integration tests miss rendering bugs, event binding issues, and framework regressions.
+- Always run `bun run validate` before marking tasks complete
+- Test with real Docker containers
+- Use SSH for user interaction (not `docker exec`)
+- Follow naming: `workspace-<name>` containers, `workspace-internal-` resources  
+- Maintain backward compatibility
 
-**Required coverage:**
-- Web: Playwright
-- Mobile: Appium/Detox
+## Constraints
 
-## Known Issues
-
-**Web UI oRPC**: Browser needs absolute URL. See `web/src/lib/api.ts`
-
-## Don't
-
-- Add CLI commands without permission
-- Break backward compatibility
-- Use `docker exec` for user interaction (use SSH)
-- Skip failing tests
-- Write complex bash in docker exec (escaping issues - use TypeScript)
-- **Add pre-commit hooks** (husky, lint-staged, etc.) - CI is the appropriate place to catch errors
-
-## Do
-
-- Test with real Docker
-- Follow naming: `workspace-<name>` containers, `workspace-internal-` resources
-- Keep commands fast (lazy init, reuse)
-
-## Releasing
-
-To create a new release:
-
-1. Update version in `package.json` to the new version (e.g., `0.1.7`)
-2. Commit the version bump
-3. Push to main: `git push origin main`
-4. Create tag: `git tag v0.1.7`
-5. Push tag: `git push origin v0.1.7`
-
-The GitHub Actions workflow (`.github/workflows/release.yml`) will automatically build and publish to npm and ghcr.io when a `v*` tag is pushed.
+- No CLI command additions without approval
+- No pre-commit hooks (CI handles validation)
+- No complex bash in docker exec (use TypeScript)
+- No skipping failing tests
