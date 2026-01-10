@@ -132,58 +132,6 @@ export async function linkAgentSession(
 }
 
 /**
- * Update last activity timestamp for a session.
- */
-export async function touchSession(
-  stateDir: string,
-  perrySessionId: string
-): Promise<SessionRecord | null> {
-  return withLock(stateDir, async () => {
-    const registry = await loadRegistry(stateDir);
-    const record = registry.sessions[perrySessionId];
-
-    if (!record) {
-      return null;
-    }
-
-    record.lastActivity = new Date().toISOString();
-    await saveRegistry(stateDir, registry);
-    return record;
-  });
-}
-
-/**
- * Get a session by Perry session ID.
- */
-export async function getSession(
-  stateDir: string,
-  perrySessionId: string
-): Promise<SessionRecord | null> {
-  const registry = await loadRegistry(stateDir);
-  return registry.sessions[perrySessionId] ?? null;
-}
-
-/**
- * Find a session by agent session ID.
- * Used when reconnecting to a session that was started outside Perry.
- */
-export async function findSessionByAgentId(
-  stateDir: string,
-  agentType: AgentType,
-  agentSessionId: string
-): Promise<SessionRecord | null> {
-  const registry = await loadRegistry(stateDir);
-
-  for (const record of Object.values(registry.sessions)) {
-    if (record.agentType === agentType && record.agentSessionId === agentSessionId) {
-      return record;
-    }
-  }
-
-  return null;
-}
-
-/**
  * Get all sessions for a workspace.
  */
 export async function getSessionsForWorkspace(
@@ -195,34 +143,6 @@ export async function getSessionsForWorkspace(
   return Object.values(registry.sessions)
     .filter((record) => record.workspaceName === workspaceName)
     .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
-}
-
-/**
- * Get all sessions across all workspaces.
- */
-export async function getAllSessions(stateDir: string): Promise<SessionRecord[]> {
-  const registry = await loadRegistry(stateDir);
-
-  return Object.values(registry.sessions).sort(
-    (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
-  );
-}
-
-/**
- * Delete a session from the registry.
- */
-export async function deleteSession(stateDir: string, perrySessionId: string): Promise<boolean> {
-  return withLock(stateDir, async () => {
-    const registry = await loadRegistry(stateDir);
-
-    if (!registry.sessions[perrySessionId]) {
-      return false;
-    }
-
-    delete registry.sessions[perrySessionId];
-    await saveRegistry(stateDir, registry);
-    return true;
-  });
 }
 
 /**
@@ -271,24 +191,4 @@ export async function importExternalSession(
 
     return record;
   });
-}
-
-/**
- * Check if a session exists (by Perry ID or agent ID).
- */
-export async function sessionExists(
-  stateDir: string,
-  options: { perrySessionId?: string; agentType?: AgentType; agentSessionId?: string }
-): Promise<boolean> {
-  if (options.perrySessionId) {
-    const session = await getSession(stateDir, options.perrySessionId);
-    return session !== null;
-  }
-
-  if (options.agentType && options.agentSessionId) {
-    const session = await findSessionByAgentId(stateDir, options.agentType, options.agentSessionId);
-    return session !== null;
-  }
-
-  return false;
 }

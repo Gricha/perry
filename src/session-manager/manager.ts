@@ -110,15 +110,13 @@ export class SessionManager {
     this.sessions.set(sessionId, session);
 
     if (this.stateDir) {
-      registry
-        .createSession(this.stateDir, {
-          perrySessionId: sessionId,
-          workspaceName: options.workspaceName,
-          agentType: options.agentType,
-          agentSessionId: options.agentSessionId ?? null,
-          projectPath: options.projectPath ?? null,
-        })
-        .catch(() => {});
+      await registry.createSession(this.stateDir, {
+        perrySessionId: sessionId,
+        workspaceName: options.workspaceName,
+        agentType: options.agentType,
+        agentSessionId: options.agentSessionId ?? null,
+        projectPath: options.projectPath ?? null,
+      });
     }
 
     return sessionId;
@@ -160,7 +158,12 @@ export class SessionManager {
       session.info.agentSessionId = currentAgentSessionId;
 
       if (this.stateDir) {
-        registry.linkAgentSession(this.stateDir, sessionId, currentAgentSessionId).catch(() => {});
+        registry.linkAgentSession(this.stateDir, sessionId, currentAgentSessionId).catch((err) => {
+          this.handleAdapterError(
+            sessionId,
+            new Error(`Failed to link agent session: ${err.message}`)
+          );
+        });
       }
 
       const updateMessage: ChatMessage = {

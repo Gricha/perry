@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 interface ChatMessagePart {
   type: 'text' | 'tool_use' | 'tool_result'
   content: string
+  messageId?: string
   toolName?: string
   toolId?: string
 }
@@ -37,6 +38,7 @@ interface RawMessage {
     | 'session_joined'
   content: string
   timestamp: string
+  messageId?: string
   toolName?: string
   toolId?: string
 }
@@ -370,6 +372,8 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
   const streamingPartsRef = useRef<ChatMessagePart[]>([])
   const [streamingParts, setStreamingParts] = useState<ChatMessagePart[]>([])
   const turnIdRef = useRef(0)
+  const seenMessageChunksRef = useRef<Set<string>>(new Set())
+  const currentMessageIdRef = useRef<string | undefined>(undefined)
 
   const wsRef = useRef<WebSocket | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -478,6 +482,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
     streamingPartsRef.current = []
     setStreamingParts([])
     setIsStreaming(false)
+    currentMessageIdRef.current = undefined
   }, [])
 
   const connect = useCallback(() => {
@@ -531,11 +536,18 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
         }
 
         // Handle replayed user messages from server (on reconnect)
-        // Skip if we already have this message (it was added locally when sent)
+        // Use messageId for deduplication when available, fall back to content comparison
         if (msg.type === 'user') {
+          const dedupKey = msg.messageId
+            ? `user:${msg.messageId}`
+            : `user:${msg.timestamp}:${msg.content}`
+          if (seenMessageChunksRef.current.has(dedupKey)) {
+            return
+          }
+          seenMessageChunksRef.current.add(dedupKey)
           setMessages(prev => {
+            // Also check against existing messages in case it was added locally
             const lastUserMsg = [...prev].reverse().find(m => m.type === 'user')
-            // Skip if the last user message has the same content (avoid duplicates)
             if (lastUserMsg && lastUserMsg.content === msg.content) {
               return prev
             }
@@ -549,6 +561,17 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
         }
 
         if (msg.type === 'tool_use') {
+          // Track messageId for this streaming turn
+          if (msg.messageId) {
+            currentMessageIdRef.current = msg.messageId
+          }
+          // Deduplicate tool_use by toolId (more reliable than messageId for tools)
+          const dedupKey = `tool_use:${msg.toolId}`
+          if (seenMessageChunksRef.current.has(dedupKey)) {
+            return
+          }
+          seenMessageChunksRef.current.add(dedupKey)
+
           const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
           if (lastPart?.type === 'text' && lastPart.content === '') {
             streamingPartsRef.current.pop()
@@ -556,15 +579,27 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
           streamingPartsRef.current.push({
             type: 'tool_use',
             content: msg.content,
+            messageId: msg.messageId,
             toolName: msg.toolName,
             toolId: msg.toolId,
           })
-          streamingPartsRef.current.push({ type: 'text', content: '' })
+          streamingPartsRef.current.push({ type: 'text', content: '', messageId: msg.messageId })
           setStreamingParts([...streamingPartsRef.current])
           return
         }
 
         if (msg.type === 'tool_result') {
+          // Track messageId for this streaming turn
+          if (msg.messageId) {
+            currentMessageIdRef.current = msg.messageId
+          }
+          // Deduplicate tool_result by toolId
+          const dedupKey = `tool_result:${msg.toolId}`
+          if (seenMessageChunksRef.current.has(dedupKey)) {
+            return
+          }
+          seenMessageChunksRef.current.add(dedupKey)
+
           const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
           if (lastPart?.type === 'text' && lastPart.content === '') {
             streamingPartsRef.current.pop()
@@ -572,22 +607,29 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
           streamingPartsRef.current.push({
             type: 'tool_result',
             content: msg.content,
+            messageId: msg.messageId,
             toolId: msg.toolId,
           })
-          streamingPartsRef.current.push({ type: 'text', content: '' })
+          streamingPartsRef.current.push({ type: 'text', content: '', messageId: msg.messageId })
           setStreamingParts([...streamingPartsRef.current])
           return
         }
 
         if (msg.type === 'assistant') {
+          // Track messageId for this streaming turn
+          if (msg.messageId) {
+            currentMessageIdRef.current = msg.messageId
+          }
+
           if (streamingPartsRef.current.length === 0) {
-            streamingPartsRef.current.push({ type: 'text', content: '' })
+            streamingPartsRef.current.push({ type: 'text', content: '', messageId: msg.messageId })
           }
           const lastPart = streamingPartsRef.current[streamingPartsRef.current.length - 1]
           if (lastPart?.type === 'text') {
             lastPart.content += msg.content
+            if (msg.messageId) lastPart.messageId = msg.messageId
           } else {
-            streamingPartsRef.current.push({ type: 'text', content: msg.content })
+            streamingPartsRef.current.push({ type: 'text', content: msg.content, messageId: msg.messageId })
           }
           setStreamingParts([...streamingPartsRef.current])
           return

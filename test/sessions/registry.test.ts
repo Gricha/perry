@@ -5,16 +5,21 @@ import { tmpdir } from 'os';
 import {
   createSession,
   linkAgentSession,
-  touchSession,
-  getSession,
-  findSessionByAgentId,
   getSessionsForWorkspace,
-  getAllSessions,
-  deleteSession,
   importExternalSession,
-  sessionExists,
   type SessionRecord,
 } from '../../src/sessions/registry';
+
+async function readRegistryFromDisk(
+  stateDir: string
+): Promise<{ version: number; sessions: Record<string, SessionRecord> }> {
+  try {
+    const content = await readFile(join(stateDir, 'session-registry.json'), 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return { version: 1, sessions: {} };
+  }
+}
 
 describe('Session Registry', () => {
   let stateDir: string;
@@ -69,8 +74,7 @@ describe('Session Registry', () => {
         agentType: 'claude',
       });
 
-      const content = await readFile(join(stateDir, 'session-registry.json'), 'utf-8');
-      const registry = JSON.parse(content);
+      const registry = await readRegistryFromDisk(stateDir);
 
       expect(registry.version).toBe(1);
       expect(registry.sessions['perry-123']).toBeDefined();
@@ -93,8 +97,8 @@ describe('Session Registry', () => {
       expect(updated.workspaceName).toBe('workspace-2');
       expect(updated.agentType).toBe('opencode');
 
-      const retrieved = await getSession(stateDir, 'perry-123');
-      expect(retrieved?.workspaceName).toBe('workspace-2');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-123'].workspaceName).toBe('workspace-2');
     });
   });
 
@@ -119,7 +123,6 @@ describe('Session Registry', () => {
         agentType: 'claude',
       });
 
-      // Small delay to ensure timestamp difference
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       const linked = await linkAgentSession(stateDir, 'perry-123', 'claude-session-abc');
@@ -141,105 +144,8 @@ describe('Session Registry', () => {
 
       await linkAgentSession(stateDir, 'perry-123', 'claude-session-abc');
 
-      // Simulate server restart by reading fresh from disk
-      const retrieved = await getSession(stateDir, 'perry-123');
-      expect(retrieved?.agentSessionId).toBe('claude-session-abc');
-    });
-  });
-
-  describe('touchSession', () => {
-    it('updates lastActivity timestamp', async () => {
-      const created = await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      const touched = await touchSession(stateDir, 'perry-123');
-
-      expect(touched!.lastActivity > created.lastActivity).toBe(true);
-      expect(touched!.createdAt).toBe(created.createdAt);
-    });
-
-    it('returns null for non-existent session', async () => {
-      const result = await touchSession(stateDir, 'non-existent');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getSession', () => {
-    it('retrieves existing session', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        projectPath: '/some/path',
-      });
-
-      const session = await getSession(stateDir, 'perry-123');
-
-      expect(session).not.toBeNull();
-      expect(session!.perrySessionId).toBe('perry-123');
-      expect(session!.projectPath).toBe('/some/path');
-    });
-
-    it('returns null for non-existent session', async () => {
-      const session = await getSession(stateDir, 'non-existent');
-      expect(session).toBeNull();
-    });
-  });
-
-  describe('findSessionByAgentId', () => {
-    it('finds session by agent type and agent session ID', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        agentSessionId: 'claude-abc',
-      });
-
-      const found = await findSessionByAgentId(stateDir, 'claude', 'claude-abc');
-
-      expect(found).not.toBeNull();
-      expect(found!.perrySessionId).toBe('perry-123');
-    });
-
-    it('returns null when agent ID not found', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        agentSessionId: 'claude-abc',
-      });
-
-      const found = await findSessionByAgentId(stateDir, 'claude', 'different-id');
-      expect(found).toBeNull();
-    });
-
-    it('returns null when agent type does not match', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        agentSessionId: 'session-abc',
-      });
-
-      const found = await findSessionByAgentId(stateDir, 'opencode', 'session-abc');
-      expect(found).toBeNull();
-    });
-
-    it('does not find sessions without agent ID linked', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        // No agentSessionId
-      });
-
-      const found = await findSessionByAgentId(stateDir, 'claude', 'any-id');
-      expect(found).toBeNull();
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-123'].agentSessionId).toBe('claude-session-abc');
     });
   });
 
@@ -289,58 +195,12 @@ describe('Session Registry', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      await touchSession(stateDir, 'perry-1'); // Make perry-1 most recent
+      await linkAgentSession(stateDir, 'perry-1', 'agent-1');
 
       const sessions = await getSessionsForWorkspace(stateDir, 'workspace-a');
 
       expect(sessions[0].perrySessionId).toBe('perry-1');
       expect(sessions[1].perrySessionId).toBe('perry-2');
-    });
-  });
-
-  describe('getAllSessions', () => {
-    it('returns all sessions across workspaces', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-1',
-        workspaceName: 'workspace-a',
-        agentType: 'claude',
-      });
-      await createSession(stateDir, {
-        perrySessionId: 'perry-2',
-        workspaceName: 'workspace-b',
-        agentType: 'opencode',
-      });
-
-      const sessions = await getAllSessions(stateDir);
-
-      expect(sessions).toHaveLength(2);
-    });
-
-    it('returns empty array when no sessions exist', async () => {
-      const sessions = await getAllSessions(stateDir);
-      expect(sessions).toEqual([]);
-    });
-  });
-
-  describe('deleteSession', () => {
-    it('deletes existing session', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-      });
-
-      const result = await deleteSession(stateDir, 'perry-123');
-
-      expect(result).toBe(true);
-
-      const session = await getSession(stateDir, 'perry-123');
-      expect(session).toBeNull();
-    });
-
-    it('returns false for non-existent session', async () => {
-      const result = await deleteSession(stateDir, 'non-existent');
-      expect(result).toBe(false);
     });
   });
 
@@ -371,13 +231,13 @@ describe('Session Registry', () => {
       });
 
       const second = await importExternalSession(stateDir, {
-        perrySessionId: 'perry-2', // Different Perry ID
+        perrySessionId: 'perry-2',
         workspaceName: 'my-workspace',
         agentType: 'claude',
-        agentSessionId: 'claude-abc', // Same agent ID
+        agentSessionId: 'claude-abc',
       });
 
-      expect(second.perrySessionId).toBe('perry-1'); // Returns first, not second
+      expect(second.perrySessionId).toBe('perry-1');
     });
 
     it('generates timestamps if not provided', async () => {
@@ -397,52 +257,9 @@ describe('Session Registry', () => {
     });
   });
 
-  describe('sessionExists', () => {
-    beforeEach(async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-123',
-        workspaceName: 'my-workspace',
-        agentType: 'claude',
-        agentSessionId: 'claude-abc',
-      });
-    });
-
-    it('returns true for existing Perry session ID', async () => {
-      const exists = await sessionExists(stateDir, { perrySessionId: 'perry-123' });
-      expect(exists).toBe(true);
-    });
-
-    it('returns false for non-existent Perry session ID', async () => {
-      const exists = await sessionExists(stateDir, { perrySessionId: 'non-existent' });
-      expect(exists).toBe(false);
-    });
-
-    it('returns true for existing agent session ID', async () => {
-      const exists = await sessionExists(stateDir, {
-        agentType: 'claude',
-        agentSessionId: 'claude-abc',
-      });
-      expect(exists).toBe(true);
-    });
-
-    it('returns false for non-existent agent session ID', async () => {
-      const exists = await sessionExists(stateDir, {
-        agentType: 'claude',
-        agentSessionId: 'non-existent',
-      });
-      expect(exists).toBe(false);
-    });
-
-    it('returns false when no options provided', async () => {
-      const exists = await sessionExists(stateDir, {});
-      expect(exists).toBe(false);
-    });
-  });
-
   describe('edge cases', () => {
     it('handles empty registry file gracefully', async () => {
-      // Registry doesn't exist yet
-      const sessions = await getAllSessions(stateDir);
+      const sessions = await getSessionsForWorkspace(stateDir, 'any-workspace');
       expect(sessions).toEqual([]);
     });
 
@@ -457,51 +274,39 @@ describe('Session Registry', () => {
 
       await Promise.all(promises);
 
-      const sessions = await getAllSessions(stateDir);
+      const sessions = await getSessionsForWorkspace(stateDir, 'my-workspace');
       expect(sessions).toHaveLength(10);
     });
 
     it('survives server restart (data persisted)', async () => {
-      // Create session
       await createSession(stateDir, {
         perrySessionId: 'perry-123',
         workspaceName: 'my-workspace',
         agentType: 'claude',
       });
 
-      // Link agent session
       await linkAgentSession(stateDir, 'perry-123', 'claude-abc');
 
-      // "Restart" - clear any in-memory state by just using the functions again
-      // (they always read from disk)
-      const session = await getSession(stateDir, 'perry-123');
+      const registry = await readRegistryFromDisk(stateDir);
 
-      expect(session).not.toBeNull();
-      expect(session!.agentSessionId).toBe('claude-abc');
+      expect(registry.sessions['perry-123']).not.toBeUndefined();
+      expect(registry.sessions['perry-123'].agentSessionId).toBe('claude-abc');
     });
 
     it('agent responds after client disconnects - link still persists', async () => {
-      // Simulate: client creates session, disconnects
       await createSession(stateDir, {
         perrySessionId: 'perry-123',
         workspaceName: 'my-workspace',
         agentType: 'claude',
       });
 
-      // Client is gone, but server receives agent response and links it
       await linkAgentSession(stateDir, 'perry-123', 'claude-abc');
 
-      // Later, client reconnects and can find the session
-      const session = await getSession(stateDir, 'perry-123');
-      expect(session?.agentSessionId).toBe('claude-abc');
-
-      // Or find by agent ID
-      const found = await findSessionByAgentId(stateDir, 'claude', 'claude-abc');
-      expect(found?.perrySessionId).toBe('perry-123');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-123'].agentSessionId).toBe('claude-abc');
     });
 
     it('merging external sessions does not duplicate', async () => {
-      // First, import an external session
       await importExternalSession(stateDir, {
         perrySessionId: 'perry-ext-1',
         workspaceName: 'my-workspace',
@@ -509,7 +314,6 @@ describe('Session Registry', () => {
         agentSessionId: 'claude-external',
       });
 
-      // Try to import again with different Perry ID
       await importExternalSession(stateDir, {
         perrySessionId: 'perry-ext-2',
         workspaceName: 'my-workspace',
@@ -525,45 +329,30 @@ describe('Session Registry', () => {
 
   describe('connectivity and reconnection scenarios', () => {
     it('session exists before agent responds (pending link)', async () => {
-      // Client sends first message, session created with no agentSessionId
       const session = await createSession(stateDir, {
         perrySessionId: 'perry-pending',
         workspaceName: 'my-workspace',
         agentType: 'claude',
-        // No agentSessionId yet - agent hasn't responded
       });
 
       expect(session.agentSessionId).toBeNull();
 
-      // Session should be findable by perrySessionId
-      const found = await getSession(stateDir, 'perry-pending');
-      expect(found).not.toBeNull();
-      expect(found!.perrySessionId).toBe('perry-pending');
-
-      // But NOT findable by agentSessionId (none linked yet)
-      const notFound = await findSessionByAgentId(stateDir, 'claude', 'any-id');
-      expect(notFound).toBeNull();
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-pending']).not.toBeUndefined();
+      expect(registry.sessions['perry-pending'].perrySessionId).toBe('perry-pending');
     });
 
     it('client disconnects before agent responds, reconnects after', async () => {
-      // Step 1: Client creates session, then disconnects
       await createSession(stateDir, {
         perrySessionId: 'perry-disconnect',
         workspaceName: 'my-workspace',
         agentType: 'claude',
       });
 
-      // Step 2: Agent responds while client is disconnected - link is created
       await linkAgentSession(stateDir, 'perry-disconnect', 'claude-abc-123');
 
-      // Step 3: Client reconnects - should find session by either ID
-      const byPerryId = await getSession(stateDir, 'perry-disconnect');
-      expect(byPerryId).not.toBeNull();
-      expect(byPerryId!.agentSessionId).toBe('claude-abc-123');
-
-      const byAgentId = await findSessionByAgentId(stateDir, 'claude', 'claude-abc-123');
-      expect(byAgentId).not.toBeNull();
-      expect(byAgentId!.perrySessionId).toBe('perry-disconnect');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-disconnect'].agentSessionId).toBe('claude-abc-123');
     });
 
     it('multiple link attempts are idempotent', async () => {
@@ -573,13 +362,12 @@ describe('Session Registry', () => {
         agentType: 'claude',
       });
 
-      // Multiple link attempts with same agentSessionId
       await linkAgentSession(stateDir, 'perry-multi', 'claude-xyz');
       await linkAgentSession(stateDir, 'perry-multi', 'claude-xyz');
       await linkAgentSession(stateDir, 'perry-multi', 'claude-xyz');
 
-      const session = await getSession(stateDir, 'perry-multi');
-      expect(session!.agentSessionId).toBe('claude-xyz');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-multi'].agentSessionId).toBe('claude-xyz');
     });
 
     it('link updates if agent provides new session ID', async () => {
@@ -590,17 +378,15 @@ describe('Session Registry', () => {
       });
 
       await linkAgentSession(stateDir, 'perry-update', 'claude-first');
-      const first = await getSession(stateDir, 'perry-update');
-      expect(first!.agentSessionId).toBe('claude-first');
+      let registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-update'].agentSessionId).toBe('claude-first');
 
-      // Agent provides different session ID (e.g., session resumed differently)
       await linkAgentSession(stateDir, 'perry-update', 'claude-second');
-      const second = await getSession(stateDir, 'perry-update');
-      expect(second!.agentSessionId).toBe('claude-second');
+      registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-update'].agentSessionId).toBe('claude-second');
     });
 
     it('reconnect to session started outside Perry (via import)', async () => {
-      // User started a Claude session in terminal, now wants to continue in Perry
       const imported = await importExternalSession(stateDir, {
         perrySessionId: 'perry-imported',
         workspaceName: 'my-workspace',
@@ -613,14 +399,11 @@ describe('Session Registry', () => {
       expect(imported.perrySessionId).toBe('perry-imported');
       expect(imported.agentSessionId).toBe('claude-terminal-session');
 
-      // Should be findable by agentSessionId
-      const found = await findSessionByAgentId(stateDir, 'claude', 'claude-terminal-session');
-      expect(found).not.toBeNull();
-      expect(found!.perrySessionId).toBe('perry-imported');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-imported'].agentSessionId).toBe('claude-terminal-session');
     });
 
     it('session listing includes both Perry-started and imported sessions', async () => {
-      // Perry-started session
       await createSession(stateDir, {
         perrySessionId: 'perry-native',
         workspaceName: 'test-ws',
@@ -628,7 +411,6 @@ describe('Session Registry', () => {
       });
       await linkAgentSession(stateDir, 'perry-native', 'claude-native');
 
-      // Imported external session
       await importExternalSession(stateDir, {
         perrySessionId: 'perry-external',
         workspaceName: 'test-ws',
@@ -653,72 +435,14 @@ describe('Session Registry', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate activity from agent (touch updates lastActivity)
-      await touchSession(stateDir, 'perry-activity');
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      // Link agent session (also updates lastActivity)
       await linkAgentSession(stateDir, 'perry-activity', 'claude-active');
 
-      const final = await getSession(stateDir, 'perry-activity');
-      expect(final!.lastActivity > created.lastActivity).toBe(true);
-      expect(final!.createdAt).toBe(created.createdAt); // Created time unchanged
-    });
-
-    it('sessions sorted by most recent activity for reconnection UX', async () => {
-      // Create sessions with staggered activity
-      await createSession(stateDir, {
-        perrySessionId: 'perry-old',
-        workspaceName: 'ux-test',
-        agentType: 'claude',
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 15));
-
-      await createSession(stateDir, {
-        perrySessionId: 'perry-newer',
-        workspaceName: 'ux-test',
-        agentType: 'opencode',
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 15));
-
-      // Touch the old session to make it most recent
-      await touchSession(stateDir, 'perry-old');
-
-      const sessions = await getSessionsForWorkspace(stateDir, 'ux-test');
-
-      // Most recently active should be first
-      expect(sessions[0].perrySessionId).toBe('perry-old');
-      expect(sessions[1].perrySessionId).toBe('perry-newer');
-    });
-
-    it('different agent types tracked separately', async () => {
-      // Same agentSessionId but different agent types (unlikely but possible)
-      await createSession(stateDir, {
-        perrySessionId: 'perry-claude',
-        workspaceName: 'multi-agent',
-        agentType: 'claude',
-        agentSessionId: 'session-123',
-      });
-
-      await createSession(stateDir, {
-        perrySessionId: 'perry-opencode',
-        workspaceName: 'multi-agent',
-        agentType: 'opencode',
-        agentSessionId: 'session-123', // Same ID, different agent
-      });
-
-      const claude = await findSessionByAgentId(stateDir, 'claude', 'session-123');
-      const opencode = await findSessionByAgentId(stateDir, 'opencode', 'session-123');
-
-      expect(claude!.perrySessionId).toBe('perry-claude');
-      expect(opencode!.perrySessionId).toBe('perry-opencode');
+      const registry = await readRegistryFromDisk(stateDir);
+      expect(registry.sessions['perry-activity'].lastActivity > created.lastActivity).toBe(true);
+      expect(registry.sessions['perry-activity'].createdAt).toBe(created.createdAt);
     });
 
     it('handles rapid session creation during reconnection attempts', async () => {
-      // Simulate rapid reconnection attempts creating sessions
       const promises = [];
       for (let i = 0; i < 5; i++) {
         promises.push(
@@ -737,9 +461,6 @@ describe('Session Registry', () => {
     });
 
     it('preserves session data through full lifecycle', async () => {
-      // Full lifecycle: create -> link -> activity -> persist -> recover
-
-      // 1. Create (first message sent)
       await createSession(stateDir, {
         perrySessionId: 'perry-lifecycle',
         workspaceName: 'lifecycle-ws',
@@ -747,40 +468,17 @@ describe('Session Registry', () => {
         projectPath: '/home/user/project',
       });
 
-      // 2. Link (agent responds)
       await linkAgentSession(stateDir, 'perry-lifecycle', 'claude-lifecycle-id');
 
-      // 3. Activity (conversation continues)
-      await touchSession(stateDir, 'perry-lifecycle');
+      const registry = await readRegistryFromDisk(stateDir);
+      const recovered = registry.sessions['perry-lifecycle'];
 
-      // 4. "Server restart" - read fresh from disk
-      const recovered = await getSession(stateDir, 'perry-lifecycle');
-
-      expect(recovered).not.toBeNull();
-      expect(recovered!.perrySessionId).toBe('perry-lifecycle');
-      expect(recovered!.workspaceName).toBe('lifecycle-ws');
-      expect(recovered!.agentType).toBe('claude');
-      expect(recovered!.agentSessionId).toBe('claude-lifecycle-id');
-      expect(recovered!.projectPath).toBe('/home/user/project');
-    });
-
-    it('deleted session cannot be reconnected to', async () => {
-      await createSession(stateDir, {
-        perrySessionId: 'perry-deleted',
-        workspaceName: 'delete-test',
-        agentType: 'claude',
-        agentSessionId: 'claude-to-delete',
-      });
-
-      // Verify exists
-      expect(await getSession(stateDir, 'perry-deleted')).not.toBeNull();
-
-      // Delete
-      await deleteSession(stateDir, 'perry-deleted');
-
-      // Cannot reconnect by either ID
-      expect(await getSession(stateDir, 'perry-deleted')).toBeNull();
-      expect(await findSessionByAgentId(stateDir, 'claude', 'claude-to-delete')).toBeNull();
+      expect(recovered).not.toBeUndefined();
+      expect(recovered.perrySessionId).toBe('perry-lifecycle');
+      expect(recovered.workspaceName).toBe('lifecycle-ws');
+      expect(recovered.agentType).toBe('claude');
+      expect(recovered.agentSessionId).toBe('claude-lifecycle-id');
+      expect(recovered.projectPath).toBe('/home/user/project');
     });
 
     it('workspace isolation - sessions from different workspaces', async () => {
