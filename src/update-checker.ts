@@ -81,11 +81,11 @@ export async function checkForUpdates(currentVersion: string): Promise<void> {
     }
 
     if (latestVersion && compareVersions(currentVersion, latestVersion) > 0) {
-      console.log('');
-      console.log(
+      console.error('');
+      console.error(
         `\x1b[33mUpdate available: \x1b[90m${currentVersion}\x1b[0m → \x1b[32m${latestVersion}\x1b[0m  \x1b[33mRun: \x1b[36mperry update\x1b[0m`
       );
-      console.log('');
+      console.error('');
     }
   } catch {
     // Silently ignore update check errors

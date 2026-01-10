@@ -12,6 +12,7 @@ interface OpenCodeServerEvent {
   properties: {
     part?: {
       id: string;
+      messageID?: string;
       type: string;
       tool?: string;
       state?: {
@@ -125,6 +126,7 @@ export class OpenCodeAdapter implements AgentAdapter {
   private port?: number;
   private isHost = false;
   private sseProcess: Subprocess<'ignore', 'pipe', 'pipe'> | null = null;
+  private currentMessageId?: string;
 
   private messageCallback?: MessageCallback;
   private statusCallback?: StatusCallback;
@@ -253,9 +255,11 @@ export class OpenCodeAdapter implements AgentAdapter {
       await this.sendAndStream(baseUrl, message);
 
       this.setStatus('idle');
-      this.emit({ type: 'done', content: 'Response complete' });
+      this.emit({ type: 'done', content: 'Response complete', messageId: this.currentMessageId });
+      this.currentMessageId = undefined;
     } catch (err) {
       this.cleanup();
+      this.currentMessageId = undefined;
       this.setStatus('error');
       this.emitError(err as Error);
       this.emit({ type: 'error', content: (err as Error).message });
@@ -427,8 +431,16 @@ export class OpenCodeAdapter implements AgentAdapter {
                 if (event.type === 'message.part.updated' && event.properties.part) {
                   const part = event.properties.part;
 
+                  if (part.messageID) {
+                    this.currentMessageId = part.messageID;
+                  }
+
                   if (part.type === 'text' && event.properties.delta) {
-                    this.emit({ type: 'assistant', content: event.properties.delta });
+                    this.emit({
+                      type: 'assistant',
+                      content: event.properties.delta,
+                      messageId: this.currentMessageId,
+                    });
                   } else if (part.type === 'tool' && part.tool && !seenTools.has(part.id)) {
                     seenTools.add(part.id);
                     this.emit({
@@ -436,6 +448,7 @@ export class OpenCodeAdapter implements AgentAdapter {
                       content: JSON.stringify(part.state?.input, null, 2),
                       toolName: part.state?.title || part.tool,
                       toolId: part.id,
+                      messageId: this.currentMessageId,
                     });
 
                     if (part.state?.status === 'completed' && part.state?.output) {
@@ -443,6 +456,7 @@ export class OpenCodeAdapter implements AgentAdapter {
                         type: 'tool_result',
                         content: part.state.output,
                         toolId: part.id,
+                        messageId: this.currentMessageId,
                       });
                     }
                   }
@@ -481,6 +495,7 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   async interrupt(): Promise<void> {
     this.cleanup();
+    this.currentMessageId = undefined;
     if (this.status === 'running') {
       this.setStatus('interrupted');
       this.emit({ type: 'system', content: 'Interrupted' });
