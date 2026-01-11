@@ -29,9 +29,11 @@ export async function openDockerExec(options: DockerExecOptions): Promise<void> 
   const { containerName, onConnect, onDisconnect, onError } = options;
 
   return new Promise((resolve, reject) => {
+    const isInteractive = process.stdin.isTTY;
+
     const args = [
       'exec',
-      '-it',
+      ...(isInteractive ? ['-it'] : ['-i']),
       '-u',
       'workspace',
       '-e',
@@ -42,10 +44,15 @@ export async function openDockerExec(options: DockerExecOptions): Promise<void> 
     ];
 
     const proc = spawn('docker', args, {
-      stdio: 'inherit',
+      stdio: isInteractive ? 'inherit' : ['pipe', 'pipe', 'inherit'],
     });
 
     let connected = false;
+
+    if (!isInteractive) {
+      process.stdin.pipe(proc.stdin!);
+      proc.stdout!.pipe(process.stdout);
+    }
 
     setTimeout(() => {
       if (proc.exitCode === null) {
@@ -77,6 +84,7 @@ export async function openWSShell(options: WSShellOptions): Promise<void> {
     let connected = false;
     const stdin = process.stdin as ReadStream;
     const stdout = process.stdout as WriteStream;
+    const isInteractive = stdin.isTTY;
 
     const safeSend = (data: string | Buffer): boolean => {
       if (ws.readyState !== WebSocket.OPEN) {
@@ -99,12 +107,11 @@ export async function openWSShell(options: WSShellOptions): Promise<void> {
     ws.on('open', () => {
       connected = true;
 
-      if (stdin.isTTY) {
+      if (isInteractive) {
         stdin.setRawMode(true);
+        sendResize();
       }
       stdin.resume();
-
-      sendResize();
 
       if (onConnect) {
         onConnect();
@@ -117,7 +124,7 @@ export async function openWSShell(options: WSShellOptions): Promise<void> {
     });
 
     ws.on('close', (code) => {
-      if (stdin.isTTY) {
+      if (isInteractive) {
         stdin.setRawMode(false);
       }
       stdin.pause();
@@ -140,11 +147,13 @@ export async function openWSShell(options: WSShellOptions): Promise<void> {
       safeSend(data);
     });
 
-    stdout.on('resize', sendResize);
+    if (isInteractive) {
+      stdout.on('resize', sendResize);
+    }
 
     const cleanup = () => {
-      stdout.removeListener('resize', sendResize);
-      if (stdin.isTTY) {
+      if (isInteractive) {
+        stdout.removeListener('resize', sendResize);
         stdin.setRawMode(false);
       }
       ws.close();
