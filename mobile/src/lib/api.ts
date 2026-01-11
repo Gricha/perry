@@ -1,6 +1,7 @@
 import { createORPCClient } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { setUserContext } from './sentry'
 
 import { createDemoChatWebSocket } from './demo/chat'
 import { demoDriver } from './demo/driver'
@@ -164,6 +165,7 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
   baseUrl = `http://${config.host}:${config.port}`
   client = createClient()
   setServerMode(mode)
+  setUserContext(baseUrl)
 
   return { ...config, mode }
 }
@@ -177,6 +179,7 @@ export async function saveServerConfig(host: string, port: number = DEFAULT_PORT
   baseUrl = `http://${host}:${port}`
   client = createClient()
   setServerMode(mode)
+  setUserContext(baseUrl)
 }
 
 export function getDefaultPort(): number {
