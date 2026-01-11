@@ -348,9 +348,13 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
   }, [initialSessionId, workspaceName, agentType, parseMessages])
 
   useEffect(() => {
+    let active = true
     const fetchAgentType = agentType === 'opencode' ? 'opencode' : 'claude-code'
+
     api.listModels(fetchAgentType, workspaceName)
       .then(async ({ models }) => {
+        if (!active) return
+
         setAvailableModels(models)
 
         if (models.length === 0) return
@@ -384,17 +388,25 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
 
         try {
           const agents = await api.getAgents()
+          if (!active) return
+
           const configModel = fetchAgentType === 'opencode'
             ? agents.opencode?.model
             : agents.claude_code?.model
           setSelectedModel(pickDefault(configModel))
         } catch {
+          if (!active) return
           setSelectedModel(pickDefault())
         }
       })
       .catch((err) => {
+        if (!active) return
         console.error('Failed to load models:', err)
       })
+
+    return () => {
+      active = false
+    }
   }, [agentType, workspaceName])
 
   const streamingPartsRef = useRef<ChatMessagePart[]>([])
