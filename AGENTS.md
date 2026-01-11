@@ -12,6 +12,27 @@ Read `DESIGN.md` for comprehensive architecture, data models, and API specificat
 bun run validate  # Complete validation suite: lint + build + test + web tests
 ```
 
+## Release
+
+To cut a new release:
+
+```bash
+# 1) Validate
+bun run validate
+
+# 2) Bump version in package.json (patch/minor/major)
+# Example: 0.3.13 -> 0.3.14
+
+# 3) Commit + push to main
+git add package.json
+git commit -m "Bump version to <x.y.z>"
+git push origin main
+
+# 4) Tag and push the tag (CI builds/publishes on v* tags)
+git tag v<x.y.z>
+git push origin v<x.y.z>
+```
+
 **Incremental validation during development:**
 
 ```bash
