@@ -297,6 +297,7 @@ export class WorkspaceManager {
     await this.syncEnvironmentFile(containerName);
     await syncAllAgents(containerName, this.config);
     await this.copyPerryWorker(containerName);
+    await this.ensurePerryOnPath(containerName);
     await this.startWorkerServer(containerName);
     if (workspaceName) {
       await this.setupSSHKeys(containerName, workspaceName);
@@ -333,6 +334,18 @@ export class WorkspaceManager {
     });
   }
 
+  private async ensurePerryOnPath(containerName: string): Promise<void> {
+    await docker.execInContainer(
+      containerName,
+      [
+        'sh',
+        '-c',
+        'mkdir -p /home/workspace/.local/bin && ln -sf /usr/local/bin/perry /home/workspace/.local/bin/perry',
+      ],
+      { user: 'workspace' }
+    );
+  }
+
   async updateWorkerBinary(name: string): Promise<void> {
     const workspace = await this.state.getWorkspace(name);
     if (!workspace) {
@@ -365,12 +378,27 @@ export class WorkspaceManager {
       return;
     }
 
+    const desiredVersion = pkg.version;
+
     try {
       const healthResponse = await fetch(`http://${ip}:${WORKER_PORT}/health`, {
         signal: AbortSignal.timeout(1000),
       });
+
       if (healthResponse.ok) {
-        return;
+        const health = (await healthResponse.json().catch(() => null)) as {
+          version?: string;
+        } | null;
+
+        if (health?.version === desiredVersion) {
+          return;
+        }
+
+        await docker.execInContainer(
+          containerName,
+          ['sh', '-c', 'pkill -f "perry worker serve" || true'],
+          { user: 'workspace' }
+        );
       }
     } catch {
       // Worker not running, start it
@@ -378,7 +406,7 @@ export class WorkspaceManager {
 
     await docker.execInContainer(
       containerName,
-      ['sh', '-c', 'nohup perry worker serve > /tmp/perry-worker.log 2>&1 &'],
+      ['sh', '-c', 'nohup /usr/local/bin/perry worker serve > /tmp/perry-worker.log 2>&1 &'],
       { user: 'workspace' }
     );
 
@@ -389,7 +417,13 @@ export class WorkspaceManager {
         const response = await fetch(`http://${ip}:${WORKER_PORT}/health`, {
           signal: AbortSignal.timeout(500),
         });
-        if (response.ok) {
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const health = (await response.json().catch(() => null)) as { version?: string } | null;
+        if (health?.version === desiredVersion) {
           return;
         }
       } catch {
