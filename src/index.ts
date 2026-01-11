@@ -835,31 +835,148 @@ program
       process.exit(0);
     }
 
-    const agentRunning = await checkLocalAgent();
-    if (agentRunning) {
-      console.error('');
-      console.error('Warning: Perry agent is currently running.');
-      console.error('The update may fail with "Text file busy" error.');
-      console.error('');
-      console.error('Stop the agent first with:');
-      console.error('  perry agent kill');
-      console.error('');
-      console.error('Then run the update again.');
-      process.exit(1);
+    const configDir = getConfigDir();
+    const agentConfig = await loadAgentConfig(configDir);
+    const agentPort = agentConfig.port || DEFAULT_AGENT_PORT;
+
+    async function checkAgentRunning(): Promise<boolean> {
+      try {
+        const response = await fetch(`http://localhost:${agentPort}/health`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    async function waitForAgentReady(timeoutMs = 15000): Promise<boolean> {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (await checkAgentRunning()) {
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return false;
+    }
+
+    async function runProcess(command: string, args: string[], inherit = true): Promise<number> {
+      const proc = spawn(command, args, { stdio: inherit ? 'inherit' : 'ignore' });
+      return await new Promise<number>((resolve) => proc.on('close', (code) => resolve(code ?? 0)));
+    }
+
+    const serviceStatus = await getServiceStatus();
+    const wasSystemdRunning = serviceStatus.running;
+    const wasAgentRunning = wasSystemdRunning ? true : await checkAgentRunning();
+
+    if (wasAgentRunning) {
+      console.log('');
+      console.log('Agent is running; update will restart it.');
+      console.log('');
+
+      if (wasSystemdRunning) {
+        const stopCode = await runProcess('systemctl', ['--user', 'stop', 'perry-agent']);
+        if (stopCode !== 0) {
+          console.error('Failed to stop agent service.');
+          process.exit(stopCode);
+        }
+      } else {
+        await runProcess('pkill', ['-f', 'perry.*agent.*run']);
+        await new Promise((r) => setTimeout(r, 500));
+        const stillRunning = await checkAgentRunning();
+        if (stillRunning) {
+          await runProcess('pkill', ['-9', '-f', 'perry.*agent.*run']);
+        }
+      }
     }
 
     console.log(`Updating Perry from ${currentVersion} to ${latestVersion}...`);
 
-    const child = spawn(
-      'bash',
-      ['-c', 'curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash'],
-      {
-        stdio: 'inherit',
+    const updateExitCode = await runProcess('bash', [
+      '-c',
+      'curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash',
+    ]);
+
+    if (updateExitCode !== 0) {
+      process.exit(updateExitCode);
+    }
+
+    if (wasSystemdRunning) {
+      const startCode = await runProcess('systemctl', ['--user', 'start', 'perry-agent']);
+      if (startCode !== 0) {
+        console.error('Updated perry, but failed to start agent service.');
+        process.exit(startCode);
       }
-    );
-    child.on('close', (code) => {
-      process.exit(code ?? 0);
-    });
+    } else if (wasAgentRunning) {
+      const proc = spawn(
+        'perry',
+        ['agent', 'run', '--port', String(agentPort), '--config-dir', configDir],
+        {
+          detached: true,
+          stdio: 'ignore',
+        }
+      );
+      proc.unref();
+    }
+
+    if (!wasAgentRunning) {
+      console.log('');
+      console.log('Agent was not running; skipping workspace sync.');
+      console.log('To update running workspaces, start the agent and run:');
+      console.log('  perry sync --all');
+      process.exit(0);
+    }
+
+    const agentReady = await waitForAgentReady();
+    if (!agentReady) {
+      console.log('');
+      console.error('Updated perry, but agent did not become ready in time.');
+      if (wasSystemdRunning) {
+        console.error('Check logs with:');
+        console.error('  journalctl --user -u perry-agent -f');
+      }
+      console.error('Then sync workspaces with:');
+      console.error('  perry sync --all');
+      process.exit(1);
+    }
+
+    try {
+      console.log('');
+      console.log('Syncing all running workspaces...');
+
+      const client = createApiClient(`localhost:${agentPort}`);
+      const result = await client.syncAllWorkspaces();
+
+      if (result.results.length === 0) {
+        console.log('No running workspaces to sync.');
+        process.exit(0);
+      }
+
+      for (const r of result.results) {
+        if (r.success) {
+          console.log(`  ✓ ${r.name}`);
+        } else {
+          console.log(`  ✗ ${r.name}: ${r.error}`);
+        }
+      }
+
+      console.log('');
+      console.log(`Synced: ${result.synced}, Failed: ${result.failed}`);
+    } catch (err) {
+      console.error('');
+      console.error('Updated perry, but workspace sync failed.');
+      if (err instanceof ApiClientError) {
+        console.error(err.message);
+      } else if (err instanceof Error) {
+        console.error(err.message);
+      } else {
+        console.error(String(err));
+      }
+      console.error('Run `perry sync --all` after the agent is reachable.');
+    }
+
+    process.exit(0);
   });
 
 program

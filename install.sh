@@ -117,8 +117,12 @@ download_and_install() {
 
   local extracted_dir="$tmp_dir/perry-${version}-${platform}"
 
-  cp "$extracted_dir/$binary_name" "$BIN_DIR/perry"
-  chmod +x "$BIN_DIR/perry"
+  local target="$BIN_DIR/perry"
+  local tmp_target="$BIN_DIR/.perry.tmp.$$"
+
+  cp "$extracted_dir/$binary_name" "$tmp_target"
+  chmod +x "$tmp_target"
+  mv -f "$tmp_target" "$target"
 
   if [[ -d "$extracted_dir/web" ]]; then
     rm -rf "$INSTALL_DIR/web"
