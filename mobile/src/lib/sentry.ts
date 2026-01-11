@@ -22,8 +22,10 @@ export function setUserContext(serverUrl: string) {
 }
 
 export function captureError(error: Error, context?: Record<string, unknown>) {
-  if (context) {
-    Sentry.setContext('errorContext', context);
-  }
-  Sentry.captureException(error);
+  Sentry.withScope((scope) => {
+    if (context) {
+      scope.setContext('errorContext', context);
+    }
+    Sentry.captureException(error);
+  });
 }

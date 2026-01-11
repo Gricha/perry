@@ -133,22 +133,24 @@ export function isConfigured(): boolean {
   return baseUrl.length > 0
 }
 
+function configureClient(host: string, port: number): void {
+  baseUrl = `http://${host}:${port}`
+  client = createClient()
+  setUserContext(baseUrl)
+}
+
 export async function loadServerConfig(): Promise<ServerConfig | null> {
   const stored = await AsyncStorage.getItem(STORAGE_KEY)
   if (!stored) return null
   const config = JSON.parse(stored) as ServerConfig
-  baseUrl = `http://${config.host}:${config.port}`
-  client = createClient()
-  setUserContext(baseUrl)
+  configureClient(config.host, config.port)
   return config
 }
 
 export async function saveServerConfig(host: string, port: number = DEFAULT_PORT): Promise<void> {
   const config: ServerConfig = { host, port }
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(config))
-  baseUrl = `http://${host}:${port}`
-  client = createClient()
-  setUserContext(baseUrl)
+  configureClient(host, port)
 }
 
 export function getDefaultPort(): number {
