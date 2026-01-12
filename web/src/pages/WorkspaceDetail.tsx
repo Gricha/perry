@@ -328,7 +328,54 @@ export function WorkspaceDetail() {
 
   const isHostWorkspace = name === HOST_WORKSPACE_NAME
   const currentTab = (searchParams.get('tab') as TabType) || 'sessions'
-  const [chatMode, setChatMode] = useState<ChatMode | null>(null)
+  const sessionParam = searchParams.get('session')
+  const agentParam = searchParams.get('agent') as AgentType | null
+
+  const [projectPathOverride, setProjectPathOverride] = useState<string | undefined>(undefined)
+
+  const chatMode: ChatMode | null = useMemo(() => {
+    if (!sessionParam && !agentParam) return null
+    if (agentParam === 'codex') {
+      return { type: 'terminal', command: sessionParam ? `codex resume ${sessionParam}` : 'codex' }
+    }
+    return {
+      type: 'chat',
+      sessionId: sessionParam || undefined,
+      agentType: (agentParam || 'claude-code') as AgentType,
+      projectPath: projectPathOverride,
+    }
+  }, [sessionParam, agentParam, projectPathOverride])
+
+  const setChatMode = useCallback((mode: ChatMode | null) => {
+    if (!mode) {
+      setProjectPathOverride(undefined)
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('session')
+        next.delete('agent')
+        return next
+      })
+    } else if (mode.type === 'chat') {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        if (mode.sessionId) next.set('session', mode.sessionId)
+        else next.delete('session')
+        if (mode.agentType) next.set('agent', mode.agentType)
+        return next
+      })
+    } else if (mode.type === 'terminal') {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('agent', 'codex')
+        if (mode.command.includes('resume')) {
+          const match = mode.command.match(/resume\s+(\S+)/)
+          if (match) next.set('session', match[1])
+        }
+        return next
+      })
+    }
+  }, [setSearchParams])
+
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
@@ -346,17 +393,22 @@ export function WorkspaceDetail() {
   }, [searchQuery])
 
   const setTab = (tab: TabType) => {
-    setChatMode(null)
     setSearchParams({ tab })
   }
 
   const handleSessionId = useCallback((sessionId: string) => {
-    if (name && chatMode?.type === 'chat' && chatMode.agentType) {
-      api.recordSessionAccess(name, sessionId, chatMode.agentType).catch(() => {})
+    if (name && chatMode?.type === 'chat') {
+      const agent = chatMode.agentType || 'claude-code'
+      api.recordSessionAccess(name, sessionId, agent).catch(() => {})
       queryClient.invalidateQueries({ queryKey: ['sessions', name] })
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('session', sessionId)
+        next.set('agent', agent)
+        return next
+      })
     }
-    setChatMode((prev) => prev?.type === 'chat' ? { ...prev, sessionId } : prev)
-  }, [name, chatMode, queryClient])
+  }, [name, chatMode, queryClient, setSearchParams])
 
   const { data: hostInfo, isLoading: hostLoading } = useQuery({
     queryKey: ['hostInfo'],
@@ -466,34 +518,25 @@ export function WorkspaceDetail() {
   })
 
   const handleResume = (session: SessionInfo) => {
+    setProjectPathOverride(session.projectPath)
     if (session.agentType === 'claude-code' || session.agentType === 'opencode') {
       setChatMode({
         type: 'chat',
         sessionId: session.id,
         agentType: session.agentType,
-        projectPath: session.projectPath,
       })
     } else {
       const resumeId = session.agentSessionId || session.id
-      const commands: Record<AgentType, string> = {
-        'claude-code': `claude -r ${resumeId}`,
-        opencode: `opencode --resume ${resumeId}`,
-        codex: `codex resume ${resumeId}`,
-      }
-      setChatMode({ type: 'terminal', command: commands[session.agentType] })
+      setChatMode({ type: 'terminal', command: `codex resume ${resumeId}` })
     }
   }
 
   const handleNewChat = (agentType: AgentType = 'claude-code') => {
+    setProjectPathOverride(undefined)
     if (agentType === 'claude-code' || agentType === 'opencode') {
       setChatMode({ type: 'chat', agentType })
     } else {
-      const commands: Record<AgentType, string> = {
-        'claude-code': 'claude',
-        opencode: 'opencode',
-        codex: 'codex',
-      }
-      setChatMode({ type: 'terminal', command: commands[agentType] })
+      setChatMode({ type: 'terminal', command: 'codex' })
     }
   }
 

@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Menu,
@@ -24,6 +24,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
 
   const { data: workspaces } = useQuery({
     queryKey: ['workspaces'],
@@ -75,33 +76,36 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3">
-          <div className="space-y-6">
-            {/* Workspaces Section */}
-            <div>
-              <div className="section-header">Workspaces</div>
-              <div className="space-y-0.5">
-                <Link
-                  to="/workspaces"
-                  className={cn(
-                    'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
-                    location.pathname === '/workspaces' && 'nav-active'
-                  )}
-                  onClick={() => isOpen && onToggle()}
-                >
-                  <Boxes className="h-4 w-4 text-muted-foreground" />
-                  <span>All Workspaces</span>
-                </Link>
-                {workspaces?.map((ws: WorkspaceInfo) => (
-                  <Link
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Workspaces Section - Scrollable */}
+          <nav className="flex-1 overflow-y-auto p-3">
+            <div className="section-header">Workspaces</div>
+            <div className="space-y-0.5">
+              <Link
+                to="/workspaces"
+                className={cn(
+                  'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
+                  location.pathname === '/workspaces' && 'nav-active'
+                )}
+                onClick={() => isOpen && onToggle()}
+              >
+                <Boxes className="h-4 w-4 text-muted-foreground" />
+                <span>All Workspaces</span>
+              </Link>
+              {workspaces?.map((ws: WorkspaceInfo) => {
+                const wsPath = `/workspaces/${ws.name}`
+                const isActive = location.pathname === wsPath || location.pathname.startsWith(`${wsPath}/`)
+                return (
+                  <button
                     key={ws.name}
-                    to={`/workspaces/${ws.name}`}
                     className={cn(
-                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
-                      (location.pathname === `/workspaces/${ws.name}` ||
-                        location.pathname.startsWith(`/workspaces/${ws.name}/`)) && 'nav-active'
+                      'w-full flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
+                      isActive && 'nav-active'
                     )}
-                    onClick={() => isOpen && onToggle()}
+                    onClick={() => {
+                      navigate(wsPath)
+                      if (isOpen) onToggle()
+                    }}
                   >
                     <span
                       className={cn(
@@ -111,57 +115,58 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                           : 'bg-muted-foreground/40'
                       )}
                     />
-                    <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                    <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors text-left">
                       {ws.name}
                     </span>
-                  </Link>
-                ))}
-                {hostInfo?.enabled && (
-                  <Link
-                    to={`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`}
-                    className={cn(
-                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
-                      location.pathname.includes(encodeURIComponent(HOST_WORKSPACE_NAME)) && 'nav-active'
-                    )}
-                    onClick={() => isOpen && onToggle()}
-                  >
-                    <Monitor className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                    <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors">
-                      {hostInfo.hostname}
-                    </span>
-                  </Link>
-                )}
-              </div>
+                  </button>
+                )
+              })}
+              {hostInfo?.enabled && (
+                <button
+                  className={cn(
+                    'w-full flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
+                    location.pathname.includes(encodeURIComponent(HOST_WORKSPACE_NAME)) && 'nav-active'
+                  )}
+                  onClick={() => {
+                    navigate(`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`)
+                    if (isOpen) onToggle()
+                  }}
+                >
+                  <Monitor className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                  <span className="truncate text-muted-foreground group-hover:text-foreground transition-colors text-left">
+                    {hostInfo.hostname}
+                  </span>
+                </button>
+              )}
             </div>
+          </nav>
 
-            {/* Settings Section - Always visible */}
-            <div>
-              <div className="section-header">Settings</div>
-              <div className="space-y-0.5">
-                {settingsLinks.map((link) => (
-                  <Link
-                    key={link.to}
-                    to={link.to}
-                    className={cn(
-                      'flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent min-h-[44px]',
-                      location.pathname === link.to && 'nav-active'
-                    )}
-                    onClick={() => isOpen && onToggle()}
-                  >
-                    <link.icon className="h-4 w-4 text-muted-foreground" />
-                    <span>{link.label}</span>
-                  </Link>
-                ))}
-              </div>
+          {/* Settings Section - Sticky at bottom of scrollable area */}
+          <div className="flex-shrink-0 border-t px-3 py-2">
+            <div className="section-header">Settings</div>
+            <div className="space-y-0">
+              {settingsLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={cn(
+                    'flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                    location.pathname === link.to && 'nav-active'
+                  )}
+                  onClick={() => isOpen && onToggle()}
+                >
+                  <link.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{link.label}</span>
+                </Link>
+              ))}
             </div>
-
           </div>
-        </nav>
+        </div>
 
-        <div className="border-t p-3 flex-shrink-0 space-y-2">
+        <div className="border-t px-3 py-2 flex-shrink-0 space-y-1">
           <div className="section-header">Appearance</div>
           <ThemeSwitcher />
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider pt-2">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider pt-1">
             Perry v0.1.0
           </div>
         </div>
