@@ -304,7 +304,10 @@ export class SessionManager {
     return session?.info ?? null;
   }
 
-  async findSession(id: string): Promise<{ sessionId: string; info: SessionInfo } | null> {
+  async findSession(
+    id: string,
+    options?: { projectPath?: string }
+  ): Promise<{ sessionId: string; info: SessionInfo } | null> {
     // First try direct lookup by internal sessionId (in-memory cache)
     const direct = this.sessions.get(id);
     if (direct) {
@@ -335,7 +338,7 @@ export class SessionManager {
           workspaceName: record.workspaceName,
           agentType: record.agentType,
           agentSessionId: record.agentSessionId ?? undefined,
-          projectPath: record.projectPath ?? undefined,
+          projectPath: options?.projectPath ?? record.projectPath ?? undefined,
         });
         const restored = this.sessions.get(restoredId);
         if (restored) {

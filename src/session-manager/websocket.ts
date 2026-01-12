@@ -126,7 +126,9 @@ export class LiveChatWebSocketServer extends BaseWebSocketServer<LiveChatConnect
     const agentType = message.agentType || this.agentType;
 
     if (message.sessionId) {
-      const found = await sessionManager.findSession(message.sessionId);
+      const found = await sessionManager.findSession(message.sessionId, {
+        projectPath: message.projectPath,
+      });
       if (found) {
         connection.sessionId = found.sessionId;
 
