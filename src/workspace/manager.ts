@@ -431,7 +431,9 @@ export class WorkspaceManager {
       }
     }
 
-    console.warn(`[sync] Worker server failed to start in ${containerName}`);
+    throw new Error(
+      `[sync] Worker server failed to start in ${containerName}. Check /tmp/perry-worker.log`
+    );
   }
 
   private async runUserScripts(containerName: string): Promise<void> {
