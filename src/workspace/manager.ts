@@ -290,14 +290,16 @@ export class WorkspaceManager {
 
   private async setupWorkspaceCredentials(
     containerName: string,
-    workspaceName?: string
+    workspaceName: string | undefined,
+    options: { strictWorker: boolean }
   ): Promise<void> {
     await this.copyGitConfig(containerName);
     await this.copyCredentialFiles(containerName);
     await this.syncEnvironmentFile(containerName);
     await syncAllAgents(containerName, this.config);
     await this.copyPerryWorker(containerName);
-    await this.startWorkerServer(containerName);
+    await this.ensurePerryOnPath(containerName);
+    await this.startWorkerServer(containerName, options);
     if (workspaceName) {
       await this.setupSSHKeys(containerName, workspaceName);
     }
@@ -305,22 +307,27 @@ export class WorkspaceManager {
 
   private async copyPerryWorker(containerName: string): Promise<void> {
     const installedPath = path.join(os.homedir(), '.perry', 'bin', 'perry');
+    const cwdDistPath = path.join(process.cwd(), 'dist', 'perry-worker');
     const distDir = path.dirname(new URL(import.meta.url).pathname);
     const distPath = path.join(distDir, '..', 'perry-worker');
 
-    let workerBinaryPath = distPath;
-    try {
-      await fs.access(installedPath);
-      workerBinaryPath = installedPath;
-    } catch {
+    let workerBinaryPath: string | null = null;
+
+    for (const candidate of [installedPath, cwdDistPath, distPath]) {
       try {
-        await fs.access(distPath);
+        await fs.access(candidate);
+        workerBinaryPath = candidate;
+        break;
       } catch {
-        console.warn(
-          `[sync] perry binary not found at ${installedPath} or ${distPath}, session discovery may not work`
-        );
-        return;
+        // Try next
       }
+    }
+
+    if (!workerBinaryPath) {
+      console.warn(
+        `[sync] perry binary not found at ${installedPath}, ${cwdDistPath}, or ${distPath}, session discovery may not work`
+      );
+      return;
     }
 
     const destPath = '/usr/local/bin/perry';
@@ -331,6 +338,18 @@ export class WorkspaceManager {
     await docker.execInContainer(containerName, ['chmod', '755', destPath], {
       user: 'root',
     });
+  }
+
+  private async ensurePerryOnPath(containerName: string): Promise<void> {
+    await docker.execInContainer(
+      containerName,
+      [
+        'sh',
+        '-c',
+        'if [ -x /usr/local/bin/perry ]; then mkdir -p /home/workspace/.local/bin && ln -sf /usr/local/bin/perry /home/workspace/.local/bin/perry; fi',
+      ],
+      { user: 'workspace' }
+    );
   }
 
   async updateWorkerBinary(name: string): Promise<void> {
@@ -352,10 +371,13 @@ export class WorkspaceManager {
     );
 
     await this.copyPerryWorker(containerName);
-    await this.startWorkerServer(containerName);
+    await this.startWorkerServer(containerName, { strictWorker: true });
   }
 
-  private async startWorkerServer(containerName: string): Promise<void> {
+  private async startWorkerServer(
+    containerName: string,
+    options: { strictWorker: boolean }
+  ): Promise<void> {
     const WORKER_PORT = 7392;
     const ip = await docker.getContainerIp(containerName);
     if (!ip) {
@@ -365,12 +387,38 @@ export class WorkspaceManager {
       return;
     }
 
+    const desiredVersion = pkg.version;
+
+    const hasSyncedPerry =
+      (
+        await docker.execInContainer(containerName, ['sh', '-c', 'test -x /usr/local/bin/perry'], {
+          user: 'workspace',
+        })
+      ).exitCode === 0;
+
     try {
       const healthResponse = await fetch(`http://${ip}:${WORKER_PORT}/health`, {
         signal: AbortSignal.timeout(1000),
       });
+
       if (healthResponse.ok) {
-        return;
+        if (!hasSyncedPerry) {
+          return;
+        }
+
+        const health = (await healthResponse.json().catch(() => null)) as {
+          version?: string;
+        } | null;
+
+        if (health?.version === desiredVersion) {
+          return;
+        }
+
+        await docker.execInContainer(
+          containerName,
+          ['sh', '-c', 'pkill -f "perry worker serve" || true'],
+          { user: 'workspace' }
+        );
       }
     } catch {
       // Worker not running, start it
@@ -378,7 +426,11 @@ export class WorkspaceManager {
 
     await docker.execInContainer(
       containerName,
-      ['sh', '-c', 'nohup perry worker serve > /tmp/perry-worker.log 2>&1 &'],
+      [
+        'sh',
+        '-c',
+        "nohup sh -c 'if [ -x /usr/local/bin/perry ]; then exec /usr/local/bin/perry worker serve; else exec perry worker serve; fi' > /tmp/perry-worker.log 2>&1 &",
+      ],
       { user: 'workspace' }
     );
 
@@ -389,12 +441,28 @@ export class WorkspaceManager {
         const response = await fetch(`http://${ip}:${WORKER_PORT}/health`, {
           signal: AbortSignal.timeout(500),
         });
-        if (response.ok) {
+
+        if (!response.ok) {
+          continue;
+        }
+
+        if (!hasSyncedPerry) {
+          return;
+        }
+
+        const health = (await response.json().catch(() => null)) as { version?: string } | null;
+        if (health?.version === desiredVersion) {
           return;
         }
       } catch {
         // Not ready yet
       }
+    }
+
+    if (options.strictWorker && hasSyncedPerry) {
+      throw new Error(
+        `[sync] Worker server failed to start in ${containerName}. Check /tmp/perry-worker.log`
+      );
     }
 
     console.warn(`[sync] Worker server failed to start in ${containerName}`);
@@ -607,7 +675,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-      await this.setupWorkspaceCredentials(containerName, name);
+      await this.setupWorkspaceCredentials(containerName, name, { strictWorker: false });
 
       workspace.status = 'running';
       await this.state.setWorkspace(workspace);
@@ -705,7 +773,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-      await this.setupWorkspaceCredentials(containerName, name);
+      await this.setupWorkspaceCredentials(containerName, name, { strictWorker: false });
 
       workspace.status = 'running';
       workspace.lastUsed = new Date().toISOString();
@@ -804,7 +872,7 @@ export class WorkspaceManager {
       throw new Error(`Workspace '${name}' is not running`);
     }
 
-    await this.setupWorkspaceCredentials(containerName, name);
+    await this.setupWorkspaceCredentials(containerName, name, { strictWorker: true });
   }
 
   async setPortForwards(name: string, forwards: number[]): Promise<Workspace> {
@@ -914,7 +982,7 @@ export class WorkspaceManager {
 
       await docker.startContainer(cloneContainerName);
       await docker.waitForContainerReady(cloneContainerName);
-      await this.setupWorkspaceCredentials(cloneContainerName, cloneName);
+      await this.setupWorkspaceCredentials(cloneContainerName, cloneName, { strictWorker: false });
 
       workspace.status = 'running';
       await this.state.setWorkspace(workspace);

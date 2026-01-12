@@ -137,9 +137,9 @@ async function checkLocalAgent(): Promise<boolean> {
   }
 }
 
-async function getClient() {
+async function getClient(timeoutMs?: number) {
   const worker = await getWorkerWithFallback();
-  return createApiClient(worker);
+  return createApiClient(worker, undefined, timeoutMs);
 }
 
 async function getWorkerWithFallback(): Promise<string> {
@@ -314,7 +314,7 @@ program
   .option('-a, --all', 'Sync all running workspaces')
   .action(async (name, options) => {
     try {
-      const client = await getClient();
+      const client = await getClient(5 * 60 * 1000);
 
       if (options.all) {
         console.log('Syncing all running workspaces...');
@@ -945,7 +945,7 @@ program
       console.log('');
       console.log('Syncing all running workspaces...');
 
-      const client = createApiClient(`localhost:${agentPort}`);
+      const client = createApiClient(`localhost:${agentPort}`, undefined, 5 * 60 * 1000);
       const result = await client.syncAllWorkspaces();
 
       if (result.results.length === 0) {

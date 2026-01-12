@@ -214,7 +214,7 @@ export class ApiClient {
   }
 }
 
-export function createApiClient(worker: string, port?: number): ApiClient {
+export function createApiClient(worker: string, port?: number, timeoutMs?: number): ApiClient {
   let baseUrl: string;
 
   if (worker.includes('://')) {
@@ -226,5 +226,5 @@ export function createApiClient(worker: string, port?: number): ApiClient {
     baseUrl = `http://${worker}:${effectivePort}`;
   }
 
-  return new ApiClient({ baseUrl });
+  return new ApiClient({ baseUrl, timeout: timeoutMs });
 }
