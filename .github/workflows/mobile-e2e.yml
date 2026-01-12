@@ -60,7 +60,13 @@ jobs:
           xcodebuild -version
 
       - name: Install ccache
-        run: brew install ccache
+        run: |
+          brew install ccache
+          # Add ccache to PATH for all subsequent steps
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          # Verify ccache is accessible
+          which ccache
+          ccache --version
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -123,8 +129,12 @@ jobs:
         env:
           USE_CCACHE: '1'
         run: |
+          # Verify ccache is in PATH for pod install
+          echo "ccache location: $(which ccache)"
           # Always run pod install to ensure ccache is configured in xcconfig
           pod install
+          # Verify ccache was configured
+          grep -r "ccache" Pods/Target\ Support\ Files/Pods-Perry/*.xcconfig || echo "Warning: ccache not found in xcconfig"
 
       - name: List available simulators
         run: xcrun simctl list devices available
@@ -142,11 +152,40 @@ jobs:
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
+      - name: Cache Derived Data
+        uses: actions/cache@v4
+        with:
+          path: mobile/ios/build
+          key: ${{ runner.os }}-derived-data-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('mobile/ios/Podfile.lock', 'mobile/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-derived-data-xcode${{ steps.xcode.outputs.version }}-
+
+      - name: Create ccache xcconfig
+        working-directory: mobile/ios
+        run: |
+          # Create xcconfig that forces ccache usage for all targets
+          CCACHE_PATH=$(which ccache)
+          RN_PATH="$(pwd)/../node_modules/react-native"
+
+          # Verify wrapper scripts exist
+          ls -la "$RN_PATH/scripts/xcode/"
+
+          cat > ccache.xcconfig << EOF
+          CC = $RN_PATH/scripts/xcode/ccache-clang.sh
+          CXX = $RN_PATH/scripts/xcode/ccache-clang++.sh
+          LD = $RN_PATH/scripts/xcode/ccache-clang.sh
+          LDPLUSPLUS = $RN_PATH/scripts/xcode/ccache-clang++.sh
+          CCACHE_BINARY = $CCACHE_PATH
+          EOF
+          echo "Created ccache.xcconfig:"
+          cat ccache.xcconfig
+
       - name: Build iOS app for simulator
         working-directory: mobile/ios
         env:
           SENTRY_DISABLE_AUTO_UPLOAD: 'true'
           USE_CCACHE: '1'
+          CCACHE_BINARY: /opt/homebrew/bin/ccache
         run: |
           xcodebuild -workspace Perry.xcworkspace \
             -scheme Perry \
@@ -154,11 +193,20 @@ jobs:
             -sdk iphonesimulator \
             -destination "id=${{ env.DEVICE_ID }}" \
             -derivedDataPath build \
+            -xcconfig ccache.xcconfig \
             build
 
       - name: Show ccache stats
         if: always()
-        run: ccache --show-stats
+        run: |
+          echo "=== ccache statistics ==="
+          ccache --show-stats --verbose
+          echo ""
+          echo "=== ccache config ==="
+          ccache --show-config
+          echo ""
+          echo "=== Cache directory contents ==="
+          ls -la ~/Library/Caches/ccache/ 2>/dev/null || echo "No ccache directory"
 
       - name: Install app on simulator
         run: |
