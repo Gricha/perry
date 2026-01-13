@@ -176,6 +176,11 @@ export class LiveChatHandler {
 
         if (clientId) {
           connection.clientId = clientId;
+
+          if (message.model && message.model !== found.info.model) {
+            sessionManager.setModel(found.sessionId, message.model);
+          }
+
           safeSend(
             ws,
             JSON.stringify({
@@ -183,6 +188,7 @@ export class LiveChatHandler {
               sessionId: found.sessionId,
               status: found.info.status,
               agentSessionId: found.info.agentSessionId,
+              model: message.model || found.info.model,
               timestamp: new Date().toISOString(),
             })
           );
