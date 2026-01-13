@@ -21,7 +21,7 @@ export function getContainerName(name: string): string {
 async function runCommand(
   command: string,
   args: string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -32,6 +32,29 @@ async function runCommand(
 
     let stdout = '';
     let stderr = '';
+    let finished = false;
+
+    const finish = (fn: () => void) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      fn();
+    };
+
+    const timeoutId = options.timeoutMs
+      ? setTimeout(() => {
+          const err = new Error(`Command timed out: ${command} ${args.join(' ')}`) as CommandError;
+          err.code = 124;
+          err.stdout = stdout;
+          err.stderr = stderr;
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+          finish(() => reject(err));
+        }, options.timeoutMs)
+      : undefined;
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk;
@@ -40,24 +63,24 @@ async function runCommand(
       stderr += chunk;
     });
 
-    child.on('error', reject);
+    child.on('error', (err) => finish(() => reject(err)));
     child.on('close', (code) => {
       const result = { stdout: stdout.trim(), stderr: stderr.trim(), code: code ?? 1 };
       if (code === 0) {
-        resolve(result);
+        finish(() => resolve(result));
       } else {
         const err = new Error(`Command failed: ${command} ${args.join(' ')}`) as CommandError;
         err.code = code ?? undefined;
         err.stdout = stdout;
         err.stderr = stderr;
-        reject(err);
+        finish(() => reject(err));
       }
     });
   });
 }
 
-async function docker(args: string[]): Promise<CommandResult> {
-  return runCommand('docker', args);
+async function docker(args: string[], options?: { timeoutMs?: number }): Promise<CommandResult> {
+  return runCommand('docker', args, { timeoutMs: options?.timeoutMs });
 }
 
 export async function getDockerVersion(): Promise<string> {
@@ -298,17 +321,23 @@ export async function execInContainer(
 export async function copyToContainer(
   containerName: string,
   sourcePath: string,
-  destPath: string
+  destPath: string,
+  options: { timeoutMs?: number } = {}
 ): Promise<void> {
-  await docker(['cp', sourcePath, `${containerName}:${destPath}`]);
+  await docker(['cp', sourcePath, `${containerName}:${destPath}`], {
+    timeoutMs: options.timeoutMs,
+  });
 }
 
 export async function copyFromContainer(
   containerName: string,
   sourcePath: string,
-  destPath: string
+  destPath: string,
+  options: { timeoutMs?: number } = {}
 ): Promise<void> {
-  await docker(['cp', `${containerName}:${sourcePath}`, destPath]);
+  await docker(['cp', `${containerName}:${sourcePath}`, destPath], {
+    timeoutMs: options.timeoutMs,
+  });
 }
 
 export async function volumeExists(name: string): Promise<boolean> {

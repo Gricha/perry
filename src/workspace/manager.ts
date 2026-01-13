@@ -94,7 +94,7 @@ async function copyCredentialToContainer(options: CopyCredentialOptions): Promis
       await docker.execInContainer(containerName, ['mkdir', '-p', dest], {
         user: 'workspace',
       });
-      await docker.copyToContainer(containerName, tempTar, '/tmp/creds.tar');
+      await docker.copyToContainer(containerName, tempTar, '/tmp/creds.tar', { timeoutMs: 60_000 });
       await docker.execInContainer(containerName, ['tar', '-xf', '/tmp/creds.tar', '-C', dest], {
         user: 'workspace',
       });
@@ -117,7 +117,7 @@ async function copyCredentialToContainer(options: CopyCredentialOptions): Promis
     await docker.execInContainer(containerName, ['mkdir', '-p', destDir], {
       user: 'workspace',
     });
-    await docker.copyToContainer(containerName, expandedSource, dest);
+    await docker.copyToContainer(containerName, expandedSource, dest, { timeoutMs: 60_000 });
     await docker.execInContainer(containerName, ['chown', 'workspace:workspace', dest], {
       user: 'root',
     });
@@ -211,7 +211,9 @@ export class WorkspaceManager {
 
     try {
       await fs.writeFile(tempFile, content);
-      await docker.copyToContainer(containerName, tempFile, '/etc/environment');
+      await docker.copyToContainer(containerName, tempFile, '/etc/environment', {
+        timeoutMs: 60_000,
+      });
     } finally {
       await fs.unlink(tempFile).catch(() => {});
     }
@@ -238,7 +240,8 @@ export class WorkspaceManager {
         await docker.copyToContainer(
           containerName,
           tempFile,
-          '/home/workspace/.ssh/authorized_keys'
+          '/home/workspace/.ssh/authorized_keys',
+          { timeoutMs: 60_000 }
         );
         await docker.execInContainer(
           containerName,
@@ -267,8 +270,12 @@ export class WorkspaceManager {
         await fs.writeFile(privateTempFile, key.privateKey + '\n');
         await fs.writeFile(publicTempFile, key.publicKey + '\n');
 
-        await docker.copyToContainer(containerName, privateTempFile, privateKeyPath);
-        await docker.copyToContainer(containerName, publicTempFile, publicKeyPath);
+        await docker.copyToContainer(containerName, privateTempFile, privateKeyPath, {
+          timeoutMs: 60_000,
+        });
+        await docker.copyToContainer(containerName, publicTempFile, publicKeyPath, {
+          timeoutMs: 60_000,
+        });
 
         await docker.execInContainer(
           containerName,
@@ -331,7 +338,20 @@ export class WorkspaceManager {
     }
 
     const destPath = '/usr/local/bin/perry';
-    await docker.copyToContainer(containerName, workerBinaryPath, destPath);
+
+    try {
+      await docker.copyToContainer(containerName, workerBinaryPath, destPath, {
+        timeoutMs: 60_000,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[sync] Timed out copying perry worker binary to ${containerName}. ` +
+          `This may indicate a stuck Docker daemon or slow filesystem. ` +
+          `Original error: ${message}`
+      );
+    }
+
     await docker.execInContainer(containerName, ['chown', 'root:root', destPath], {
       user: 'root',
     });
@@ -525,7 +545,7 @@ export class WorkspaceManager {
     const destPath = `/workspace/.perry-script-${scriptName}`;
 
     try {
-      await docker.copyToContainer(containerName, scriptPath, destPath);
+      await docker.copyToContainer(containerName, scriptPath, destPath, { timeoutMs: 60_000 });
       await docker.execInContainer(containerName, ['chown', 'workspace:workspace', destPath], {
         user: 'root',
       });
