@@ -76,12 +76,17 @@ export async function startDockerProxy(options: DockerProxyOptions): Promise<() 
                 },
                 drain(upstream) {
                   flushPending(upstream);
+                  if (upstream.data.peerClosed && upstream.data.pendingWrite.length === 0) {
+                    upstream.end();
+                  }
                 },
                 close(upstream) {
-                  upstream.data.peerClosed = true;
                   const downstream = upstream.data.peer;
-                  if (downstream && downstream.data.pendingWrite.length === 0) {
-                    downstream.end();
+                  if (downstream) {
+                    downstream.data.peerClosed = true;
+                    if (downstream.data.pendingWrite.length === 0) {
+                      downstream.end();
+                    }
                   }
                 },
                 error(upstream, err) {
@@ -112,10 +117,12 @@ export async function startDockerProxy(options: DockerProxyOptions): Promise<() 
             }
           },
           close(downstream) {
-            downstream.data.peerClosed = true;
             const upstream = downstream.data.peer;
-            if (upstream && upstream.data.pendingWrite.length === 0) {
-              upstream.end();
+            if (upstream) {
+              upstream.data.peerClosed = true;
+              if (upstream.data.pendingWrite.length === 0) {
+                upstream.end();
+              }
             }
           },
           error(downstream, err) {
