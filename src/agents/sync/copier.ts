@@ -23,7 +23,7 @@ export function createDockerFileCopier(): FileCopier {
         user: 'workspace',
       });
 
-      await docker.copyToContainer(containerName, expandedSource, file.dest);
+      await docker.copyToContainer(containerName, expandedSource, file.dest, { timeoutMs: 60_000 });
       await docker.execInContainer(containerName, ['chown', 'workspace:workspace', file.dest], {
         user: 'root',
       });
@@ -43,7 +43,9 @@ export function createDockerFileCopier(): FileCopier {
         await docker.execInContainer(containerName, ['mkdir', '-p', dir.dest], {
           user: 'workspace',
         });
-        await docker.copyToContainer(containerName, tempTar, '/tmp/agent-sync.tar');
+        await docker.copyToContainer(containerName, tempTar, '/tmp/agent-sync.tar', {
+          timeoutMs: 60_000,
+        });
         await docker.execInContainer(
           containerName,
           ['tar', '-xf', '/tmp/agent-sync.tar', '-C', dir.dest],
@@ -79,7 +81,7 @@ export function createDockerFileCopier(): FileCopier {
           user: 'workspace',
         });
 
-        await docker.copyToContainer(containerName, tempFile, config.dest);
+        await docker.copyToContainer(containerName, tempFile, config.dest, { timeoutMs: 60_000 });
         await docker.execInContainer(containerName, ['chown', 'workspace:workspace', config.dest], {
           user: 'root',
         });
