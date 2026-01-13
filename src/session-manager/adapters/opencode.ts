@@ -406,7 +406,11 @@ export class OpenCodeAdapter implements AgentAdapter {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const payload = { parts: [{ type: 'text', text: message }] };
+    const payload: Record<string, unknown> = { parts: [{ type: 'text', text: message }] };
+    // Include model in each message so model changes take effect immediately
+    if (this.model) {
+      payload.model = this.model;
+    }
 
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session/${this.agentSessionId}/prompt_async`, {
