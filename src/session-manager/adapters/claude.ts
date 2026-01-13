@@ -302,10 +302,6 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     return this.status;
   }
 
-  setModel(model: string): void {
-    this.model = model;
-  }
-
   private setStatus(status: SessionStatus): void {
     this.status = status;
     if (this.statusCallback) {
