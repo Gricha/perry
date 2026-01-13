@@ -59,6 +59,11 @@ export class SessionManager {
 
     const existing = this.sessions.get(sessionId);
     if (existing) {
+      // Update model if a different one was requested
+      if (options.model && options.model !== existing.info.model) {
+        existing.info.model = options.model;
+        existing.adapter.setModel(options.model);
+      }
       return sessionId;
     }
 
@@ -411,6 +416,7 @@ export class SessionManager {
     if (!session) return;
 
     session.info.model = model;
+    session.adapter.setModel(model);
   }
 
   hasActiveClients(sessionId: string): boolean {

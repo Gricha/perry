@@ -52,6 +52,12 @@ export interface AgentAdapter {
 
   getStatus(): SessionStatus;
 
+  /**
+   * Update the model used by this adapter for subsequent messages.
+   * This is called when a client reconnects with a different model selection.
+   */
+  setModel(model: string): void;
+
   onMessage(callback: (message: ChatMessage) => void): void;
 
   onStatusChange(callback: (status: SessionStatus) => void): void;
