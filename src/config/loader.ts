@@ -27,6 +27,8 @@ export function createDefaultAgentConfig(): AgentConfig {
       fail_on_error: false,
     },
     agents: {},
+    skills: [],
+    mcpServers: [],
     allowHostAccess: true,
     ssh: {
       autoAuthorizeHostKeys: true,
@@ -70,6 +72,8 @@ export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> 
         fail_on_error: config.scripts?.fail_on_error ?? false,
       },
       agents: config.agents || {},
+      skills: Array.isArray(config.skills) ? config.skills : [],
+      mcpServers: Array.isArray(config.mcpServers) ? config.mcpServers : [],
       allowHostAccess: config.allowHostAccess ?? true,
       ssh: {
         autoAuthorizeHostKeys: config.ssh?.autoAuthorizeHostKeys ?? true,

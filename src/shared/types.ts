@@ -44,11 +44,34 @@ export interface TerminalSettings {
   preferredShell?: string;
 }
 
+export type SkillAppliesTo = 'all' | Array<'claude-code' | 'opencode' | 'codex'>;
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  appliesTo: SkillAppliesTo;
+  /** Full SKILL.md contents (including YAML frontmatter). */
+  skillMd: string;
+}
+
+export interface McpServerDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
 export interface AgentConfig {
   port: number;
   credentials: WorkspaceCredentials;
   scripts: WorkspaceScripts;
   agents?: CodingAgents;
+  skills?: SkillDefinition[];
+  mcpServers?: McpServerDefinition[];
   allowHostAccess?: boolean;
   ssh?: SSHSettings;
   terminal?: TerminalSettings;

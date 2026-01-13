@@ -60,6 +60,33 @@ export interface CodingAgents {
   };
 }
 
+export type SkillAppliesTo = 'all' | AgentType[];
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  appliesTo: SkillAppliesTo;
+  /** Full SKILL.md contents (including YAML frontmatter). */
+  skillMd: string;
+}
+
+export interface McpServerDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
+export type Skill = SkillDefinition;
+
+export type McpServer = McpServerDefinition;
+
+export const AGENT_TYPES = ['claude-code', 'opencode', 'codex'] as const;
+
 export interface ModelInfo {
   id: string;
   name: string;

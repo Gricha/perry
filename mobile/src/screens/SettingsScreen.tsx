@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,22 +11,33 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActionSheetIOS,
-} from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, CodingAgents, Credentials, Scripts, SyncResult, ModelInfo, getBaseUrl, saveServerConfig, getDefaultPort, refreshClient } from '../lib/api'
-import { useNetwork, parseNetworkError } from '../lib/network'
-import { useTheme } from '../contexts/ThemeContext'
-import { ThemeId } from '../lib/themes'
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  api,
+  CodingAgents,
+  Credentials,
+  Scripts,
+  SyncResult,
+  ModelInfo,
+  getBaseUrl,
+  saveServerConfig,
+  getDefaultPort,
+  refreshClient,
+} from '../lib/api';
+import { useNetwork, parseNetworkError } from '../lib/network';
+import { useTheme } from '../contexts/ThemeContext';
+import { ThemeId } from '../lib/themes';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useTheme()
+  const { colors } = useTheme();
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
       {children}
     </View>
-  )
+  );
 }
 
 function SettingRow({
@@ -36,11 +47,11 @@ function SettingRow({
   onChangeText,
   secureTextEntry,
 }: {
-  label: string
-  value: string
-  placeholder: string
-  onChangeText: (text: string) => void
-  secureTextEntry?: boolean
+  label: string;
+  value: string;
+  placeholder: string;
+  onChangeText: (text: string) => void;
+  secureTextEntry?: boolean;
 }) {
   return (
     <View style={styles.row}>
@@ -56,14 +67,14 @@ function SettingRow({
         autoCorrect={false}
       />
     </View>
-  )
+  );
 }
 
 const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
   { id: 'sonnet', name: 'Sonnet', description: 'Fast and cost-effective' },
   { id: 'opus', name: 'Opus', description: 'Most capable' },
   { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost' },
-]
+];
 
 function ModelPicker({
   label,
@@ -71,15 +82,15 @@ function ModelPicker({
   selectedModel,
   onSelect,
 }: {
-  label: string
-  models: ModelInfo[]
-  selectedModel: string
-  onSelect: (model: string) => void
+  label: string;
+  models: ModelInfo[];
+  selectedModel: string;
+  onSelect: (model: string) => void;
 }) {
-  const selectedModelInfo = models.find(m => m.id === selectedModel)
+  const selectedModelInfo = models.find((m) => m.id === selectedModel);
 
   const showPicker = () => {
-    const options = [...models.map(m => m.name), 'Cancel']
+    const options = [...models.map((m) => m.name), 'Cancel'];
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options,
@@ -88,76 +99,102 @@ function ModelPicker({
       },
       (buttonIndex) => {
         if (buttonIndex < models.length) {
-          onSelect(models[buttonIndex].id)
+          onSelect(models[buttonIndex].id);
         }
       }
-    )
-  }
+    );
+  };
 
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.modelPicker} onPress={showPicker}>
-        <Text style={styles.modelPickerText}>
-          {selectedModelInfo?.name || 'Select Model'}
-        </Text>
+        <Text style={styles.modelPickerText}>{selectedModelInfo?.name || 'Select Model'}</Text>
         <Text style={styles.modelPickerChevron}>›</Text>
       </TouchableOpacity>
     </View>
-  )
+  );
+}
+
+function NavigationRow({
+  title,
+  value,
+  onPress,
+}: {
+  title: string;
+  value?: string;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      style={[styles.navRow, { borderBottomColor: colors.border }]}
+      onPress={onPress}
+    >
+      <View style={styles.navRowContent}>
+        <Text style={[styles.navRowTitle, { color: colors.text }]}>{title}</Text>
+        {value ? (
+          <Text style={[styles.navRowValue, { color: colors.textMuted }]}>{value}</Text>
+        ) : null}
+      </View>
+      <Text style={[styles.navRowChevron, { color: colors.textMuted }]}>›</Text>
+    </TouchableOpacity>
+  );
 }
 
 function AgentsSettings() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: agents, isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: api.getAgents,
-  })
+  });
 
   const { data: claudeModelsData } = useQuery({
     queryKey: ['models', 'claude-code'],
     queryFn: () => api.listModels('claude-code'),
-  })
+  });
 
   const { data: opencodeModelsData } = useQuery({
     queryKey: ['models', 'opencode'],
     queryFn: () => api.listModels('opencode'),
-  })
+  });
 
-  const claudeModels = claudeModelsData?.models?.length ? claudeModelsData.models : FALLBACK_CLAUDE_MODELS
-  const opencodeModels = opencodeModelsData?.models || []
+  const claudeModels = claudeModelsData?.models?.length
+    ? claudeModelsData.models
+    : FALLBACK_CLAUDE_MODELS;
+  const opencodeModels = opencodeModelsData?.models || [];
 
-  const [opencodeZenToken, setOpencodeZenToken] = useState('')
-  const [opencodeModel, setOpencodeModel] = useState('')
-  const [githubToken, setGithubToken] = useState('')
-  const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
-  const [claudeModel, setClaudeModel] = useState('sonnet')
-  const [hasChanges, setHasChanges] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [opencodeZenToken, setOpencodeZenToken] = useState('');
+  const [opencodeModel, setOpencodeModel] = useState('');
+  const [githubToken, setGithubToken] = useState('');
+  const [claudeOAuthToken, setClaudeOAuthToken] = useState('');
+  const [claudeModel, setClaudeModel] = useState('sonnet');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (agents && !initialized) {
-      setOpencodeZenToken(agents.opencode?.zen_token || '')
-      setOpencodeModel(agents.opencode?.model || '')
-      setGithubToken(agents.github?.token || '')
-      setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
-      setClaudeModel(agents.claude_code?.model || 'sonnet')
-      setInitialized(true)
+      setOpencodeZenToken(agents.opencode?.zen_token || '');
+      setOpencodeModel(agents.opencode?.model || '');
+      setGithubToken(agents.github?.token || '');
+      setClaudeOAuthToken(agents.claude_code?.oauth_token || '');
+      setClaudeModel(agents.claude_code?.model || 'sonnet');
+      setInitialized(true);
     }
-  }, [agents, initialized])
+  }, [agents, initialized]);
 
   const mutation = useMutation({
     mutationFn: (data: CodingAgents) => api.updateAgents(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setHasChanges(false)
-      Alert.alert('Success', 'Settings saved')
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setHasChanges(false);
+      Alert.alert('Success', 'Settings saved');
     },
     onError: (err) => {
-      Alert.alert('Error', parseNetworkError(err))
+      Alert.alert('Error', parseNetworkError(err));
     },
-  })
+  });
 
   const handleSave = () => {
     mutation.mutate({
@@ -172,15 +209,15 @@ function AgentsSettings() {
         oauth_token: claudeOAuthToken.trim() || undefined,
         model: claudeModel,
       },
-    })
-  }
+    });
+  };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#0a84ff" />
       </View>
-    )
+    );
   }
 
   return (
@@ -192,7 +229,10 @@ function AgentsSettings() {
           label="Zen Token"
           value={opencodeZenToken}
           placeholder="zen_..."
-          onChangeText={(t) => { setOpencodeZenToken(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setOpencodeZenToken(t);
+            setHasChanges(true);
+          }}
           secureTextEntry
         />
         {opencodeModels.length > 0 && (
@@ -200,7 +240,10 @@ function AgentsSettings() {
             label="Model"
             models={opencodeModels}
             selectedModel={opencodeModel}
-            onSelect={(m) => { setOpencodeModel(m); setHasChanges(true) }}
+            onSelect={(m) => {
+              setOpencodeModel(m);
+              setHasChanges(true);
+            }}
           />
         )}
       </View>
@@ -212,14 +255,20 @@ function AgentsSettings() {
           label="OAuth Token"
           value={claudeOAuthToken}
           placeholder="sk-ant-oat01-..."
-          onChangeText={(t) => { setClaudeOAuthToken(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setClaudeOAuthToken(t);
+            setHasChanges(true);
+          }}
           secureTextEntry
         />
         <ModelPicker
           label="Model"
           models={claudeModels}
           selectedModel={claudeModel}
-          onSelect={(m) => { setClaudeModel(m); setHasChanges(true) }}
+          onSelect={(m) => {
+            setClaudeModel(m);
+            setHasChanges(true);
+          }}
         />
       </View>
 
@@ -230,7 +279,10 @@ function AgentsSettings() {
           label="Token"
           value={githubToken}
           placeholder="ghp_..."
-          onChangeText={(t) => { setGithubToken(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setGithubToken(t);
+            setHasChanges(true);
+          }}
           secureTextEntry
         />
       </View>
@@ -247,77 +299,77 @@ function AgentsSettings() {
         )}
       </TouchableOpacity>
     </Section>
-  )
+  );
 }
 
 function EnvironmentSettings() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: credentials, isLoading } = useQuery({
     queryKey: ['credentials'],
     queryFn: api.getCredentials,
-  })
+  });
 
-  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([])
-  const [hasChanges, setHasChanges] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (credentials && !initialized) {
-      const entries = Object.entries(credentials.env || {}).map(([key, value]) => ({ key, value }))
-      setEnvVars(entries.length > 0 ? entries : [{ key: '', value: '' }])
-      setInitialized(true)
+      const entries = Object.entries(credentials.env || {}).map(([key, value]) => ({ key, value }));
+      setEnvVars(entries.length > 0 ? entries : [{ key: '', value: '' }]);
+      setInitialized(true);
     }
-  }, [credentials, initialized])
+  }, [credentials, initialized]);
 
   const mutation = useMutation({
     mutationFn: (data: Credentials) => api.updateCredentials(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credentials'] })
-      setHasChanges(false)
-      Alert.alert('Success', 'Environment variables saved')
+      queryClient.invalidateQueries({ queryKey: ['credentials'] });
+      setHasChanges(false);
+      Alert.alert('Success', 'Environment variables saved');
     },
     onError: (err) => {
-      Alert.alert('Error', parseNetworkError(err))
+      Alert.alert('Error', parseNetworkError(err));
     },
-  })
+  });
 
   const handleAddVar = () => {
-    setEnvVars([...envVars, { key: '', value: '' }])
-    setHasChanges(true)
-  }
+    setEnvVars([...envVars, { key: '', value: '' }]);
+    setHasChanges(true);
+  };
 
   const handleRemoveVar = (index: number) => {
-    setEnvVars(envVars.filter((_, i) => i !== index))
-    setHasChanges(true)
-  }
+    setEnvVars(envVars.filter((_, i) => i !== index));
+    setHasChanges(true);
+  };
 
   const handleUpdateVar = (index: number, field: 'key' | 'value', text: string) => {
-    const newVars = [...envVars]
-    newVars[index][field] = text
-    setEnvVars(newVars)
-    setHasChanges(true)
-  }
+    const newVars = [...envVars];
+    newVars[index][field] = text;
+    setEnvVars(newVars);
+    setHasChanges(true);
+  };
 
   const handleSave = () => {
-    const env: Record<string, string> = {}
+    const env: Record<string, string> = {};
     envVars.forEach(({ key, value }) => {
       if (key.trim()) {
-        env[key.trim()] = value
+        env[key.trim()] = value;
       }
-    })
+    });
     mutation.mutate({
       env,
       files: credentials?.files || {},
-    })
-  }
+    });
+  };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#0a84ff" />
       </View>
-    )
+    );
   }
 
   return (
@@ -347,10 +399,7 @@ function EnvironmentSettings() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => handleRemoveVar(index)}
-            >
+            <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveVar(index)}>
               <Text style={styles.removeButtonText}>-</Text>
             </TouchableOpacity>
           </View>
@@ -371,80 +420,80 @@ function EnvironmentSettings() {
         </TouchableOpacity>
       </View>
     </Section>
-  )
+  );
 }
 
 function FilesSettings() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: credentials, isLoading } = useQuery({
     queryKey: ['credentials'],
     queryFn: api.getCredentials,
-  })
+  });
 
-  const [fileMappings, setFileMappings] = useState<Array<{ source: string; dest: string }>>([])
-  const [hasChanges, setHasChanges] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [fileMappings, setFileMappings] = useState<Array<{ source: string; dest: string }>>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (credentials && !initialized) {
       const entries = Object.entries(credentials.files || {}).map(([dest, source]) => ({
         source: source as string,
         dest,
-      }))
-      setFileMappings(entries.length > 0 ? entries : [{ source: '', dest: '' }])
-      setInitialized(true)
+      }));
+      setFileMappings(entries.length > 0 ? entries : [{ source: '', dest: '' }]);
+      setInitialized(true);
     }
-  }, [credentials, initialized])
+  }, [credentials, initialized]);
 
   const mutation = useMutation({
     mutationFn: (data: Credentials) => api.updateCredentials(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credentials'] })
-      setHasChanges(false)
-      Alert.alert('Success', 'File mappings saved')
+      queryClient.invalidateQueries({ queryKey: ['credentials'] });
+      setHasChanges(false);
+      Alert.alert('Success', 'File mappings saved');
     },
     onError: (err) => {
-      Alert.alert('Error', parseNetworkError(err))
+      Alert.alert('Error', parseNetworkError(err));
     },
-  })
+  });
 
   const handleAddMapping = () => {
-    setFileMappings([...fileMappings, { source: '', dest: '' }])
-    setHasChanges(true)
-  }
+    setFileMappings([...fileMappings, { source: '', dest: '' }]);
+    setHasChanges(true);
+  };
 
   const handleRemoveMapping = (index: number) => {
-    setFileMappings(fileMappings.filter((_, i) => i !== index))
-    setHasChanges(true)
-  }
+    setFileMappings(fileMappings.filter((_, i) => i !== index));
+    setHasChanges(true);
+  };
 
   const handleUpdateMapping = (index: number, field: 'source' | 'dest', text: string) => {
-    const newMappings = [...fileMappings]
-    newMappings[index][field] = text
-    setFileMappings(newMappings)
-    setHasChanges(true)
-  }
+    const newMappings = [...fileMappings];
+    newMappings[index][field] = text;
+    setFileMappings(newMappings);
+    setHasChanges(true);
+  };
 
   const handleSave = () => {
-    const files: Record<string, string> = {}
+    const files: Record<string, string> = {};
     fileMappings.forEach(({ source, dest }) => {
       if (dest.trim() && source.trim()) {
-        files[dest.trim()] = source.trim()
+        files[dest.trim()] = source.trim();
       }
-    })
+    });
     mutation.mutate({
       env: credentials?.env || {},
       files,
-    })
-  }
+    });
+  };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#0a84ff" />
       </View>
-    )
+    );
   }
 
   return (
@@ -500,52 +549,52 @@ function FilesSettings() {
         </TouchableOpacity>
       </View>
     </Section>
-  )
+  );
 }
 
 function ScriptsSettings() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: scripts, isLoading } = useQuery({
     queryKey: ['scripts'],
     queryFn: api.getScripts,
-  })
+  });
 
-  const [postStartScript, setPostStartScript] = useState('')
-  const [hasChanges, setHasChanges] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [postStartScript, setPostStartScript] = useState('');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (scripts && !initialized) {
-      setPostStartScript(scripts.post_start || '')
-      setInitialized(true)
+      setPostStartScript(scripts.post_start || '');
+      setInitialized(true);
     }
-  }, [scripts, initialized])
+  }, [scripts, initialized]);
 
   const mutation = useMutation({
     mutationFn: (data: Scripts) => api.updateScripts(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scripts'] })
-      setHasChanges(false)
-      Alert.alert('Success', 'Scripts saved')
+      queryClient.invalidateQueries({ queryKey: ['scripts'] });
+      setHasChanges(false);
+      Alert.alert('Success', 'Scripts saved');
     },
     onError: (err) => {
-      Alert.alert('Error', parseNetworkError(err))
+      Alert.alert('Error', parseNetworkError(err));
     },
-  })
+  });
 
   const handleSave = () => {
     mutation.mutate({
       post_start: postStartScript.trim() || undefined,
-    })
-  }
+    });
+  };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#0a84ff" />
       </View>
-    )
+    );
   }
 
   return (
@@ -559,7 +608,10 @@ function ScriptsSettings() {
           label="Script Path"
           value={postStartScript}
           placeholder="~/scripts/post-start.sh"
-          onChangeText={(t) => { setPostStartScript(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setPostStartScript(t);
+            setHasChanges(true);
+          }}
         />
         <TouchableOpacity
           style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
@@ -574,34 +626,37 @@ function ScriptsSettings() {
         </TouchableOpacity>
       </View>
     </Section>
-  )
+  );
 }
 
 function SyncSettings() {
-  const queryClient = useQueryClient()
-  const [lastResult, setLastResult] = useState<SyncResult | null>(null)
+  const queryClient = useQueryClient();
+  const [lastResult, setLastResult] = useState<SyncResult | null>(null);
 
   const mutation = useMutation({
     mutationFn: () => api.syncAllWorkspaces(),
     onSuccess: (result) => {
-      setLastResult(result)
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      setLastResult(result);
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       if (result.failed === 0) {
-        Alert.alert('Success', `Synced credentials to ${result.synced} workspace${result.synced !== 1 ? 's' : ''}`)
+        Alert.alert(
+          'Success',
+          `Synced credentials to ${result.synced} workspace${result.synced !== 1 ? 's' : ''}`
+        );
       } else {
         Alert.alert(
           'Partial Success',
           `Synced: ${result.synced}, Failed: ${result.failed}\n\n${result.results
-            .filter(r => !r.success)
-            .map(r => `${r.name}: ${r.error}`)
+            .filter((r) => !r.success)
+            .map((r) => `${r.name}: ${r.error}`)
             .join('\n')}`
-        )
+        );
       }
     },
     onError: (err) => {
-      Alert.alert('Error', parseNetworkError(err))
+      Alert.alert('Error', parseNetworkError(err));
     },
-  })
+  });
 
   return (
     <Section title="Sync">
@@ -614,7 +669,12 @@ function SyncSettings() {
           <View style={styles.syncResultContainer}>
             <View style={styles.syncResultRow}>
               <Text style={styles.syncResultLabel}>Last sync:</Text>
-              <Text style={[styles.syncResultValue, { color: lastResult.failed === 0 ? '#34c759' : '#ff9f0a' }]}>
+              <Text
+                style={[
+                  styles.syncResultValue,
+                  { color: lastResult.failed === 0 ? '#34c759' : '#ff9f0a' },
+                ]}
+              >
                 {lastResult.synced} synced, {lastResult.failed} failed
               </Text>
             </View>
@@ -633,43 +693,43 @@ function SyncSettings() {
         </TouchableOpacity>
       </View>
     </Section>
-  )
+  );
 }
 
 function ConnectionSettings() {
-  const currentUrl = getBaseUrl()
-  const urlMatch = currentUrl.match(/^https?:\/\/([^:]+):(\d+)$/)
-  const [host, setHost] = useState(urlMatch?.[1] || '')
-  const [port, setPort] = useState(urlMatch?.[2] || String(getDefaultPort()))
-  const [hasChanges, setHasChanges] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const queryClient = useQueryClient()
+  const currentUrl = getBaseUrl();
+  const urlMatch = currentUrl.match(/^https?:\/\/([^:]+):(\d+)$/);
+  const [host, setHost] = useState(urlMatch?.[1] || '');
+  const [port, setPort] = useState(urlMatch?.[2] || String(getDefaultPort()));
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleSave = async () => {
-    const trimmedHost = host.trim()
+    const trimmedHost = host.trim();
     if (!trimmedHost) {
-      Alert.alert('Error', 'Please enter a hostname')
-      return
+      Alert.alert('Error', 'Please enter a hostname');
+      return;
     }
-    const portNum = parseInt(port, 10)
+    const portNum = parseInt(port, 10);
     if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-      Alert.alert('Error', 'Please enter a valid port number')
-      return
+      Alert.alert('Error', 'Please enter a valid port number');
+      return;
     }
 
-    setIsSaving(true)
+    setIsSaving(true);
     try {
-      await saveServerConfig(trimmedHost, portNum)
-      refreshClient()
-      queryClient.invalidateQueries()
-      setHasChanges(false)
-      Alert.alert('Success', 'Server settings updated')
+      await saveServerConfig(trimmedHost, portNum);
+      refreshClient();
+      queryClient.invalidateQueries();
+      setHasChanges(false);
+      Alert.alert('Success', 'Server settings updated');
     } catch {
-      Alert.alert('Error', 'Failed to save settings')
+      Alert.alert('Error', 'Failed to save settings');
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
-  }
+  };
 
   return (
     <Section title="Connection">
@@ -680,13 +740,19 @@ function ConnectionSettings() {
           label="Hostname"
           value={host}
           placeholder="my-server.tailnet.ts.net"
-          onChangeText={(t) => { setHost(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setHost(t);
+            setHasChanges(true);
+          }}
         />
         <SettingRow
           label="Port"
           value={port}
           placeholder={String(getDefaultPort())}
-          onChangeText={(t) => { setPort(t); setHasChanges(true) }}
+          onChangeText={(t) => {
+            setPort(t);
+            setHasChanges(true);
+          }}
         />
         <TouchableOpacity
           style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
@@ -701,18 +767,18 @@ function ConnectionSettings() {
         </TouchableOpacity>
       </View>
     </Section>
-  )
+  );
 }
 
 function AboutSection() {
-  const { status, checkConnection } = useNetwork()
+  const { status, checkConnection } = useNetwork();
   const { data: info, isLoading } = useQuery({
     queryKey: ['info'],
     queryFn: api.getInfo,
     retry: false,
-  })
+  });
 
-  const isConnected = status === 'connected'
+  const isConnected = status === 'connected';
 
   return (
     <Section title="About">
@@ -763,15 +829,15 @@ function AboutSection() {
         )}
       </View>
     </Section>
-  )
+  );
 }
 
 function ThemeSettings() {
-  const { themeId, setTheme, definitions, colors } = useTheme()
-  const currentTheme = definitions.find(t => t.id === themeId) || definitions[0]
+  const { themeId, setTheme, definitions, colors } = useTheme();
+  const currentTheme = definitions.find((t) => t.id === themeId) || definitions[0];
 
   const showPicker = () => {
-    const options = [...definitions.map(t => t.name), 'Cancel']
+    const options = [...definitions.map((t) => t.name), 'Cancel'];
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options,
@@ -780,22 +846,29 @@ function ThemeSettings() {
       },
       (buttonIndex) => {
         if (buttonIndex < definitions.length) {
-          setTheme(definitions[buttonIndex].id as ThemeId)
+          setTheme(definitions[buttonIndex].id as ThemeId);
         }
       }
-    )
-  }
+    );
+  };
 
   return (
     <Section title="Appearance">
       <View style={[styles.themeCard, { backgroundColor: colors.surface }]}>
         <Text style={[styles.themeLabel, { color: colors.textMuted }]}>Theme</Text>
-        <TouchableOpacity style={[styles.themePicker, { backgroundColor: colors.surfaceSecondary }]} onPress={showPicker}>
+        <TouchableOpacity
+          style={[styles.themePicker, { backgroundColor: colors.surfaceSecondary }]}
+          onPress={showPicker}
+        >
           <View style={styles.themePreviewRow}>
-            <View style={[styles.themePreviewDot, { backgroundColor: currentTheme.preview.accent }]} />
+            <View
+              style={[styles.themePreviewDot, { backgroundColor: currentTheme.preview.accent }]}
+            />
             <View style={styles.themeInfo}>
               <Text style={[styles.themeName, { color: colors.text }]}>{currentTheme.name}</Text>
-              <Text style={[styles.themeDescription, { color: colors.textMuted }]}>{currentTheme.description}</Text>
+              <Text style={[styles.themeDescription, { color: colors.textMuted }]}>
+                {currentTheme.description}
+              </Text>
             </View>
           </View>
           <Text style={[styles.themeChevron, { color: colors.textMuted }]}>›</Text>
@@ -822,21 +895,21 @@ function ThemeSettings() {
         </View>
       </View>
     </Section>
-  )
+  );
 }
 
 function formatUptime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   if (hours > 0) {
-    return `${hours}h ${mins}m`
+    return `${hours}h ${mins}m`;
   }
-  return `${mins}m`
+  return `${mins}m`;
 }
 
 export function SettingsScreen({ navigation }: any) {
-  const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <KeyboardAvoidingView
@@ -854,6 +927,14 @@ export function SettingsScreen({ navigation }: any) {
         <ConnectionSettings />
         <ThemeSettings />
         <SyncSettings />
+        <Section title="Skills">
+          <NavigationRow
+            title="Skills"
+            value="SKILL.md"
+            onPress={() => navigation.navigate('Skills')}
+          />
+          <NavigationRow title="MCP" value="Servers" onPress={() => navigation.navigate('Mcp')} />
+        </Section>
         <AgentsSettings />
         <EnvironmentSettings />
         <FilesSettings />
@@ -861,7 +942,7 @@ export function SettingsScreen({ navigation }: any) {
         <AboutSection />
       </ScrollView>
     </KeyboardAvoidingView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -900,6 +981,27 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  navRow: {
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+  },
+  navRowContent: {
+    flex: 1,
+  },
+  navRowTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  navRowValue: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  navRowChevron: {
+    fontSize: 18,
+    paddingHorizontal: 8,
   },
   section: {
     marginBottom: 24,
@@ -1223,4 +1325,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-})
+});
