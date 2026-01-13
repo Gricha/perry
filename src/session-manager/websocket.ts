@@ -142,6 +142,12 @@ export class LiveChatWebSocketServer extends BaseWebSocketServer<LiveChatConnect
 
         if (clientId) {
           connection.clientId = clientId;
+
+          // Update model if client requested a different one
+          if (message.model && message.model !== found.info.model) {
+            sessionManager.setModel(found.sessionId, message.model);
+          }
+
           safeSend(
             ws,
             JSON.stringify({
@@ -149,6 +155,7 @@ export class LiveChatWebSocketServer extends BaseWebSocketServer<LiveChatConnect
               sessionId: found.sessionId,
               status: found.info.status,
               agentSessionId: found.info.agentSessionId,
+              model: message.model || found.info.model,
               timestamp: new Date().toISOString(),
             })
           );

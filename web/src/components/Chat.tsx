@@ -262,6 +262,7 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
   const [messageOffset, setMessageOffset] = useState(0)
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined)
+  const [modelLoaded, setModelLoaded] = useState(false)
   const selectedModelRef = useRef<string | undefined>(undefined)
   selectedModelRef.current = selectedModel
   const sessionIdRef = useRef<string | undefined>(initialSessionId)
@@ -357,11 +358,17 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
 
         setAvailableModels(models)
 
-        if (models.length === 0) return
+        if (models.length === 0) {
+          setModelLoaded(true)
+          return
+        }
 
         const current = selectedModelRef.current
         const isCurrentValid = current ? models.some((m) => m.id === current) : false
-        if (isCurrentValid) return
+        if (isCurrentValid) {
+          setModelLoaded(true)
+          return
+        }
 
         const pickDefault = (configModel?: string) => {
           if (configModel && models.some((m) => m.id === configModel)) {
@@ -393,20 +400,29 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
 
         try {
           const agents = await api.getAgents()
-          if (!active || hasUserSelected()) return
+          if (!active || hasUserSelected()) {
+            setModelLoaded(true)
+            return
+          }
 
           const configModel = fetchAgentType === 'opencode'
             ? agents.opencode?.model
             : agents.claude_code?.model
           setSelectedModel(pickDefault(configModel))
+          setModelLoaded(true)
         } catch {
-          if (!active || hasUserSelected()) return
+          if (!active || hasUserSelected()) {
+            setModelLoaded(true)
+            return
+          }
           setSelectedModel(pickDefault())
+          setModelLoaded(true)
         }
       })
       .catch((err) => {
         if (!active) return
         console.error('Failed to load models:', err)
+        setModelLoaded(true) // Still allow connection even if model loading fails
       })
 
     return () => {
@@ -741,12 +757,15 @@ export function Chat({ workspaceName, sessionId: initialSessionId, projectPath, 
   }, [workspaceName, agentType, finalizeStreaming, projectPath, selectedModel])
 
   useEffect(() => {
+    // Wait for model to be loaded before connecting to ensure the correct model is sent
+    if (!modelLoaded) return
+
     const ws = connect()
 
     return () => {
       ws.close()
     }
-  }, [connect])
+  }, [connect, modelLoaded])
 
   useEffect(() => {
     onConnectionChange?.(isConnected)
