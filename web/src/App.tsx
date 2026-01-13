@@ -77,9 +77,9 @@ function App() {
         <BrowserRouter>
           <SetupGuard>
             <Routes>
-              <Route path="/setup" element={<Setup />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Navigate to="/workspaces" replace />} />
+                <Route path="setup" element={<Setup />} />
                 <Route path="workspaces" element={<WorkspaceList />} />
                 <Route path="workspaces/:name" element={<WorkspaceDetail />} />
                 <Route path="workspaces/:name/sessions" element={<SessionsRedirect />} />

@@ -6,9 +6,9 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/models';
 const ANTHROPIC_API_VERSION = '2023-06-01';
 
 const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
-  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable' },
-  { id: 'opus', name: 'Opus', description: 'Most capable' },
-  { id: 'haiku', name: 'Haiku', description: 'Fastest' },
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and capable', provider: 'anthropic' },
+  { id: 'opus', name: 'Opus', description: 'Most capable', provider: 'anthropic' },
+  { id: 'haiku', name: 'Haiku', description: 'Fastest', provider: 'anthropic' },
 ];
 
 interface AnthropicModel {
@@ -51,6 +51,7 @@ export async function discoverClaudeCodeModels(config: AgentConfig): Promise<Mod
       .map((m) => ({
         id: m.id,
         name: m.display_name || m.id,
+        provider: 'anthropic',
       }));
 
     if (models.length === 0) {
@@ -100,17 +101,17 @@ function parseOpencodeModels(output: string): ModelInfo[] {
 
     const parts = trimmed.split('/');
     const id = trimmed;
-    const provider = parts.length > 1 ? parts[0] : '';
+    const provider = parts.length > 1 ? parts[0] : undefined;
     const modelName = parts.length > 1 ? parts[1] : parts[0];
-    const formattedModel = modelName
+    const displayName = modelName
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-    const displayName = provider ? `${provider} / ${formattedModel}` : formattedModel;
 
     models.push({
       id,
       name: displayName,
+      provider,
     });
   }
 

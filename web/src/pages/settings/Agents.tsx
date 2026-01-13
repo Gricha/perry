@@ -1,22 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, ExternalLink, Sparkles, Github, Code2, ChevronDown, Check } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Github, Check } from 'lucide-react'
 import { api, type CodingAgents, type ModelInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { useSyncNotification } from '@/contexts/SyncContext'
+import { AgentIcon } from '@/components/AgentIcon'
+import { SearchableModelSelect } from '@/components/SearchableModelSelect'
 
 const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
-  { id: 'sonnet', name: 'Sonnet', description: 'Fast and cost-effective' },
-  { id: 'opus', name: 'Opus', description: 'Most capable' },
-  { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost' },
+  { id: 'sonnet', name: 'Sonnet', description: 'Fast and cost-effective', provider: 'anthropic' },
+  { id: 'opus', name: 'Opus', description: 'Most capable', provider: 'anthropic' },
+  { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost', provider: 'anthropic' },
 ]
 
 
@@ -179,9 +174,7 @@ export function AgentsSettings() {
 
         {/* OpenCode */}
         <div className="agent-row">
-          <div className="agent-icon">
-            <Code2 className="h-5 w-5" />
-          </div>
+          <AgentIcon agentType="opencode" size="md" />
           <div className="agent-info">
             <div className="agent-name">
               OpenCode
@@ -214,28 +207,18 @@ export function AgentsSettings() {
               </div>
               <div className="agent-input flex flex-col sm:flex-row gap-2">
                 {opencodeModels.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="flex-1 justify-between h-11 sm:h-9">
-                        <span className="text-sm">
-                          Model: {opencodeModels.find(m => m.id === opencodeModel)?.name || 'Default'}
-                        </span>
-                        <ChevronDown className="h-4 w-4 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                      <DropdownMenuRadioGroup value={opencodeModel} onValueChange={(value) => {
+                  <div className="flex-1">
+                    <SearchableModelSelect
+                      models={opencodeModels}
+                      value={opencodeModel}
+                      onChange={(value) => {
                         setOpencodeModel(value)
                         setOpencodeHasChanges(true)
-                      }}>
-                        {opencodeModels.map((model) => (
-                          <DropdownMenuRadioItem key={model.id} value={model.id}>
-                            <span>{model.name}</span>
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      }}
+                      placeholder="Select model..."
+                      showProvider
+                    />
+                  </div>
                 )}
                 <Button
                   onClick={handleSaveOpencode}
@@ -263,9 +246,7 @@ export function AgentsSettings() {
 
         {/* Claude Code */}
         <div className="agent-row">
-          <div className="agent-icon">
-            <Sparkles className="h-5 w-5" />
-          </div>
+          <AgentIcon agentType="claude-code" size="md" />
           <div className="agent-info">
             <div className="agent-name">
               Claude Code
@@ -288,33 +269,17 @@ export function AgentsSettings() {
                 />
               </div>
               <div className="agent-input flex flex-col sm:flex-row gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="flex-1 justify-between h-11 sm:h-9">
-                      <span className="text-sm">
-                        Model: {claudeModels.find(m => m.id === claudeModel)?.name || 'Sonnet'}
-                      </span>
-                      <ChevronDown className="h-4 w-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    <DropdownMenuRadioGroup value={claudeModel} onValueChange={(value) => {
+                <div className="flex-1">
+                  <SearchableModelSelect
+                    models={claudeModels}
+                    value={claudeModel}
+                    onChange={(value) => {
                       setClaudeModel(value)
                       setClaudeHasChanges(true)
-                    }}>
-                      {claudeModels.map((model) => (
-                        <DropdownMenuRadioItem key={model.id} value={model.id}>
-                          <div className="flex flex-col">
-                            <span>{model.name}</span>
-                            {model.description && (
-                              <span className="text-xs text-muted-foreground">{model.description}</span>
-                            )}
-                          </div>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    }}
+                    showProvider
+                  />
+                </div>
                 <Button
                   onClick={handleSaveClaude}
                   disabled={mutation.isPending || !claudeHasChanges}

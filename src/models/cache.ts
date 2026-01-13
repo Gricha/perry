@@ -5,6 +5,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   description?: string;
+  provider?: string;
 }
 
 interface ModelCacheEntry {
