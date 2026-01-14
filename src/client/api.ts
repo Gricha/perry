@@ -1,4 +1,5 @@
 import { createORPCClient } from '@orpc/client';
+import { isIP } from 'node:net';
 import { RPCLink } from '@orpc/client/fetch';
 import type { RouterClient } from '@orpc/server';
 import type { AppRouter } from '../agent/router';
@@ -219,47 +220,34 @@ export class ApiClient {
   }
 }
 
-function countColons(value: string): number {
-  let count = 0;
-  for (const ch of value) {
-    if (ch === ':') count++;
-  }
-  return count;
-}
-
 function formatWorkerBaseUrl(worker: string, port?: number): string {
   const trimmed = worker.trim();
   const effectivePort = port || DEFAULT_AGENT_PORT;
 
   if (trimmed.includes('://')) {
+    // Validate early so we don't silently produce garbage.
+    new URL(trimmed);
     return trimmed;
   }
 
   // Bracketed IPv6 (optionally with port).
   if (trimmed.startsWith('[')) {
-    if (trimmed.includes(']:')) {
-      return `http://${trimmed}`;
-    }
-    if (trimmed.endsWith(']')) {
-      return `http://${trimmed}:${effectivePort}`;
-    }
+    const parsed = new URL(`http://${trimmed}`);
+    return parsed.port ? `http://${trimmed}` : `http://${trimmed}:${effectivePort}`;
+  }
+
+  // Bracketless IPv6 literal.
+  if (isIP(trimmed) === 6) {
+    return `http://[${trimmed}]:${effectivePort}`;
+  }
+
+  // IPv4/hostname (optionally with port).
+  if (trimmed.includes(':')) {
+    new URL(`http://${trimmed}`);
     return `http://${trimmed}`;
   }
 
-  const colonCount = countColons(trimmed);
-  if (colonCount === 0) {
-    return `http://${trimmed}:${effectivePort}`;
-  }
-
-  // Hostname:port or IPv4:port.
-  if (colonCount === 1) {
-    return `http://${trimmed}`;
-  }
-
-  // Bracketless IPv6 literal. We cannot safely infer an explicit port here
-  // because addresses like `::1` or `fe80::5678` end with decimal digits.
-  // If a non-default port is needed, require bracket form: `[fd01::1]:7391`.
-  return `http://[${trimmed}]:${effectivePort}`;
+  return `http://${trimmed}:${effectivePort}`;
 }
 
 export function createApiClient(worker: string, port?: number, timeoutMs?: number): ApiClient {
