@@ -17,14 +17,42 @@ import { api } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { parseNetworkError } from '../lib/network';
 
+type McpOauthConfig =
+  | false
+  | {
+      clientId?: string;
+      clientSecret?: string;
+      scope?: string;
+    };
+
 type McpServer = {
   id: string;
   name: string;
   enabled: boolean;
-  command: string;
-  args: string[];
+  type: 'local' | 'remote';
+  command?: string;
+  args?: string[];
   env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  oauth?: McpOauthConfig;
 };
+
+type KV = { key: string; value: string };
+
+function kvFromObject(obj: Record<string, string> | undefined): KV[] {
+  return Object.entries(obj || {}).map(([key, value]) => ({ key, value }));
+}
+
+function kvToObject(entries: KV[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const entry of entries) {
+    const key = entry.key.trim();
+    if (!key) continue;
+    out[key] = entry.value;
+  }
+  return out;
+}
 
 function newServer(): McpServer {
   const id = `mcp_${Math.random().toString(16).slice(2)}`;
@@ -32,6 +60,7 @@ function newServer(): McpServer {
     id,
     name: 'my-mcp',
     enabled: true,
+    type: 'local',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-everything'],
     env: {},
@@ -111,8 +140,7 @@ export function McpServersScreen({ navigation }: any) {
             Failed to load MCP servers
           </Text>
           <Text style={[styles.errorText, { color: colors.textMuted }]}>
-            {' '}
-            {parseNetworkError(error as Error)}{' '}
+            {parseNetworkError(error as Error)}
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.accent }]}
@@ -173,73 +201,301 @@ export function McpServersScreen({ navigation }: any) {
             </Text>
           </View>
         ) : (
-          drafts.map((server, index) => (
-            <View
-              key={server.id}
-              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <View style={styles.cardHeaderRow}>
-                <TextInput
-                  style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
-                  value={server.name}
-                  onChangeText={(t) => setServer(index, { ...server, name: t })}
-                  placeholder="server-name"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity onPress={() => removeServer(index)} style={styles.deleteBtn}>
-                  <Text style={[styles.deleteBtnText, { color: '#ff3b30' }]}>✕</Text>
-                </TouchableOpacity>
-              </View>
+          drafts.map((server, index) => {
+            const headers = kvFromObject(server.headers);
+            const env = kvFromObject(server.env);
 
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Enabled</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.toggle,
-                    { backgroundColor: server.enabled ? colors.accent : colors.border },
-                  ]}
-                  onPress={() => setServer(index, { ...server, enabled: !server.enabled })}
-                >
-                  <View
-                    style={[
-                      styles.toggleKnob,
-                      { transform: [{ translateX: server.enabled ? 18 : 0 }] },
-                    ]}
+            return (
+              <View
+                key={server.id}
+                style={[
+                  styles.card,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.cardHeaderRow}>
+                  <TextInput
+                    style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
+                    value={server.name}
+                    onChangeText={(t) => setServer(index, { ...server, name: t })}
+                    placeholder="server-name"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity onPress={() => removeServer(index)} style={styles.deleteBtn}>
+                    <Text style={[styles.deleteBtnText, { color: '#ff3b30' }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.row}>
+                  <Text style={[styles.label, { color: colors.textMuted }]}>Enabled</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggle,
+                      { backgroundColor: server.enabled ? colors.accent : colors.border },
+                    ]}
+                    onPress={() => setServer(index, { ...server, enabled: !server.enabled })}
+                  >
+                    <View
+                      style={[
+                        styles.toggleKnob,
+                        { transform: [{ translateX: server.enabled ? 18 : 0 }] },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.segmentRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        backgroundColor:
+                          server.type === 'local' ? colors.accent : colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() =>
+                      setServer(index, {
+                        ...server,
+                        type: 'local',
+                        url: undefined,
+                        headers: undefined,
+                        oauth: undefined,
+                        command: server.command || 'npx',
+                        args: server.args || ['-y', '@modelcontextprotocol/server-everything'],
+                        env: server.env || {},
+                      })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.segmentBtnText,
+                        { color: server.type === 'local' ? '#fff' : colors.text },
+                      ]}
+                    >
+                      Local
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        backgroundColor:
+                          server.type === 'remote' ? colors.accent : colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() =>
+                      setServer(index, {
+                        ...server,
+                        type: 'remote',
+                        command: undefined,
+                        args: undefined,
+                        env: undefined,
+                        url: server.url || 'https://example.com/mcp',
+                        headers: server.headers || {},
+                      })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.segmentBtnText,
+                        { color: server.type === 'remote' ? '#fff' : colors.text },
+                      ]}
+                    >
+                      Remote
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {server.type === 'remote' ? (
+                  <>
+                    <TextInput
+                      style={[styles.textInput, { color: colors.text, borderColor: colors.border }]}
+                      value={server.url || ''}
+                      onChangeText={(t) => setServer(index, { ...server, url: t })}
+                      placeholder="https://.../mcp"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    <View style={styles.presetRow}>
+                      <TouchableOpacity
+                        style={[styles.presetBtn, { borderColor: colors.border }]}
+                        onPress={() =>
+                          setServer(index, {
+                            ...server,
+                            headers: {
+                              ...server.headers,
+                              Authorization: 'Bearer {env:API_KEY}',
+                            },
+                            oauth: false,
+                          })
+                        }
+                      >
+                        <Text style={[styles.presetBtnText, { color: colors.text }]}>Bearer</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.presetBtn, { borderColor: colors.border }]}
+                        onPress={() => setServer(index, { ...server, oauth: {} })}
+                      >
+                        <Text style={[styles.presetBtnText, { color: colors.text }]}>OAuth</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={[styles.subLabel, { color: colors.textMuted }]}>Headers</Text>
+                    {headers.map((row, i) => (
+                      <View key={i} style={styles.kvRow}>
+                        <TextInput
+                          style={[
+                            styles.kvInput,
+                            { color: colors.text, borderColor: colors.border },
+                          ]}
+                          value={row.key}
+                          onChangeText={(t) => {
+                            const next = [...headers];
+                            next[i] = { ...next[i], key: t };
+                            setServer(index, { ...server, headers: kvToObject(next) });
+                          }}
+                          placeholder="key"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        <TextInput
+                          style={[
+                            styles.kvInput,
+                            { color: colors.text, borderColor: colors.border },
+                          ]}
+                          value={row.value}
+                          onChangeText={(t) => {
+                            const next = [...headers];
+                            next[i] = { ...next[i], value: t };
+                            setServer(index, { ...server, headers: kvToObject(next) });
+                          }}
+                          placeholder="value"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        <TouchableOpacity
+                          style={styles.kvDelete}
+                          onPress={() => {
+                            const next = headers.filter((_, j) => j !== i);
+                            setServer(index, { ...server, headers: kvToObject(next) });
+                          }}
+                        >
+                          <Text style={[styles.kvDeleteText, { color: '#ff3b30' }]}>-</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      style={[styles.smallBtn, { borderColor: colors.border }]}
+                      onPress={() =>
+                        setServer(index, {
+                          ...server,
+                          headers: kvToObject([...headers, { key: '', value: '' }]),
+                        })
+                      }
+                    >
+                      <Text style={[styles.smallBtnText, { color: colors.text }]}>+ Header</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TextInput
+                      style={[styles.textInput, { color: colors.text, borderColor: colors.border }]}
+                      value={server.command || ''}
+                      onChangeText={(t) => setServer(index, { ...server, command: t || undefined })}
+                      placeholder="command"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    <TextInput
+                      style={[styles.textInput, { color: colors.text, borderColor: colors.border }]}
+                      value={(server.args || []).join(' ')}
+                      onChangeText={(t) =>
+                        setServer(index, {
+                          ...server,
+                          args: t
+                            .split(' ')
+                            .map((s) => s.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                      placeholder="args (space separated)"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+
+                    <Text style={[styles.subLabel, { color: colors.textMuted }]}>Env</Text>
+                    {env.map((row, i) => (
+                      <View key={i} style={styles.kvRow}>
+                        <TextInput
+                          style={[
+                            styles.kvInput,
+                            { color: colors.text, borderColor: colors.border },
+                          ]}
+                          value={row.key}
+                          onChangeText={(t) => {
+                            const next = [...env];
+                            next[i] = { ...next[i], key: t };
+                            setServer(index, { ...server, env: kvToObject(next) });
+                          }}
+                          placeholder="key"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        <TextInput
+                          style={[
+                            styles.kvInput,
+                            { color: colors.text, borderColor: colors.border },
+                          ]}
+                          value={row.value}
+                          onChangeText={(t) => {
+                            const next = [...env];
+                            next[i] = { ...next[i], value: t };
+                            setServer(index, { ...server, env: kvToObject(next) });
+                          }}
+                          placeholder="value"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        <TouchableOpacity
+                          style={styles.kvDelete}
+                          onPress={() => {
+                            const next = env.filter((_, j) => j !== i);
+                            setServer(index, { ...server, env: kvToObject(next) });
+                          }}
+                        >
+                          <Text style={[styles.kvDeleteText, { color: '#ff3b30' }]}>-</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      style={[styles.smallBtn, { borderColor: colors.border }]}
+                      onPress={() =>
+                        setServer(index, {
+                          ...server,
+                          env: kvToObject([...env, { key: '', value: '' }]),
+                        })
+                      }
+                    >
+                      <Text style={[styles.smallBtnText, { color: colors.text }]}>+ Env</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
-
-              <TextInput
-                style={[styles.textInput, { color: colors.text, borderColor: colors.border }]}
-                value={server.command}
-                onChangeText={(t) => setServer(index, { ...server, command: t })}
-                placeholder="command"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
-              <TextInput
-                style={[styles.textInput, { color: colors.text, borderColor: colors.border }]}
-                value={server.args.join(' ')}
-                onChangeText={(t) =>
-                  setServer(index, {
-                    ...server,
-                    args: t
-                      .split(' ')
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="args (space separated)"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -317,6 +573,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  subLabel: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   toggle: { width: 42, height: 24, borderRadius: 12, padding: 3 },
   toggleKnob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' },
   textInput: {
@@ -328,6 +591,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'monospace',
   },
+  segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  segmentBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  segmentBtnText: { fontSize: 13, fontWeight: '700' },
+  presetRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  presetBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  presetBtnText: { fontSize: 12, fontWeight: '700' },
+  kvRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+  kvInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
+  kvDelete: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kvDeleteText: { fontSize: 18, fontWeight: '700' },
+  smallBtn: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  smallBtnText: { fontSize: 12, fontWeight: '700' },
   errorContainer: { flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' },
   errorTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
   errorText: { fontSize: 14, textAlign: 'center', marginBottom: 16 },

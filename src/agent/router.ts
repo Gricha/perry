@@ -108,14 +108,39 @@ const SkillDefinitionSchema = z.object({
   skillMd: z.string(),
 });
 
-const McpServerDefinitionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  enabled: z.boolean(),
-  command: z.string(),
-  args: z.array(z.string()),
-  env: z.record(z.string(), z.string()).optional(),
-});
+const McpServerTypeSchema = z.enum(['local', 'remote']);
+
+const McpOauthSchema = z.union([
+  z.literal(false),
+  z
+    .object({
+      clientId: z.string().optional(),
+      clientSecret: z.string().optional(),
+      scope: z.string().optional(),
+    })
+    .strict(),
+]);
+
+const McpServerDefinitionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    enabled: z.boolean(),
+    type: McpServerTypeSchema,
+
+    // Local
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+
+    // Remote
+    url: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+
+    // OpenCode-specific OAuth config
+    oauth: McpOauthSchema.optional(),
+  })
+  .strict();
 
 const SkillsSchema = z.array(SkillDefinitionSchema);
 const McpServersSchema = z.array(McpServerDefinitionSchema);

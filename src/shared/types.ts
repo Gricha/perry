@@ -56,13 +56,33 @@ export interface SkillDefinition {
   skillMd: string;
 }
 
+export type McpServerType = 'local' | 'remote';
+
+type McpOauthConfig =
+  | false
+  | {
+      clientId?: string;
+      clientSecret?: string;
+      scope?: string;
+    };
+
 export interface McpServerDefinition {
   id: string;
   name: string;
   enabled: boolean;
-  command: string;
-  args: string[];
+  type: McpServerType;
+
+  // Local
+  command?: string;
+  args?: string[];
   env?: Record<string, string>;
+
+  // Remote
+  url?: string;
+  headers?: Record<string, string>;
+
+  // OpenCode-specific OAuth config
+  oauth?: McpOauthConfig;
 }
 
 export interface AgentConfig {

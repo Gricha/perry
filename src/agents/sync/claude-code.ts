@@ -95,9 +95,26 @@ export const claudeCodeSync: AgentSyncProvider = {
     for (const server of mcpServers) {
       const safeName = server.name.trim();
       if (!safeName) continue;
+
+      if (server.type === 'remote') {
+        const url = server.url?.trim();
+        if (!url) continue;
+        perryMcpServers[safeName] = {
+          type: 'http',
+          url,
+          headers: server.headers || {},
+        };
+        continue;
+      }
+
+      const command = server.command?.trim();
+      const args = server.args || [];
+      if (!command) continue;
+
       perryMcpServers[safeName] = {
-        command: server.command,
-        args: server.args,
+        type: 'stdio',
+        command,
+        args,
         env: server.env || {},
       };
     }

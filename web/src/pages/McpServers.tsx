@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { KeyValueEditor } from '@/components/KeyValueEditor';
 
 function newServer(): McpServer {
   const id = `mcp_${Math.random().toString(16).slice(2)}`;
@@ -13,6 +14,7 @@ function newServer(): McpServer {
     id,
     name: 'my-mcp',
     enabled: true,
+    type: 'local',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-everything'],
     env: {},
@@ -153,31 +155,210 @@ export function McpServers() {
                     <span className="text-xs text-muted-foreground/60 font-mono">{server.id}</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Input
-                      value={server.command}
-                      placeholder="command"
-                      onChange={(e) => setServer(index, { ...server, command: e.target.value })}
-                      className="font-mono"
-                    />
-                    <Input
-                      value={server.args.join(' ')}
-                      placeholder="args (space separated)"
-                      onChange={(e) =>
-                        setServer(index, {
-                          ...server,
-                          args: e.target.value
-                            .split(' ')
-                            .map((s) => s.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      className="font-mono"
-                    />
-                  </div>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={server.type === 'local' ? 'default' : 'outline'}
+                        onClick={() =>
+                          setServer(index, {
+                            ...server,
+                            type: 'local',
+                            url: undefined,
+                            headers: undefined,
+                            oauth: undefined,
+                            command: server.command || 'npx',
+                            args: server.args || ['-y', '@modelcontextprotocol/server-everything'],
+                          })
+                        }
+                      >
+                        Local
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={server.type === 'remote' ? 'default' : 'outline'}
+                        onClick={() =>
+                          setServer(index, {
+                            ...server,
+                            type: 'remote',
+                            command: undefined,
+                            args: undefined,
+                            env: undefined,
+                            url: server.url || 'https://example.com/mcp',
+                            headers: server.headers || {},
+                          })
+                        }
+                      >
+                        Remote
+                      </Button>
+                    </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Env support is basic for now; values are synced as-is.
+                    {server.type === 'remote' ? (
+                      <>
+                        <Input
+                          value={server.url || ''}
+                          placeholder="https://.../mcp"
+                          onChange={(e) => setServer(index, { ...server, url: e.target.value })}
+                          className="font-mono"
+                        />
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setServer(index, {
+                                ...server,
+                                headers: {
+                                  ...(server.headers || {}),
+                                  Authorization: 'Bearer {env:API_KEY}',
+                                },
+                                oauth: false,
+                              })
+                            }
+                          >
+                            Add Bearer header
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setServer(index, { ...server, oauth: {} })}
+                          >
+                            Enable OAuth (auto)
+                          </Button>
+                        </div>
+
+                        <div className="text-sm font-medium">Headers</div>
+                        <KeyValueEditor
+                          value={server.headers}
+                          onChange={(headers) => setServer(index, { ...server, headers })}
+                          emptyLabel="No headers configured"
+                        />
+
+                        <div className="text-sm font-medium">OAuth (OpenCode)</div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={server.oauth === undefined ? 'default' : 'outline'}
+                            onClick={() => setServer(index, { ...server, oauth: undefined })}
+                          >
+                            Auto
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={server.oauth === false ? 'default' : 'outline'}
+                            onClick={() => setServer(index, { ...server, oauth: false })}
+                          >
+                            Disabled
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={
+                              server.oauth && server.oauth.clientId !== undefined
+                                ? 'default'
+                                : server.oauth && server.oauth.clientSecret !== undefined
+                                  ? 'default'
+                                  : 'outline'
+                            }
+                            onClick={() =>
+                              setServer(index, {
+                                ...server,
+                                oauth: server.oauth
+                                  ? server.oauth
+                                  : {
+                                      clientId: '{env:MCP_CLIENT_ID}',
+                                      clientSecret: '{env:MCP_CLIENT_SECRET}',
+                                    },
+                              })
+                            }
+                          >
+                            Pre-registered
+                          </Button>
+                        </div>
+
+                        {server.oauth !== undefined && server.oauth !== false ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <Input
+                              value={server.oauth.clientId || ''}
+                              placeholder="clientId"
+                              className="font-mono"
+                              onChange={(e) =>
+                                setServer(index, {
+                                  ...server,
+                                  oauth: { ...server.oauth, clientId: e.target.value || undefined },
+                                })
+                              }
+                            />
+                            <Input
+                              value={server.oauth.clientSecret || ''}
+                              placeholder="clientSecret"
+                              className="font-mono"
+                              onChange={(e) =>
+                                setServer(index, {
+                                  ...server,
+                                  oauth: {
+                                    ...server.oauth,
+                                    clientSecret: e.target.value || undefined,
+                                  },
+                                })
+                              }
+                            />
+                            <Input
+                              value={server.oauth.scope || ''}
+                              placeholder="scope"
+                              className="font-mono sm:col-span-2"
+                              onChange={(e) =>
+                                setServer(index, {
+                                  ...server,
+                                  oauth: { ...server.oauth, scope: e.target.value || undefined },
+                                })
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <Input
+                            value={server.command || ''}
+                            placeholder="command"
+                            onChange={(e) =>
+                              setServer(index, { ...server, command: e.target.value || undefined })
+                            }
+                            className="font-mono"
+                          />
+                          <Input
+                            value={(server.args || []).join(' ')}
+                            placeholder="args (space separated)"
+                            onChange={(e) =>
+                              setServer(index, {
+                                ...server,
+                                args: e.target.value
+                                  .split(' ')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                            className="font-mono"
+                          />
+                        </div>
+
+                        <div className="text-sm font-medium">Environment</div>
+                        <KeyValueEditor
+                          value={server.env}
+                          onChange={(env) => setServer(index, { ...server, env })}
+                          emptyLabel="No environment variables"
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

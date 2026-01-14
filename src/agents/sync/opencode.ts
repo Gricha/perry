@@ -74,9 +74,27 @@ export const opencodeSync: AgentSyncProvider = {
     for (const server of mcpServers) {
       const safeName = server.name.trim();
       if (!safeName) continue;
+
+      if (server.type === 'remote') {
+        const url = server.url?.trim();
+        if (!url) continue;
+        perryMcp[safeName] = {
+          type: 'remote',
+          url,
+          enabled: true,
+          headers: server.headers || {},
+          oauth: server.oauth,
+        };
+        continue;
+      }
+
+      const command = server.command?.trim();
+      const args = server.args || [];
+      if (!command) continue;
+
       perryMcp[safeName] = {
         type: 'local',
-        command: [server.command, ...server.args],
+        command: [command, ...args],
         enabled: true,
         environment: server.env || {},
       };
