@@ -55,6 +55,13 @@ const WorkspacePortsSchema = z.object({
   forwards: z.array(PortMappingSchema).optional(),
 });
 
+const WorkspaceTailscaleSchema = z.object({
+  status: z.enum(['none', 'connected', 'failed']),
+  hostname: z.string().optional(),
+  ip: z.string().optional(),
+  error: z.string().optional(),
+});
+
 const WorkspaceInfoSchema = z.object({
   name: z.string(),
   status: WorkspaceStatusSchema,
@@ -63,6 +70,7 @@ const WorkspaceInfoSchema = z.object({
   repo: z.string().optional(),
   ports: WorkspacePortsSchema,
   lastUsed: z.string().optional(),
+  tailscale: WorkspaceTailscaleSchema.optional(),
 });
 
 const CredentialsSchema = z.object({
