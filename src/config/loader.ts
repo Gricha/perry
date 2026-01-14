@@ -83,6 +83,7 @@ export async function loadAgentConfig(configDir?: string): Promise<AgentConfig> 
         },
         workspaces: config.ssh?.workspaces || {},
       },
+      tailscale: config.tailscale,
     };
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {

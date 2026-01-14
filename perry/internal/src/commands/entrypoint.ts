@@ -3,6 +3,7 @@ import { syncUserWithHost } from "./sync-user";
 import { ensureDockerd, monitorServices, startSshd, tailDockerdLogs, waitForDocker } from "../lib/services";
 import { runCommand } from "../lib/process";
 import { writeEnvironmentFile } from "../lib/environment";
+import { ensureTailscaled, waitForTailscaled, isTailscaleInstalled } from "../lib/tailscale";
 
 export const runEntrypoint = async () => {
   console.log("[entrypoint] Syncing user with host...");
@@ -37,6 +38,11 @@ export const runEntrypoint = async () => {
   }
   console.log("[entrypoint] Starting SSH daemon...");
   await startSshd();
+  if (process.env.TS_AUTHKEY && (await isTailscaleInstalled())) {
+    console.log("[entrypoint] Starting Tailscale daemon...");
+    ensureTailscaled();
+    await waitForTailscaled();
+  }
   void monitorServices();
   await tailDockerdLogs();
 };

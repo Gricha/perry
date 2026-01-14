@@ -27,7 +27,7 @@ function createWSCollector(page: Page) {
   const messages: WSMessage[] = [];
   const wsPromise = new Promise<WebSocket>((resolve) => {
     page.on('websocket', (ws) => {
-      if (ws.url().includes('/rpc/opencode/') || ws.url().includes('/rpc/chat/')) {
+      if (ws.url().includes('/rpc/live/opencode/') || ws.url().includes('/rpc/live/claude/')) {
         resolve(ws);
         ws.on('framereceived', (frame) => {
           try {

@@ -3,6 +3,7 @@ import { once } from "events";
 import fs from "fs";
 import { ensureDir, pathExists, readFileLines } from "./fs";
 import { delay, runCommand } from "./process";
+import { startTailscaled } from "./tailscale";
 
 const logPath = "/var/log/dockerd.log";
 let dockerdProcess: ReturnType<typeof spawn> | null = null;
@@ -47,6 +48,7 @@ const isProcessRunning = async (name: string) => {
 
 export const monitorServices = async () => {
   console.log("[entrypoint] Starting service monitor...");
+  const hasTailscale = !!process.env.TS_AUTHKEY;
   while (true) {
     await delay(10000);
     if (!(await isProcessRunning("dockerd"))) {
@@ -57,6 +59,11 @@ export const monitorServices = async () => {
     if (!(await isProcessRunning("sshd"))) {
       console.log("[entrypoint] Restarting SSH daemon...");
       await startSshd();
+    }
+    if (hasTailscale && !(await isProcessRunning("tailscaled"))) {
+      console.log("[entrypoint] Restarting Tailscale daemon...");
+      startTailscaled();
+      await delay(2000);
     }
   }
 };

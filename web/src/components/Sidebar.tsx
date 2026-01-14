@@ -12,6 +12,7 @@ import {
   Boxes,
   Wand2,
   Plug,
+  Network,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api, type WorkspaceInfo } from '@/lib/api';
@@ -44,6 +45,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { to: '/settings/files', label: 'Files', icon: FolderSync },
     { to: '/settings/scripts', label: 'Scripts', icon: Terminal },
     { to: '/settings/terminal', label: 'Terminal', icon: SquareTerminal },
+    { to: '/settings/tailscale', label: 'Tailscale', icon: Network },
     { to: '/settings/ssh', label: 'SSH Keys', icon: KeyRound },
     { to: '/skills', label: 'Skills', icon: Wand2 },
     { to: '/mcp', label: 'MCP', icon: Plug },

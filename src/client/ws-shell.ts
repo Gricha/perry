@@ -69,6 +69,57 @@ export async function openDockerExec(options: DockerExecOptions): Promise<void> 
   });
 }
 
+export interface TailscaleSSHOptions {
+  hostname: string;
+  user?: string;
+  onConnect?: () => void;
+  onDisconnect?: (code: number) => void;
+  onError?: (error: Error) => void;
+}
+
+export async function openTailscaleSSH(options: TailscaleSSHOptions): Promise<void> {
+  const { hostname, user = 'workspace', onConnect, onDisconnect, onError } = options;
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-o',
+      'StrictHostKeyChecking=no',
+      '-o',
+      'UserKnownHostsFile=/dev/null',
+      '-o',
+      'LogLevel=ERROR',
+      '-t',
+      `${user}@${hostname}`,
+    ];
+
+    const proc = spawn('ssh', args, {
+      stdio: 'inherit',
+    });
+
+    let connected = false;
+
+    setTimeout(() => {
+      if (proc.exitCode === null) {
+        connected = true;
+        if (onConnect) onConnect();
+      }
+    }, 100);
+
+    proc.on('error', (err) => {
+      if (!connected) {
+        reject(err);
+      } else if (onError) {
+        onError(err);
+      }
+    });
+
+    proc.on('close', (code) => {
+      if (onDisconnect) onDisconnect(code || 0);
+      resolve();
+    });
+  });
+}
+
 export async function openWSShell(options: WSShellOptions): Promise<void> {
   const { url, onConnect, onDisconnect, onError } = options;
 

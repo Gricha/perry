@@ -8,6 +8,15 @@ import { demoDriver } from './demo/driver';
 import { DEMO_TERMINAL_HTML } from './demo/terminal-html';
 import { TERMINAL_HTML } from './terminal-html';
 
+export type TailscaleStatus = 'none' | 'connected' | 'failed';
+
+export interface WorkspaceTailscale {
+  status: TailscaleStatus;
+  hostname?: string;
+  ip?: string;
+  error?: string;
+}
+
 export interface WorkspaceInfo {
   name: string;
   status: 'running' | 'stopped' | 'creating' | 'error';
@@ -18,6 +27,7 @@ export interface WorkspaceInfo {
     ssh: number;
     http?: number;
   };
+  tailscale?: WorkspaceTailscale;
 }
 
 export interface InfoResponse {

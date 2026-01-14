@@ -2,6 +2,8 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type {
   WorkspaceInfo,
+  WorkspaceTailscale,
+  TailscaleStatus,
   InfoResponse,
   CreateWorkspaceRequest,
   Credentials,
@@ -20,6 +22,7 @@ import type {
   PortMapping,
   Skill,
   McpServer,
+  TailscaleConfig,
 } from '@shared/client-types';
 
 export interface GitHubRepo {
@@ -51,6 +54,9 @@ export type {
   TerminalSettings,
   PortMapping,
   Skill,
+  WorkspaceTailscale,
+  TailscaleStatus,
+  TailscaleConfig,
 };
 
 function getRpcUrl(): string {
@@ -178,6 +184,14 @@ const client = createORPCClient<{
       get: () => Promise<McpServer[]>;
       update: (input: McpServer[]) => Promise<McpServer[]>;
     };
+    tailscale: {
+      get: () => Promise<{ enabled: boolean; authKey?: string; hostnamePrefix?: string }>;
+      update: (input: {
+        enabled?: boolean;
+        authKey?: string;
+        hostnamePrefix?: string;
+      }) => Promise<{ enabled: boolean; authKey?: string; hostnamePrefix?: string }>;
+    };
   };
 }>(link);
 
@@ -236,6 +250,9 @@ export const api = {
   getTerminalSettings: () => client.config.terminal.get(),
   updateTerminalSettings: (data: { preferredShell?: string }) =>
     client.config.terminal.update(data),
+  getTailscaleConfig: () => client.config.tailscale.get(),
+  updateTailscaleConfig: (data: { enabled?: boolean; authKey?: string; hostnamePrefix?: string }) =>
+    client.config.tailscale.update(data),
   getSkills: () => client.config.skills.get(),
   updateSkills: (data: Skill[]) => client.config.skills.update(data),
   getMcpServers: () => client.config.mcp.get(),
