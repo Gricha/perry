@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, ExternalLink, Github, Check } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Github, Check, Network } from 'lucide-react'
 import { api, type CodingAgents, type ModelInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { useSyncNotification } from '@/contexts/SyncContext'
 import { AgentIcon } from '@/components/AgentIcon'
 import { SearchableModelSelect } from '@/components/SearchableModelSelect'
@@ -43,6 +45,11 @@ export function AgentsSettings() {
     queryFn: () => api.listModels('opencode'),
   })
 
+  const { data: tailscaleConfig } = useQuery({
+    queryKey: ['tailscaleConfig'],
+    queryFn: api.getTailscaleConfig,
+  })
+
   const claudeModels = claudeModelsData?.models?.length ? claudeModelsData.models : FALLBACK_CLAUDE_MODELS
   const opencodeModels = opencodeModelsData?.models || []
 
@@ -55,9 +62,15 @@ export function AgentsSettings() {
   const [githubHasChanges, setGithubHasChanges] = useState(false)
   const [claudeHasChanges, setClaudeHasChanges] = useState(false)
   const [initialized, setInitialized] = useState(false)
-  const [savedSection, setSavedSection] = useState<'opencode' | 'github' | 'claude' | null>(null)
+  const [savedSection, setSavedSection] = useState<'opencode' | 'github' | 'claude' | 'tailscale' | null>(null)
 
-  const showSaved = useCallback((section: 'opencode' | 'github' | 'claude') => {
+  const [tailscaleEnabled, setTailscaleEnabled] = useState(false)
+  const [tailscaleAuthKey, setTailscaleAuthKey] = useState('')
+  const [tailscaleHostnamePrefix, setTailscaleHostnamePrefix] = useState('')
+  const [tailscaleHasChanges, setTailscaleHasChanges] = useState(false)
+  const [tailscaleInitialized, setTailscaleInitialized] = useState(false)
+
+  const showSaved = useCallback((section: 'opencode' | 'github' | 'claude' | 'tailscale') => {
     setSavedSection(section)
     setTimeout(() => setSavedSection(null), 2000)
   }, [])
@@ -73,6 +86,15 @@ export function AgentsSettings() {
     }
   }, [agents, initialized])
 
+  useEffect(() => {
+    if (tailscaleConfig && !tailscaleInitialized) {
+      setTailscaleEnabled(tailscaleConfig.enabled)
+      setTailscaleAuthKey(tailscaleConfig.authKey || '')
+      setTailscaleHostnamePrefix(tailscaleConfig.hostnamePrefix || '')
+      setTailscaleInitialized(true)
+    }
+  }, [tailscaleConfig, tailscaleInitialized])
+
   const mutation = useMutation({
     mutationFn: (data: CodingAgents) => api.updateAgents(data),
     onSuccess: () => {
@@ -81,6 +103,15 @@ export function AgentsSettings() {
       setGithubHasChanges(false)
       setClaudeHasChanges(false)
       showSyncNotification()
+    },
+  })
+
+  const tailscaleMutation = useMutation({
+    mutationFn: (config: { enabled?: boolean; authKey?: string; hostnamePrefix?: string }) =>
+      api.updateTailscaleConfig(config),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tailscaleConfig'] })
+      setTailscaleHasChanges(false)
     },
   })
 
@@ -118,6 +149,17 @@ export function AgentsSettings() {
       },
       { onSuccess: () => showSaved('claude') }
     )
+  }
+
+  const handleSaveTailscale = () => {
+    const config: { enabled?: boolean; authKey?: string; hostnamePrefix?: string } = {
+      enabled: tailscaleEnabled,
+    }
+    if (tailscaleAuthKey && tailscaleAuthKey !== '********') {
+      config.authKey = tailscaleAuthKey
+    }
+    config.hostnamePrefix = tailscaleHostnamePrefix || undefined
+    tailscaleMutation.mutate(config, { onSuccess: () => showSaved('tailscale') })
   }
 
   if (error) {
@@ -369,10 +411,99 @@ export function AgentsSettings() {
         </div>
       </div>
 
-      {mutation.error && (
+      {/* Networking Section */}
+      <div>
+        <div className="section-header">Networking</div>
+
+        {/* Tailscale */}
+        <div className="agent-row">
+          <div className="agent-icon">
+            <Network className="h-5 w-5" />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">
+              Tailscale
+              <StatusIndicator configured={!!tailscaleConfig?.authKey && tailscaleEnabled} />
+            </div>
+            <p className="agent-description">
+              Connect workspaces to your tailnet for direct network access.
+              <a
+                href="https://login.tailscale.com/admin/settings/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Generate auth key
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </p>
+            <div className="space-y-3 mt-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tailscale-enabled" className="text-sm">Enable Tailscale</Label>
+                <Switch
+                  id="tailscale-enabled"
+                  checked={tailscaleEnabled}
+                  onCheckedChange={(value) => {
+                    setTailscaleEnabled(value)
+                    setTailscaleHasChanges(true)
+                  }}
+                />
+              </div>
+              <div className="agent-input">
+                <Input
+                  type="password"
+                  value={tailscaleAuthKey}
+                  onChange={(e) => {
+                    setTailscaleAuthKey(e.target.value)
+                    setTailscaleHasChanges(true)
+                  }}
+                  placeholder={tailscaleConfig?.authKey ? '********' : 'tskey-auth-...'}
+                  className="w-full font-mono text-sm h-11 sm:h-9"
+                />
+              </div>
+              <div className="agent-input flex flex-col sm:flex-row gap-2">
+                <Input
+                  type="text"
+                  value={tailscaleHostnamePrefix}
+                  onChange={(e) => {
+                    setTailscaleHostnamePrefix(e.target.value)
+                    setTailscaleHasChanges(true)
+                  }}
+                  placeholder="perry"
+                  className="flex-1 text-sm h-11 sm:h-9"
+                />
+                <Button
+                  onClick={handleSaveTailscale}
+                  disabled={tailscaleMutation.isPending || !tailscaleHasChanges}
+                  size="sm"
+                  className="h-11 sm:h-9"
+                  variant={savedSection === 'tailscale' ? 'secondary' : 'default'}
+                >
+                  {savedSection === 'tailscale' ? (
+                    <>
+                      <Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />
+                      Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-1.5 h-3.5 w-3.5" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Workspaces join as <code className="bg-muted px-1 rounded">{tailscaleHostnamePrefix || 'perry'}-workspacename</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {(mutation.error || tailscaleMutation.error) && (
         <div className="rounded border border-destructive/50 bg-destructive/10 p-3">
           <p className="text-sm text-destructive">
-            {(mutation.error as Error).message}
+            {((mutation.error || tailscaleMutation.error) as Error).message}
           </p>
         </div>
       )}

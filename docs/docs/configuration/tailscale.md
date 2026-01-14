@@ -20,7 +20,7 @@ Already have Tailscale? Here's the 2-minute setup:
 
 # 2. Open Perry Web UI and configure
 open http://localhost:7391
-# Go to Settings > Tailscale, paste your key, click Save
+# Go to Settings > Configuration > Networking section, paste your key, click Save
 
 # 3. Start a workspace - it will join your tailnet automatically
 perry start myproject
@@ -177,14 +177,12 @@ This walks you through configuring AI agents, GitHub, and SSH keys. After comple
 **Option C: Web UI Settings (Recommended)**
 
 1. Open http://localhost:7391
-2. Go to **Settings > Tailscale** in the sidebar
-3. Paste your auth key in the input field
-4. Click **Save**
+2. Go to **Settings > Configuration** in the sidebar
+3. Scroll down to the **Networking** section
+4. Enable Tailscale and paste your auth key
+5. Click **Save**
 
-The settings page shows:
-- Current auth key status (configured or not)
-- Link to generate a new key
-- Instructions for key requirements
+The Configuration page shows Tailscale alongside other service configurations (AI agents, GitHub).
 
 **Option D: Direct config.json edit**
 
@@ -283,7 +281,7 @@ tailscale status
 
 ```bash
 # 1. Configure Tailscale (one-time)
-# Go to Settings > Tailscale in Web UI and add your auth key
+# Go to Settings > Configuration in Web UI and add your auth key in the Networking section
 
 # 2. Create a workspace
 perry start myproject --clone https://github.com/myuser/myapp
@@ -347,7 +345,7 @@ tailscale status
 
 ### Workspace: Not Appearing on Tailnet
 
-1. Check the auth key is configured in Settings > Tailscale
+1. Check the auth key is configured in Settings > Configuration > Networking
 2. Restart the workspace: `perry stop myproject && perry start myproject`
 3. Check container logs: `docker logs workspace-myproject`
 4. Verify tailscaled is running inside: `docker exec workspace-myproject tailscale status`
@@ -361,7 +359,7 @@ tailscale status
 ### Auth Key Expired or Invalid
 
 1. Generate a new key in the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)
-2. Update it in Settings > Tailscale
+2. Update it in Settings > Configuration > Networking
 3. Restart affected workspaces
 
 ### Check Agent Info

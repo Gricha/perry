@@ -67,8 +67,8 @@ You now have an isolated development environment with:
 Want to access services running in your workspace from any device? Configure Tailscale:
 
 1. Generate an auth key at [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
-2. Go to **Settings > Tailscale** in the Web UI
-3. Paste your auth key and save
+2. Go to **Settings > Configuration** in the Web UI
+3. Scroll to the **Networking** section, enable Tailscale, paste your auth key and save
 
 Now workspaces get their own hostname on your tailnet:
 

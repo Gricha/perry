@@ -17,7 +17,7 @@ import { ScriptsSettings } from './pages/settings/Scripts';
 import { AgentsSettings } from './pages/settings/Agents';
 import { SSHSettings } from './pages/settings/SSH';
 import { TerminalSettings } from './pages/settings/Terminal';
-import { TailscaleSettings } from './pages/settings/Tailscale';
+
 import { Setup } from './pages/Setup';
 import { Skills } from './pages/Skills';
 import { McpServers } from './pages/McpServers';
@@ -110,7 +110,7 @@ function App() {
                 <Route path="settings/agents" element={<AgentsSettings />} />
                 <Route path="settings/ssh" element={<SSHSettings />} />
                 <Route path="settings/terminal" element={<TerminalSettings />} />
-                <Route path="settings/tailscale" element={<TailscaleSettings />} />
+                <Route path="settings/tailscale" element={<Navigate to="/settings/agents" replace />} />
                 <Route path="skills" element={<Skills />} />
                 <Route path="mcp" element={<McpServers />} />
               </Route>
