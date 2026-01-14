@@ -782,11 +782,6 @@ export function SessionChatScreen({ route, navigation }: any) {
     return cleanup
   }, [connect])
 
-  useEffect(() => {
-    if (streamingParts.length > 0 && isAtBottomRef.current) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50)
-    }
-  }, [streamingParts])
 
   const handleScroll = useCallback((event: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
@@ -931,7 +926,11 @@ export function SessionChatScreen({ route, navigation }: any) {
           ) : null
         }
         onScrollToIndexFailed={() => {}}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        onContentSizeChange={() => {
+          if (isAtBottomRef.current) {
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
+        }}
       />
       )}
 
