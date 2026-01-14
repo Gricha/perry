@@ -1,5 +1,5 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Menu,
   X,
@@ -10,31 +10,33 @@ import {
   Settings,
   Monitor,
   Boxes,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { api, type WorkspaceInfo } from '@/lib/api'
-import { HOST_WORKSPACE_NAME } from '@shared/client-types'
-import { Button } from '@/components/ui/button'
-import { ThemeSwitcher } from '@/components/ThemeSwitcher'
+  Wand2,
+  Plug,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { api, type WorkspaceInfo } from '@/lib/api';
+import { HOST_WORKSPACE_NAME } from '@shared/client-types';
+import { Button } from '@/components/ui/button';
+import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 
 interface SidebarProps {
-  isOpen: boolean
-  onToggle: () => void
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
-  const location = useLocation()
-  const navigate = useNavigate()
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: workspaces } = useQuery({
     queryKey: ['workspaces'],
     queryFn: api.listWorkspaces,
-  })
+  });
 
   const { data: hostInfo } = useQuery({
     queryKey: ['hostInfo'],
     queryFn: api.getHostInfo,
-  })
+  });
 
   const settingsLinks = [
     { to: '/settings/environment', label: 'Environment', icon: KeyRound },
@@ -43,7 +45,9 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { to: '/settings/scripts', label: 'Scripts', icon: Terminal },
     { to: '/settings/terminal', label: 'Terminal', icon: SquareTerminal },
     { to: '/settings/ssh', label: 'SSH Keys', icon: KeyRound },
-  ]
+    { to: '/skills', label: 'Skills', icon: Wand2 },
+    { to: '/mcp', label: 'MCP', icon: Plug },
+  ];
 
   return (
     <>
@@ -66,12 +70,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             <img src="/logo.png" alt="Perry Logo" className="h-7 w-7 object-contain" />
             <span className="font-semibold text-sm tracking-tight">Perry</span>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden h-8 w-8"
-            onClick={onToggle}
-          >
+          <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8" onClick={onToggle}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -93,8 +92,9 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 <span>All Workspaces</span>
               </Link>
               {workspaces?.map((ws: WorkspaceInfo) => {
-                const wsPath = `/workspaces/${ws.name}`
-                const isActive = location.pathname === wsPath || location.pathname.startsWith(`${wsPath}/`)
+                const wsPath = `/workspaces/${ws.name}`;
+                const isActive =
+                  location.pathname === wsPath || location.pathname.startsWith(`${wsPath}/`);
                 return (
                   <button
                     key={ws.name}
@@ -103,8 +103,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                       isActive && 'nav-active'
                     )}
                     onClick={() => {
-                      navigate(wsPath)
-                      if (isOpen) onToggle()
+                      navigate(wsPath);
+                      if (isOpen) onToggle();
                     }}
                   >
                     <span
@@ -119,17 +119,18 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                       {ws.name}
                     </span>
                   </button>
-                )
+                );
               })}
               {hostInfo?.enabled && (
                 <button
                   className={cn(
                     'w-full flex items-center gap-2.5 rounded px-2 py-2 text-sm transition-colors hover:bg-accent group min-h-[44px]',
-                    location.pathname.includes(encodeURIComponent(HOST_WORKSPACE_NAME)) && 'nav-active'
+                    location.pathname.includes(encodeURIComponent(HOST_WORKSPACE_NAME)) &&
+                      'nav-active'
                   )}
                   onClick={() => {
-                    navigate(`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`)
-                    if (isOpen) onToggle()
+                    navigate(`/workspaces/${encodeURIComponent(HOST_WORKSPACE_NAME)}`);
+                    if (isOpen) onToggle();
                   }}
                 >
                   <Monitor className="h-4 w-4 text-amber-500 flex-shrink-0" />
@@ -172,7 +173,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
       </aside>
     </>
-  )
+  );
 }
 
 export function SidebarTrigger({ onClick }: { onClick: () => void }) {
@@ -180,5 +181,5 @@ export function SidebarTrigger({ onClick }: { onClick: () => void }) {
     <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9" onClick={onClick}>
       <Menu className="h-5 w-5" />
     </Button>
-  )
+  );
 }

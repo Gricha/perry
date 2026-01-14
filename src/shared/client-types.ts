@@ -60,6 +60,53 @@ export interface CodingAgents {
   };
 }
 
+export type SkillAppliesTo = 'all' | AgentType[];
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  appliesTo: SkillAppliesTo;
+  /** Full SKILL.md contents (including YAML frontmatter). */
+  skillMd: string;
+}
+
+export type McpServerType = 'local' | 'remote';
+
+export type McpOauthConfig =
+  | false
+  | {
+      clientId?: string;
+      clientSecret?: string;
+      scope?: string;
+    };
+
+export interface McpServerDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  type: McpServerType;
+
+  // Local
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+
+  // Remote
+  url?: string;
+  headers?: Record<string, string>;
+
+  // OpenCode-specific OAuth config
+  oauth?: McpOauthConfig;
+}
+
+export type Skill = SkillDefinition;
+
+export type McpServer = McpServerDefinition;
+
+export const AGENT_TYPES = ['claude-code', 'opencode', 'codex'] as const;
+
 export interface ModelInfo {
   id: string;
   name: string;

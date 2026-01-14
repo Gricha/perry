@@ -44,11 +44,54 @@ export interface TerminalSettings {
   preferredShell?: string;
 }
 
+export type SkillAppliesTo = 'all' | Array<'claude-code' | 'opencode' | 'codex'>;
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  appliesTo: SkillAppliesTo;
+  /** Full SKILL.md contents (including YAML frontmatter). */
+  skillMd: string;
+}
+
+export type McpServerType = 'local' | 'remote';
+
+type McpOauthConfig =
+  | false
+  | {
+      clientId?: string;
+      clientSecret?: string;
+      scope?: string;
+    };
+
+export interface McpServerDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  type: McpServerType;
+
+  // Local
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+
+  // Remote
+  url?: string;
+  headers?: Record<string, string>;
+
+  // OpenCode-specific OAuth config
+  oauth?: McpOauthConfig;
+}
+
 export interface AgentConfig {
   port: number;
   credentials: WorkspaceCredentials;
   scripts: WorkspaceScripts;
   agents?: CodingAgents;
+  skills?: SkillDefinition[];
+  mcpServers?: McpServerDefinition[];
   allowHostAccess?: boolean;
   ssh?: SSHSettings;
   terminal?: TerminalSettings;

@@ -5,10 +5,11 @@ import type {
   SyncDirectory,
   GeneratedConfig,
 } from '../types';
+import type { McpServerDefinition, SkillDefinition } from '../../shared/types';
 
 export const claudeCodeSync: AgentSyncProvider = {
   getRequiredDirs(): string[] {
-    return ['/home/workspace/.claude'];
+    return ['/home/workspace/.claude', '/home/workspace/.claude/skills'];
   },
 
   async getFilesToSync(_context: SyncContext): Promise<SyncFile[]> {
@@ -57,6 +58,16 @@ export const claudeCodeSync: AgentSyncProvider = {
     const hostConfigContent = await context.readHostFile('~/.claude.json');
     const containerConfigContent = await context.readContainerFile('/home/workspace/.claude.json');
 
+    const skills = context.agentConfig.skills || [];
+    const enabledSkills = skills.filter(
+      (s): s is SkillDefinition =>
+        s.enabled && (s.appliesTo === 'all' || s.appliesTo.includes('claude-code'))
+    );
+
+    const mcpServers = (context.agentConfig.mcpServers || []).filter(
+      (s): s is McpServerDefinition => s.enabled
+    );
+
     let hostMcpServers: Record<string, unknown> = {};
     if (hostConfigContent) {
       try {
@@ -80,13 +91,48 @@ export const claudeCodeSync: AgentSyncProvider = {
 
     containerConfig.hasCompletedOnboarding = true;
 
-    if (Object.keys(hostMcpServers).length > 0) {
+    const perryMcpServers: Record<string, unknown> = {};
+    for (const server of mcpServers) {
+      const safeName = server.name.trim();
+      if (!safeName) continue;
+
+      if (server.type === 'remote') {
+        const url = server.url?.trim();
+        if (!url) continue;
+        perryMcpServers[safeName] = {
+          type: 'http',
+          url,
+          headers: server.headers || {},
+        };
+        continue;
+      }
+
+      const command = server.command?.trim();
+      const args = server.args || [];
+      if (!command) continue;
+
+      perryMcpServers[safeName] = {
+        type: 'stdio',
+        command,
+        args,
+        env: server.env || {},
+      };
+    }
+
+    if (Object.keys(hostMcpServers).length > 0 || Object.keys(perryMcpServers).length > 0) {
       const existingMcp =
         containerConfig.mcpServers && typeof containerConfig.mcpServers === 'object'
           ? (containerConfig.mcpServers as Record<string, unknown>)
           : {};
-      containerConfig.mcpServers = { ...existingMcp, ...hostMcpServers };
+      containerConfig.mcpServers = { ...existingMcp, ...hostMcpServers, ...perryMcpServers };
     }
+
+    const skillConfigs: GeneratedConfig[] = enabledSkills.map((skill) => ({
+      dest: `/home/workspace/.claude/skills/${skill.name}/SKILL.md`,
+      content: skill.skillMd,
+      permissions: '644',
+      category: 'preference',
+    }));
 
     return [
       {
@@ -95,6 +141,7 @@ export const claudeCodeSync: AgentSyncProvider = {
         permissions: '644',
         category: 'preference',
       },
+      ...skillConfigs,
     ];
   },
 };

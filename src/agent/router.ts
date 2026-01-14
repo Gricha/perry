@@ -95,6 +95,58 @@ const CodingAgentsSchema = z.object({
     .optional(),
 });
 
+const AgentTypeSchema = z.enum(['claude-code', 'opencode', 'codex']);
+
+const SkillAppliesToSchema = z.union([z.literal('all'), z.array(AgentTypeSchema)]);
+
+const SkillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/);
+
+const SkillDefinitionSchema = z.object({
+  id: z.string(),
+  name: SkillNameSchema,
+  description: z.string(),
+  enabled: z.boolean(),
+  appliesTo: SkillAppliesToSchema,
+  skillMd: z.string(),
+});
+
+const McpServerTypeSchema = z.enum(['local', 'remote']);
+
+const McpOauthSchema = z.union([
+  z.literal(false),
+  z
+    .object({
+      clientId: z.string().optional(),
+      clientSecret: z.string().optional(),
+      scope: z.string().optional(),
+    })
+    .strict(),
+]);
+
+const McpServerDefinitionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    enabled: z.boolean(),
+    type: McpServerTypeSchema,
+
+    // Local
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+
+    // Remote
+    url: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+
+    // OpenCode-specific OAuth config
+    oauth: McpOauthSchema.optional(),
+  })
+  .strict();
+
+const SkillsSchema = z.array(SkillDefinitionSchema);
+const McpServersSchema = z.array(McpServerDefinitionSchema);
+
 const SSHKeyConfigSchema = z.object({
   copy: z.array(z.string()),
   authorize: z.array(z.string()),
@@ -456,6 +508,38 @@ export function createRouter(ctx: RouterContext) {
     .handler(async ({ input }) => {
       const currentConfig = ctx.config.get();
       const newConfig = { ...currentConfig, agents: input };
+      ctx.config.set(newConfig);
+      await saveAgentConfig(newConfig, ctx.configDir);
+      ctx.triggerAutoSync();
+      return input;
+    });
+
+  const getSkills = os.output(SkillsSchema).handler(async () => {
+    return ctx.config.get().skills || [];
+  });
+
+  const updateSkills = os
+    .input(SkillsSchema)
+    .output(SkillsSchema)
+    .handler(async ({ input }) => {
+      const currentConfig = ctx.config.get();
+      const newConfig = { ...currentConfig, skills: input };
+      ctx.config.set(newConfig);
+      await saveAgentConfig(newConfig, ctx.configDir);
+      ctx.triggerAutoSync();
+      return input;
+    });
+
+  const getMcpServers = os.output(McpServersSchema).handler(async () => {
+    return ctx.config.get().mcpServers || [];
+  });
+
+  const updateMcpServers = os
+    .input(McpServersSchema)
+    .output(McpServersSchema)
+    .handler(async ({ input }) => {
+      const currentConfig = ctx.config.get();
+      const newConfig = { ...currentConfig, mcpServers: input };
       ctx.config.set(newConfig);
       await saveAgentConfig(newConfig, ctx.configDir);
       ctx.triggerAutoSync();
@@ -1531,6 +1615,14 @@ export function createRouter(ctx: RouterContext) {
       agents: {
         get: getAgents,
         update: updateAgents,
+      },
+      skills: {
+        get: getSkills,
+        update: updateSkills,
+      },
+      mcp: {
+        get: getMcpServers,
+        update: updateMcpServers,
       },
       ssh: {
         get: getSSHSettings,
