@@ -1,83 +1,92 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, ExternalLink, Check } from 'lucide-react'
-import { api, type CodingAgents, type ModelInfo } from '@/lib/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useSyncNotification } from '@/contexts/SyncContext'
-import { AgentIcon } from '@/components/AgentIcon'
-import { SearchableModelSelect } from '@/components/SearchableModelSelect'
+import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Save, RefreshCw, ExternalLink, Check } from 'lucide-react';
+import { api, type CodingAgents, type ModelInfo } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useSyncNotification } from '@/contexts/SyncContext';
+import { AgentIcon } from '@/components/AgentIcon';
+import { SearchableModelSelect } from '@/components/SearchableModelSelect';
 
 const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
   { id: 'sonnet', name: 'Sonnet', description: 'Fast and cost-effective', provider: 'anthropic' },
   { id: 'opus', name: 'Opus', description: 'Most capable', provider: 'anthropic' },
   { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost', provider: 'anthropic' },
-]
+];
 
 function StatusIndicator({ configured }: { configured: boolean }) {
-  if (!configured) return null
-  return (
-    <span className="status-configured text-xs font-medium">
-      Configured
-    </span>
-  )
+  if (!configured) return null;
+  return <span className="status-configured text-xs font-medium">Configured</span>;
 }
 
 export function AgentsSettings() {
-  const queryClient = useQueryClient()
-  const showSyncNotification = useSyncNotification()
+  const queryClient = useQueryClient();
+  const showSyncNotification = useSyncNotification();
 
-  const { data: agents, isLoading, error, refetch } = useQuery({
+  const {
+    data: agents,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['agents'],
     queryFn: api.getAgents,
-  })
+  });
 
   const { data: claudeModelsData } = useQuery({
     queryKey: ['models', 'claude-code'],
     queryFn: () => api.listModels('claude-code'),
-  })
+  });
 
   const { data: opencodeModelsData } = useQuery({
     queryKey: ['models', 'opencode'],
     queryFn: () => api.listModels('opencode'),
-  })
+  });
 
-  const claudeModels = claudeModelsData?.models?.length ? claudeModelsData.models : FALLBACK_CLAUDE_MODELS
-  const opencodeModels = opencodeModelsData?.models || []
+  const claudeModels = claudeModelsData?.models?.length
+    ? claudeModelsData.models
+    : FALLBACK_CLAUDE_MODELS;
+  const opencodeModels = opencodeModelsData?.models || [];
 
-  const [opencodeZenToken, setOpencodeZenToken] = useState('')
-  const [opencodeModel, setOpencodeModel] = useState('')
-  const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
-  const [claudeModel, setClaudeModel] = useState('sonnet')
-  const [opencodeHasChanges, setOpencodeHasChanges] = useState(false)
-  const [claudeHasChanges, setClaudeHasChanges] = useState(false)
-  const [initialized, setInitialized] = useState(false)
-  const [savedSection, setSavedSection] = useState<'opencode' | 'claude' | null>(null)
+  const [opencodeZenToken, setOpencodeZenToken] = useState('');
+  const [opencodeModel, setOpencodeModel] = useState('');
+  const [opencodeServerHostname, setOpencodeServerHostname] = useState('0.0.0.0');
+  const [opencodeServerUsername, setOpencodeServerUsername] = useState('');
+  const [opencodeServerPassword, setOpencodeServerPassword] = useState('');
+  const [claudeOAuthToken, setClaudeOAuthToken] = useState('');
+  const [claudeModel, setClaudeModel] = useState('sonnet');
+  const [opencodeHasChanges, setOpencodeHasChanges] = useState(false);
+  const [claudeHasChanges, setClaudeHasChanges] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+  const [savedSection, setSavedSection] = useState<'opencode' | 'claude' | null>(null);
 
   const showSaved = useCallback((section: 'opencode' | 'claude') => {
-    setSavedSection(section)
-    setTimeout(() => setSavedSection(null), 2000)
-  }, [])
+    setSavedSection(section);
+    setTimeout(() => setSavedSection(null), 2000);
+  }, []);
 
   useEffect(() => {
     if (agents && !initialized) {
-      setOpencodeZenToken(agents.opencode?.zen_token || '')
-      setOpencodeModel(agents.opencode?.model || '')
-      setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
-      setClaudeModel(agents.claude_code?.model || 'sonnet')
-      setInitialized(true)
+      setOpencodeZenToken(agents.opencode?.zen_token || '');
+      setOpencodeModel(agents.opencode?.model || '');
+      setOpencodeServerHostname(agents.opencode?.server?.hostname || '0.0.0.0');
+      setOpencodeServerUsername(agents.opencode?.server?.username || '');
+      setOpencodeServerPassword(agents.opencode?.server?.password || '');
+      setClaudeOAuthToken(agents.claude_code?.oauth_token || '');
+      setClaudeModel(agents.claude_code?.model || 'sonnet');
+      setInitialized(true);
     }
-  }, [agents, initialized])
+  }, [agents, initialized]);
 
   const mutation = useMutation({
     mutationFn: (data: CodingAgents) => api.updateAgents(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setOpencodeHasChanges(false)
-      setClaudeHasChanges(false)
-      showSyncNotification()
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setOpencodeHasChanges(false);
+      setClaudeHasChanges(false);
+      showSyncNotification();
     },
-  })
+  });
 
   const handleSaveOpencode = () => {
     mutation.mutate(
@@ -86,11 +95,16 @@ export function AgentsSettings() {
         opencode: {
           zen_token: opencodeZenToken.trim() || undefined,
           model: opencodeModel || undefined,
+          server: {
+            hostname: opencodeServerHostname.trim() || undefined,
+            username: opencodeServerUsername.trim() || undefined,
+            password: opencodeServerPassword || undefined,
+          },
         },
       },
       { onSuccess: () => showSaved('opencode') }
-    )
-  }
+    );
+  };
 
   const handleSaveClaude = () => {
     mutation.mutate(
@@ -102,8 +116,8 @@ export function AgentsSettings() {
         },
       },
       { onSuccess: () => showSaved('claude') }
-    )
-  }
+    );
+  };
 
   if (error) {
     return (
@@ -117,11 +131,11 @@ export function AgentsSettings() {
           Retry
         </Button>
       </div>
-    )
+    );
   }
 
-  const opencodeConfigured = !!agents?.opencode?.zen_token
-  const claudeConfigured = !!agents?.claude_code?.oauth_token
+  const opencodeConfigured = !!agents?.opencode?.zen_token;
+  const claudeConfigured = !!agents?.claude_code?.oauth_token;
 
   if (isLoading) {
     return (
@@ -142,7 +156,7 @@ export function AgentsSettings() {
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -178,8 +192,8 @@ export function AgentsSettings() {
                 type="password"
                 value={opencodeZenToken}
                 onChange={(e) => {
-                  setOpencodeZenToken(e.target.value)
-                  setOpencodeHasChanges(true)
+                  setOpencodeZenToken(e.target.value);
+                  setOpencodeHasChanges(true);
                 }}
                 placeholder="zen_... (Zen token)"
                 className="w-full font-mono text-sm h-11 sm:h-9"
@@ -192,14 +206,43 @@ export function AgentsSettings() {
                     models={opencodeModels}
                     value={opencodeModel}
                     onChange={(value) => {
-                      setOpencodeModel(value)
-                      setOpencodeHasChanges(true)
+                      setOpencodeModel(value);
+                      setOpencodeHasChanges(true);
                     }}
                     placeholder="Select model..."
                     showProvider
                   />
                 </div>
               )}
+              <Input
+                value={opencodeServerHostname}
+                onChange={(e) => {
+                  setOpencodeServerHostname(e.target.value);
+                  setOpencodeHasChanges(true);
+                }}
+                placeholder="server hostname (0.0.0.0 or 127.0.0.1)"
+                className="w-full sm:w-[260px] font-mono text-sm h-11 sm:h-9"
+              />
+              <Input
+                type="password"
+                value={opencodeServerUsername}
+                onChange={(e) => {
+                  setOpencodeServerUsername(e.target.value);
+                  setOpencodeHasChanges(true);
+                }}
+                placeholder="server username (optional)"
+                className="w-full sm:w-[220px] font-mono text-sm h-11 sm:h-9"
+              />
+              <Input
+                type="password"
+                value={opencodeServerPassword}
+                onChange={(e) => {
+                  setOpencodeServerPassword(e.target.value);
+                  setOpencodeHasChanges(true);
+                }}
+                placeholder="server password (optional)"
+                className="w-full sm:w-[220px] font-mono text-sm h-11 sm:h-9"
+              />
               <Button
                 onClick={handleSaveOpencode}
                 disabled={mutation.isPending || !opencodeHasChanges}
@@ -233,7 +276,9 @@ export function AgentsSettings() {
             <StatusIndicator configured={claudeConfigured} />
           </div>
           <p className="agent-description">
-            OAuth token for headless operation. Run <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code> locally to generate.
+            OAuth token for headless operation. Run{' '}
+            <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code>{' '}
+            locally to generate.
           </p>
           <div className="space-y-2 mt-2">
             <div className="agent-input">
@@ -241,8 +286,8 @@ export function AgentsSettings() {
                 type="password"
                 value={claudeOAuthToken}
                 onChange={(e) => {
-                  setClaudeOAuthToken(e.target.value)
-                  setClaudeHasChanges(true)
+                  setClaudeOAuthToken(e.target.value);
+                  setClaudeHasChanges(true);
                 }}
                 placeholder="sk-ant-oat01-... (OAuth token)"
                 className="w-full font-mono text-sm h-11 sm:h-9"
@@ -254,8 +299,8 @@ export function AgentsSettings() {
                   models={claudeModels}
                   value={claudeModel}
                   onChange={(value) => {
-                    setClaudeModel(value)
-                    setClaudeHasChanges(true)
+                    setClaudeModel(value);
+                    setClaudeHasChanges(true);
                   }}
                   showProvider
                 />
@@ -286,11 +331,9 @@ export function AgentsSettings() {
 
       {mutation.error && (
         <div className="rounded border border-destructive/50 bg-destructive/10 p-3">
-          <p className="text-sm text-destructive">
-            {(mutation.error as Error).message}
-          </p>
+          <p className="text-sm text-destructive">{(mutation.error as Error).message}</p>
         </div>
       )}
     </div>
-  )
+  );
 }

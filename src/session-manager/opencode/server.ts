@@ -1,10 +1,16 @@
 import type { Subprocess } from 'bun';
 import { execInContainer } from '../../docker';
+import { Buffer } from 'buffer';
 
 export interface EnsureOpenCodeServerOptions {
   isHost: boolean;
   containerName?: string;
   projectPath?: string;
+  hostname?: string;
+  auth?: {
+    username?: string;
+    password?: string;
+  };
 }
 
 const serverPorts = new Map<string, number>();
@@ -89,7 +95,19 @@ async function getServerLogs(containerName: string): Promise<string> {
   }
 }
 
-async function ensureContainerServer(containerName: string, projectPath?: string): Promise<number> {
+async function ensureContainerServer(
+  containerName: string,
+  options: {
+    projectPath?: string;
+    hostname?: string;
+    auth?: { username?: string; password?: string };
+  }
+): Promise<number> {
+  const projectPath = options.projectPath;
+  const hostname = options.hostname ?? '0.0.0.0';
+  const auth = options.auth;
+
+  // hostname/auth used when spawning server (below)
   const key = getServerKey(containerName, projectPath);
 
   const cached = serverPorts.get(key);
@@ -122,9 +140,21 @@ async function ensureContainerServer(containerName: string, projectPath?: string
       [
         'sh',
         '-c',
-        `nohup opencode serve --port ${port} --hostname 127.0.0.1 > /tmp/opencode-server.log 2>&1 &`,
+        // Use positional parameters to avoid shell interpolation of hostname.
+        // $1=port, $2=hostname
+        'nohup opencode serve --port "$1" --hostname "$2" > /tmp/opencode-server.log 2>&1 &',
+        'opencode',
+        String(port),
+        hostname,
       ],
-      { user: 'workspace', workdir: projectPath }
+      {
+        user: 'workspace',
+        workdir: projectPath,
+        env: {
+          ...(auth?.password ? { OPENCODE_SERVER_PASSWORD: auth.password } : {}),
+          ...(auth?.username ? { OPENCODE_SERVER_USERNAME: auth.username } : {}),
+        },
+      }
     );
 
     for (let i = 0; i < 30; i++) {
@@ -156,20 +186,44 @@ async function findAvailablePortHost(): Promise<number> {
   return port;
 }
 
-async function isServerRunningHost(port: number): Promise<boolean> {
+async function isServerRunningHost(
+  port: number,
+  auth?: { username?: string; password?: string }
+): Promise<boolean> {
   try {
-    const response = await fetch(`http://localhost:${port}/session`, { method: 'GET' });
+    const headers: Record<string, string> = {};
+    if (auth?.password) {
+      const username = auth.username || 'opencode';
+      const token = Buffer.from(`${username}:${auth.password}`).toString('base64');
+      headers.Authorization = `Basic ${token}`;
+    }
+
+    const response = await fetch(`http://localhost:${port}/session`, {
+      method: 'GET',
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+    });
+
+    // Authenticated servers may return 401 for this endpoint if unauth'd.
     return response.ok;
   } catch {
     return false;
   }
 }
 
-async function ensureHostServer(projectPath?: string): Promise<number> {
+async function ensureHostServer(options: {
+  projectPath?: string;
+  hostname?: string;
+  auth?: { username?: string; password?: string };
+}): Promise<number> {
+  const projectPath = options.projectPath;
+  const hostname = options.hostname ?? '0.0.0.0';
+  const auth = options.auth;
+
+  // hostname/auth used when spawning server (below)
   const key = projectPath ?? '';
 
   const cached = hostServerPorts.get(key);
-  if (cached && (await isServerRunningHost(cached))) {
+  if (cached && (await isServerRunningHost(cached, auth))) {
     return cached;
   }
 
@@ -185,21 +239,23 @@ async function ensureHostServer(projectPath?: string): Promise<number> {
       `[opencode] Starting server on port ${port} on host${projectPath ? ` (cwd ${projectPath})` : ''}`
     );
 
-    const proc = Bun.spawn(
-      ['opencode', 'serve', '--port', String(port), '--hostname', '127.0.0.1'],
-      {
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'pipe',
-        cwd: projectPath,
-      }
-    );
+    const proc = Bun.spawn(['opencode', 'serve', '--port', String(port), '--hostname', hostname], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      cwd: projectPath,
+      env: {
+        ...process.env,
+        ...(auth?.password ? { OPENCODE_SERVER_PASSWORD: auth.password } : {}),
+        ...(auth?.username ? { OPENCODE_SERVER_USERNAME: auth.username } : {}),
+      },
+    });
 
     hostServerProcesses.set(key, proc);
 
     for (let i = 0; i < 30; i++) {
       await new Promise((resolve) => setTimeout(resolve, 500));
-      if (await isServerRunningHost(port)) {
+      if (await isServerRunningHost(port, auth)) {
         console.log(`[opencode] Server ready on port ${port}`);
         hostServerPorts.set(key, port);
         hostServerStarting.delete(key);
@@ -224,12 +280,20 @@ async function ensureHostServer(projectPath?: string): Promise<number> {
 
 export async function ensureOpenCodeServer(options: EnsureOpenCodeServerOptions): Promise<number> {
   if (options.isHost) {
-    return ensureHostServer(options.projectPath);
+    return ensureHostServer({
+      projectPath: options.projectPath,
+      hostname: options.hostname,
+      auth: options.auth,
+    });
   }
 
   if (!options.containerName) {
     throw new Error('containerName is required when isHost=false');
   }
 
-  return ensureContainerServer(options.containerName, options.projectPath);
+  return ensureContainerServer(options.containerName, {
+    projectPath: options.projectPath,
+    hostname: options.hostname,
+    auth: options.auth,
+  });
 }

@@ -3,6 +3,8 @@ import type { AgentAdapter, AdapterStartOptions, SessionStatus } from '../types'
 import type { ChatMessage } from '../../chat/types';
 import { execInContainer } from '../../docker';
 import { ensureOpenCodeServer } from '../opencode/server';
+import { loadAgentConfig } from '../../config/loader';
+import { Buffer } from 'buffer';
 
 type MessageCallback = (message: ChatMessage) => void;
 type StatusCallback = (status: SessionStatus) => void;
@@ -55,6 +57,24 @@ export function toOpenCodeModelParam(model: string): OpenCodeModelParam | null {
 export class OpenCodeAdapter implements AgentAdapter {
   readonly agentType = 'opencode' as const;
 
+  private getAuthHeader(): string | undefined {
+    return this.authHeader;
+  }
+
+  private getJsonHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const auth = this.getAuthHeader();
+    if (auth) headers.Authorization = auth;
+    return headers;
+  }
+
+  private addCurlAuth(args: string[]): void {
+    const auth = this.getAuthHeader();
+    if (auth) {
+      args.push('-H', `Authorization: ${auth}`);
+    }
+  }
+
   private containerName?: string;
   private agentSessionId?: string;
   private model?: string;
@@ -62,6 +82,7 @@ export class OpenCodeAdapter implements AgentAdapter {
   private port?: number;
   private isHost = false;
   private projectPath?: string;
+  private authHeader?: string;
 
   private sseProcess: Subprocess<'ignore', 'pipe', 'pipe'> | null = null;
   private currentMessageId?: string;
@@ -93,11 +114,27 @@ export class OpenCodeAdapter implements AgentAdapter {
     this.model = options.model;
     this.projectPath = options.projectPath;
 
+    const config = options.configDir ? await loadAgentConfig(options.configDir) : null;
+    const opencodeServer = config?.agents?.opencode?.server;
+
+    if (opencodeServer?.password) {
+      const username = opencodeServer.username || 'opencode';
+      const token = Buffer.from(`${username}:${opencodeServer.password}`).toString('base64');
+      this.authHeader = `Basic ${token}`;
+    } else {
+      this.authHeader = undefined;
+    }
+
     try {
       this.port = await ensureOpenCodeServer({
         isHost: this.isHost,
         containerName: this.containerName,
         projectPath: this.projectPath,
+        hostname: opencodeServer?.hostname,
+        auth: {
+          username: opencodeServer?.username,
+          password: opencodeServer?.password,
+        },
       });
       this.setStatus('idle');
     } catch (err) {
@@ -159,28 +196,21 @@ export class OpenCodeAdapter implements AgentAdapter {
   private async sessionExists(baseUrl: string, sessionId: string): Promise<boolean> {
     try {
       if (this.isHost) {
+        const auth = this.getAuthHeader();
         const response = await fetch(`${baseUrl}/session/${sessionId}`, {
           method: 'GET',
+          headers: auth ? { Authorization: auth } : undefined,
           signal: AbortSignal.timeout(5000),
         });
         return response.ok;
       }
 
-      const result = await execInContainer(
-        this.containerName!,
-        [
-          'curl',
-          '-s',
-          '-o',
-          '/dev/null',
-          '-w',
-          '%{http_code}',
-          '--max-time',
-          '5',
-          `${baseUrl}/session/${sessionId}`,
-        ],
-        { user: 'workspace' }
-      );
+      const args = ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '5'];
+      this.addCurlAuth(args);
+
+      args.push(`${baseUrl}/session/${sessionId}`);
+
+      const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
       return result.stdout.trim() === '200';
     } catch {
       return false;
@@ -193,7 +223,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getJsonHeaders(),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -206,24 +236,24 @@ export class OpenCodeAdapter implements AgentAdapter {
       return session.id;
     }
 
-    const result = await execInContainer(
-      this.containerName!,
-      [
-        'curl',
-        '-s',
-        '-f',
-        '--max-time',
-        String(MESSAGE_TIMEOUT_MS / 1000),
-        '-X',
-        'POST',
-        `${baseUrl}/session`,
-        '-H',
-        'Content-Type: application/json',
-        '-d',
-        JSON.stringify(payload),
-      ],
-      { user: 'workspace' }
-    );
+    const args = [
+      'curl',
+      '-s',
+      '-f',
+      '--max-time',
+      String(MESSAGE_TIMEOUT_MS / 1000),
+      '-X',
+      'POST',
+      `${baseUrl}/session`,
+      '-H',
+      'Content-Type: application/json',
+    ];
+
+    this.addCurlAuth(args);
+
+    args.push('-d', JSON.stringify(payload));
+
+    const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
 
     if (result.exitCode !== 0) {
       throw new Error(`Failed to create session: ${result.stderr || 'Unknown error'}`);
@@ -252,7 +282,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session/${this.agentSessionId}/prompt_async`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getJsonHeaders(),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -261,27 +291,27 @@ export class OpenCodeAdapter implements AgentAdapter {
         throw new Error(`Failed to send message: ${response.statusText}`);
       }
     } else {
-      const result = await execInContainer(
-        this.containerName!,
-        [
-          'curl',
-          '-s',
-          '-w',
-          '%{http_code}',
-          '-o',
-          '/dev/null',
-          '--max-time',
-          String(MESSAGE_TIMEOUT_MS / 1000),
-          '-X',
-          'POST',
-          `${baseUrl}/session/${this.agentSessionId}/prompt_async`,
-          '-H',
-          'Content-Type: application/json',
-          '-d',
-          JSON.stringify(payload),
-        ],
-        { user: 'workspace' }
-      );
+      const args = [
+        'curl',
+        '-s',
+        '-w',
+        '%{http_code}',
+        '-o',
+        '/dev/null',
+        '--max-time',
+        String(MESSAGE_TIMEOUT_MS / 1000),
+        '-X',
+        'POST',
+        `${baseUrl}/session/${this.agentSessionId}/prompt_async`,
+        '-H',
+        'Content-Type: application/json',
+      ];
+
+      this.addCurlAuth(args);
+
+      args.push('-d', JSON.stringify(payload));
+
+      const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
 
       const httpCode = result.stdout.trim();
       if (result.exitCode !== 0 || (httpCode !== '204' && httpCode !== '200')) {
@@ -301,14 +331,10 @@ export class OpenCodeAdapter implements AgentAdapter {
       let resolved = false;
       let receivedIdle = false;
 
-      const curlArgs = [
-        'curl',
-        '-s',
-        '-N',
-        '--max-time',
-        String(SSE_TIMEOUT_MS / 1000),
-        `http://localhost:${this.port}/event`,
-      ];
+      const curlArgs = ['curl', '-s', '-N', '--max-time', String(SSE_TIMEOUT_MS / 1000)];
+      this.addCurlAuth(curlArgs);
+
+      curlArgs.push(`http://localhost:${this.port}/event`);
 
       const spawnArgs = this.isHost
         ? curlArgs
