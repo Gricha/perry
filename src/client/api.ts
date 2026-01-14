@@ -1,4 +1,5 @@
 import { createORPCClient } from '@orpc/client';
+import { isIP } from 'node:net';
 import { RPCLink } from '@orpc/client/fetch';
 import type { RouterClient } from '@orpc/server';
 import type { AppRouter } from '../agent/router';
@@ -219,17 +220,37 @@ export class ApiClient {
   }
 }
 
-export function createApiClient(worker: string, port?: number, timeoutMs?: number): ApiClient {
-  let baseUrl: string;
+function formatWorkerBaseUrl(worker: string, port?: number): string {
+  const trimmed = worker.trim();
+  const effectivePort = port || DEFAULT_AGENT_PORT;
 
-  if (worker.includes('://')) {
-    baseUrl = worker;
-  } else if (worker.includes(':')) {
-    baseUrl = `http://${worker}`;
-  } else {
-    const effectivePort = port || DEFAULT_AGENT_PORT;
-    baseUrl = `http://${worker}:${effectivePort}`;
+  if (trimmed.includes('://')) {
+    // Validate early so we don't silently produce garbage.
+    new URL(trimmed);
+    return trimmed;
   }
 
+  // Bracketed IPv6 (optionally with port).
+  if (trimmed.startsWith('[')) {
+    const parsed = new URL(`http://${trimmed}`);
+    return parsed.port ? `http://${trimmed}` : `http://${trimmed}:${effectivePort}`;
+  }
+
+  // Bracketless IPv6 literal.
+  if (isIP(trimmed) === 6) {
+    return `http://[${trimmed}]:${effectivePort}`;
+  }
+
+  // IPv4/hostname (optionally with port).
+  if (trimmed.includes(':')) {
+    new URL(`http://${trimmed}`);
+    return `http://${trimmed}`;
+  }
+
+  return `http://${trimmed}:${effectivePort}`;
+}
+
+export function createApiClient(worker: string, port?: number, timeoutMs?: number): ApiClient {
+  const baseUrl = formatWorkerBaseUrl(worker, port);
   return new ApiClient({ baseUrl, timeout: timeoutMs });
 }
