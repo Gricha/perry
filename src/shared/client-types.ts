@@ -3,6 +3,15 @@ export interface PortMapping {
   container: number;
 }
 
+export type TailscaleStatus = 'none' | 'connected' | 'failed';
+
+export interface WorkspaceTailscale {
+  status: TailscaleStatus;
+  hostname?: string;
+  ip?: string;
+  error?: string;
+}
+
 export interface WorkspaceInfo {
   name: string;
   status: 'running' | 'stopped' | 'creating' | 'error';
@@ -15,6 +24,7 @@ export interface WorkspaceInfo {
     forwards?: PortMapping[];
   };
   lastUsed?: string;
+  tailscale?: WorkspaceTailscale;
 }
 
 export interface RecentSession {
@@ -179,4 +189,10 @@ export interface SSHKeyInfo {
 export interface TerminalSettings {
   preferredShell?: string;
   detectedShell?: string;
+}
+
+export interface TailscaleConfig {
+  enabled: boolean;
+  authKey?: string;
+  hostnamePrefix?: string;
 }

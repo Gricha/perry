@@ -569,6 +569,92 @@ export class WorkspaceManager {
     }
   }
 
+  private async setupTailscale(containerName: string, workspace: Workspace): Promise<void> {
+    if (!this.config.tailscale?.enabled || !this.config.tailscale?.authKey) {
+      workspace.tailscale = { status: 'none' };
+      return;
+    }
+
+    const prefix = this.config.tailscale.hostnamePrefix;
+    const hostname = prefix ? `${prefix}${workspace.name}` : workspace.name;
+
+    try {
+      console.log(`[tailscale] Setting up Tailscale for ${workspace.name} as ${hostname}...`);
+
+      const result = await docker.execInContainer(
+        containerName,
+        [
+          'tailscale',
+          'up',
+          `--authkey=${this.config.tailscale.authKey}`,
+          `--hostname=${hostname}`,
+          '--accept-routes',
+          '--accept-dns=false',
+        ],
+        { user: 'root' }
+      );
+
+      if (result.exitCode !== 0) {
+        console.warn(`[tailscale] tailscale up failed: ${result.stderr}`);
+        workspace.tailscale = {
+          status: 'failed',
+          hostname,
+          error: result.stderr || `exit code ${result.exitCode}`,
+        };
+        return;
+      }
+
+      const statusResult = await docker.execInContainer(
+        containerName,
+        ['tailscale', 'status', '--json'],
+        { user: 'root' }
+      );
+
+      if (statusResult.exitCode === 0) {
+        try {
+          const status = JSON.parse(statusResult.stdout);
+          const dnsName = status.Self?.DNSName?.replace(/\.$/, '') || hostname;
+          const ip = status.Self?.TailscaleIPs?.[0] || '';
+
+          console.log(`[tailscale] Connected as ${dnsName} (${ip})`);
+          workspace.tailscale = {
+            status: 'connected',
+            hostname: dnsName,
+            ip,
+          };
+        } catch {
+          workspace.tailscale = { status: 'connected', hostname };
+        }
+      } else {
+        workspace.tailscale = { status: 'connected', hostname };
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.warn(`[tailscale] Setup error: ${error}`);
+      workspace.tailscale = {
+        status: 'failed',
+        hostname,
+        error,
+      };
+    }
+  }
+
+  private async teardownTailscale(containerName: string): Promise<void> {
+    if (!this.config.tailscale?.enabled) {
+      return;
+    }
+
+    try {
+      console.log(`[tailscale] Running tailscale logout in ${containerName}...`);
+      await docker.execInContainer(containerName, ['tailscale', 'logout'], {
+        user: 'root',
+      });
+      console.log('[tailscale] Logged out');
+    } catch (err) {
+      console.warn(`[tailscale] Logout error (non-fatal): ${(err as Error).message}`);
+    }
+  }
+
   private async syncWorkspaceStatus(workspace: Workspace): Promise<void> {
     if (workspace.status === 'creating') {
       return;
@@ -666,6 +752,10 @@ export class WorkspaceManager {
         containerEnv.WORKSPACE_REPO_URL = clone;
       }
 
+      if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+        containerEnv.TS_AUTHKEY = this.config.tailscale.authKey;
+      }
+
       const dockerVolumeName = `${VOLUME_PREFIX}${name}-docker`;
       if (!(await docker.volumeExists(dockerVolumeName))) {
         await docker.createVolume(dockerVolumeName);
@@ -701,6 +791,9 @@ export class WorkspaceManager {
       await this.state.setWorkspace(workspace);
 
       await this.runUserScripts(containerName);
+
+      await this.setupTailscale(containerName, workspace);
+      await this.state.setWorkspace(workspace);
 
       return workspace;
     } catch (err) {
@@ -755,6 +848,10 @@ export class WorkspaceManager {
           containerEnv.WORKSPACE_REPO_URL = workspace.repo;
         }
 
+        if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+          containerEnv.TS_AUTHKEY = this.config.tailscale.authKey;
+        }
+
         const dockerVolumeName = `${VOLUME_PREFIX}${name}-docker`;
         if (!(await docker.volumeExists(dockerVolumeName))) {
           await docker.createVolume(dockerVolumeName);
@@ -801,6 +898,9 @@ export class WorkspaceManager {
 
       await this.runUserScripts(containerName);
 
+      await this.setupTailscale(containerName, workspace);
+      await this.state.setWorkspace(workspace);
+
       return workspace;
     } catch (err) {
       workspace.status = previousStatus === 'error' ? 'error' : 'stopped';
@@ -825,6 +925,9 @@ export class WorkspaceManager {
 
     await docker.stopContainer(containerName);
     workspace.status = 'stopped';
+    if (workspace.tailscale) {
+      workspace.tailscale.status = 'none';
+    }
     await this.state.setWorkspace(workspace);
 
     return workspace;
@@ -841,6 +944,10 @@ export class WorkspaceManager {
     const dockerVolumeName = `${VOLUME_PREFIX}${name}-docker`;
 
     if (await docker.containerExists(containerName)) {
+      const running = await docker.containerRunning(containerName);
+      if (running) {
+        await this.teardownTailscale(containerName);
+      }
       await docker.removeContainer(containerName, true);
     }
 
@@ -978,6 +1085,10 @@ export class WorkspaceManager {
         containerEnv.WORKSPACE_REPO_URL = workspace.repo;
       }
 
+      if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+        containerEnv.TS_AUTHKEY = this.config.tailscale.authKey;
+      }
+
       const containerId = await docker.createContainer({
         name: cloneContainerName,
         image: workspaceImage,
@@ -1008,6 +1119,9 @@ export class WorkspaceManager {
       await this.state.setWorkspace(workspace);
 
       await this.runUserScripts(cloneContainerName);
+
+      await this.setupTailscale(cloneContainerName, workspace);
+      await this.state.setWorkspace(workspace);
 
       return workspace;
     } catch (err) {

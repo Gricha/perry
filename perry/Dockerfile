@@ -183,6 +183,8 @@ RUN bunx playwright install chromium --with-deps
 
 USER root
 
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+
 ENV PATH="/home/workspace/.opencode/bin:${PATH}"
 
 RUN mkdir -p /home/workspace /workspace/config /workspace/template /workspace/source \

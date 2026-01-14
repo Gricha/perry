@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, RefreshCw, ExternalLink, Github, Check } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Check } from 'lucide-react'
 import { api, type CodingAgents, type ModelInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,6 @@ const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
   { id: 'opus', name: 'Opus', description: 'Most capable', provider: 'anthropic' },
   { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost', provider: 'anthropic' },
 ]
-
 
 function StatusIndicator({ configured }: { configured: boolean }) {
   if (!configured) return null
@@ -48,16 +47,14 @@ export function AgentsSettings() {
 
   const [opencodeZenToken, setOpencodeZenToken] = useState('')
   const [opencodeModel, setOpencodeModel] = useState('')
-  const [githubToken, setGithubToken] = useState('')
   const [claudeOAuthToken, setClaudeOAuthToken] = useState('')
   const [claudeModel, setClaudeModel] = useState('sonnet')
   const [opencodeHasChanges, setOpencodeHasChanges] = useState(false)
-  const [githubHasChanges, setGithubHasChanges] = useState(false)
   const [claudeHasChanges, setClaudeHasChanges] = useState(false)
   const [initialized, setInitialized] = useState(false)
-  const [savedSection, setSavedSection] = useState<'opencode' | 'github' | 'claude' | null>(null)
+  const [savedSection, setSavedSection] = useState<'opencode' | 'claude' | null>(null)
 
-  const showSaved = useCallback((section: 'opencode' | 'github' | 'claude') => {
+  const showSaved = useCallback((section: 'opencode' | 'claude') => {
     setSavedSection(section)
     setTimeout(() => setSavedSection(null), 2000)
   }, [])
@@ -66,7 +63,6 @@ export function AgentsSettings() {
     if (agents && !initialized) {
       setOpencodeZenToken(agents.opencode?.zen_token || '')
       setOpencodeModel(agents.opencode?.model || '')
-      setGithubToken(agents.github?.token || '')
       setClaudeOAuthToken(agents.claude_code?.oauth_token || '')
       setClaudeModel(agents.claude_code?.model || 'sonnet')
       setInitialized(true)
@@ -78,7 +74,6 @@ export function AgentsSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       setOpencodeHasChanges(false)
-      setGithubHasChanges(false)
       setClaudeHasChanges(false)
       showSyncNotification()
     },
@@ -94,16 +89,6 @@ export function AgentsSettings() {
         },
       },
       { onSuccess: () => showSaved('opencode') }
-    )
-  }
-
-  const handleSaveGithub = () => {
-    mutation.mutate(
-      {
-        ...agents,
-        github: { token: githubToken.trim() || undefined },
-      },
-      { onSuccess: () => showSaved('github') }
     )
   }
 
@@ -136,18 +121,17 @@ export function AgentsSettings() {
   }
 
   const opencodeConfigured = !!agents?.opencode?.zen_token
-  const githubConfigured = !!agents?.github?.token
   const claudeConfigured = !!agents?.claude_code?.oauth_token
 
   if (isLoading) {
     return (
       <div className="space-y-8 max-w-2xl mx-auto">
         <div className="page-header">
-          <h1 className="page-title">Configuration</h1>
-          <p className="page-description">Configure AI assistants for your workspaces</p>
+          <h1 className="page-title">AI Agents</h1>
+          <p className="page-description">Configure AI coding assistants for your workspaces</p>
         </div>
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div key={i} className="agent-row animate-pulse">
               <div className="agent-icon bg-secondary" />
               <div className="agent-info space-y-2">
@@ -164,195 +148,126 @@ export function AgentsSettings() {
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
       <div className="page-header">
-        <h1 className="page-title">Configuration</h1>
-        <p className="page-description">Configure AI assistants for your workspaces</p>
+        <h1 className="page-title">AI Agents</h1>
+        <p className="page-description">Configure AI coding assistants for your workspaces</p>
       </div>
 
-      {/* AI Assistants Section */}
-      <div>
-        <div className="section-header">AI Assistants</div>
-
-        {/* OpenCode */}
-        <div className="agent-row">
-          <AgentIcon agentType="opencode" size="md" />
-          <div className="agent-info">
-            <div className="agent-name">
-              OpenCode
-              <StatusIndicator configured={opencodeConfigured} />
-            </div>
-            <p className="agent-description">
-              Zen token for OpenCode.
-              <a
-                href="https://opencode.ai/auth"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 text-primary hover:underline inline-flex items-center gap-1"
-              >
-                Get token
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </p>
-            <div className="space-y-2 mt-2">
-              <div className="agent-input">
-                <Input
-                  type="password"
-                  value={opencodeZenToken}
-                  onChange={(e) => {
-                    setOpencodeZenToken(e.target.value)
-                    setOpencodeHasChanges(true)
-                  }}
-                  placeholder="zen_... (Zen token)"
-                  className="w-full font-mono text-sm h-11 sm:h-9"
-                />
-              </div>
-              <div className="agent-input flex flex-col sm:flex-row gap-2">
-                {opencodeModels.length > 0 && (
-                  <div className="flex-1">
-                    <SearchableModelSelect
-                      models={opencodeModels}
-                      value={opencodeModel}
-                      onChange={(value) => {
-                        setOpencodeModel(value)
-                        setOpencodeHasChanges(true)
-                      }}
-                      placeholder="Select model..."
-                      showProvider
-                    />
-                  </div>
-                )}
-                <Button
-                  onClick={handleSaveOpencode}
-                  disabled={mutation.isPending || !opencodeHasChanges}
-                  size="sm"
-                  className="h-11 sm:h-9"
-                  variant={savedSection === 'opencode' ? 'secondary' : 'default'}
-                >
-                  {savedSection === 'opencode' ? (
-                    <>
-                      <Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />
-                      Saved
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-1.5 h-3.5 w-3.5" />
-                      Save
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
+      {/* OpenCode */}
+      <div className="agent-row">
+        <AgentIcon agentType="opencode" size="md" />
+        <div className="agent-info">
+          <div className="agent-name">
+            OpenCode
+            <StatusIndicator configured={opencodeConfigured} />
           </div>
-        </div>
-
-        {/* Claude Code */}
-        <div className="agent-row">
-          <AgentIcon agentType="claude-code" size="md" />
-          <div className="agent-info">
-            <div className="agent-name">
-              Claude Code
-              <StatusIndicator configured={claudeConfigured} />
+          <p className="agent-description">
+            Zen token for OpenCode.
+            <a
+              href="https://opencode.ai/auth"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 text-primary hover:underline inline-flex items-center gap-1"
+            >
+              Get token
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </p>
+          <div className="space-y-2 mt-2">
+            <div className="agent-input">
+              <Input
+                type="password"
+                value={opencodeZenToken}
+                onChange={(e) => {
+                  setOpencodeZenToken(e.target.value)
+                  setOpencodeHasChanges(true)
+                }}
+                placeholder="zen_... (Zen token)"
+                className="w-full font-mono text-sm h-11 sm:h-9"
+              />
             </div>
-            <p className="agent-description">
-              OAuth token for headless operation. Run <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code> locally to generate.
-            </p>
-            <div className="space-y-2 mt-2">
-              <div className="agent-input">
-                <Input
-                  type="password"
-                  value={claudeOAuthToken}
-                  onChange={(e) => {
-                    setClaudeOAuthToken(e.target.value)
-                    setClaudeHasChanges(true)
-                  }}
-                  placeholder="sk-ant-oat01-... (OAuth token)"
-                  className="w-full font-mono text-sm h-11 sm:h-9"
-                />
-              </div>
-              <div className="agent-input flex flex-col sm:flex-row gap-2">
+            <div className="agent-input flex flex-col sm:flex-row gap-2">
+              {opencodeModels.length > 0 && (
                 <div className="flex-1">
                   <SearchableModelSelect
-                    models={claudeModels}
-                    value={claudeModel}
+                    models={opencodeModels}
+                    value={opencodeModel}
                     onChange={(value) => {
-                      setClaudeModel(value)
-                      setClaudeHasChanges(true)
+                      setOpencodeModel(value)
+                      setOpencodeHasChanges(true)
                     }}
+                    placeholder="Select model..."
                     showProvider
                   />
                 </div>
-                <Button
-                  onClick={handleSaveClaude}
-                  disabled={mutation.isPending || !claudeHasChanges}
-                  size="sm"
-                  className="h-11 sm:h-9"
-                  variant={savedSection === 'claude' ? 'secondary' : 'default'}
-                >
-                  {savedSection === 'claude' ? (
-                    <>
-                      <Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />
-                      Saved
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-1.5 h-3.5 w-3.5" />
-                      Save
-                    </>
-                  )}
-                </Button>
-              </div>
+              )}
+              <Button
+                onClick={handleSaveOpencode}
+                disabled={mutation.isPending || !opencodeHasChanges}
+                size="sm"
+                className="h-11 sm:h-9"
+                variant={savedSection === 'opencode' ? 'secondary' : 'default'}
+              >
+                {savedSection === 'opencode' ? (
+                  <>
+                    <Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                    Save
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Version Control Section */}
-      <div>
-        <div className="section-header">Version Control</div>
-
-        {/* GitHub */}
-        <div className="agent-row">
-          <div className="agent-icon">
-            <Github className="h-5 w-5" />
+      {/* Claude Code */}
+      <div className="agent-row">
+        <AgentIcon agentType="claude-code" size="md" />
+        <div className="agent-info">
+          <div className="agent-name">
+            Claude Code
+            <StatusIndicator configured={claudeConfigured} />
           </div>
-          <div className="agent-info">
-            <div className="agent-name">
-              GitHub
-              <StatusIndicator configured={githubConfigured} />
-            </div>
-            <p className="agent-description">
-              Personal Access Token for git operations. Injected as <code className="text-xs bg-secondary px-1 py-0.5 rounded">GITHUB_TOKEN</code>
-              <a
-                href="https://github.com/settings/personal-access-tokens/new"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 text-primary hover:underline inline-flex items-center gap-1"
-              >
-                Create token
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Use a fine-grained PAT with repository access permissions.
-            </p>
-            <div className="agent-input flex flex-col sm:flex-row gap-2">
+          <p className="agent-description">
+            OAuth token for headless operation. Run <code className="text-xs bg-secondary px-1 py-0.5 rounded">claude setup-token</code> locally to generate.
+          </p>
+          <div className="space-y-2 mt-2">
+            <div className="agent-input">
               <Input
                 type="password"
-                value={githubToken}
+                value={claudeOAuthToken}
                 onChange={(e) => {
-                  setGithubToken(e.target.value)
-                  setGithubHasChanges(true)
+                  setClaudeOAuthToken(e.target.value)
+                  setClaudeHasChanges(true)
                 }}
-                placeholder="ghp_..."
-                className="flex-1 font-mono text-sm h-11 sm:h-9"
+                placeholder="sk-ant-oat01-... (OAuth token)"
+                className="w-full font-mono text-sm h-11 sm:h-9"
               />
+            </div>
+            <div className="agent-input flex flex-col sm:flex-row gap-2">
+              <div className="flex-1">
+                <SearchableModelSelect
+                  models={claudeModels}
+                  value={claudeModel}
+                  onChange={(value) => {
+                    setClaudeModel(value)
+                    setClaudeHasChanges(true)
+                  }}
+                  showProvider
+                />
+              </div>
               <Button
-                onClick={handleSaveGithub}
-                disabled={mutation.isPending || !githubHasChanges}
+                onClick={handleSaveClaude}
+                disabled={mutation.isPending || !claudeHasChanges}
                 size="sm"
                 className="h-11 sm:h-9"
-                variant={savedSection === 'github' ? 'secondary' : 'default'}
+                variant={savedSection === 'claude' ? 'secondary' : 'default'}
               >
-                {savedSection === 'github' ? (
+                {savedSection === 'claude' ? (
                   <>
                     <Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />
                     Saved

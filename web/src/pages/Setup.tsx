@@ -12,6 +12,7 @@ import {
   Rocket,
   ArrowRight,
   Sparkles,
+  Network,
 } from 'lucide-react';
 import { api, type CodingAgents, type SSHSettings, type ModelInfo } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -25,9 +26,9 @@ const FALLBACK_CLAUDE_MODELS: ModelInfo[] = [
   { id: 'haiku', name: 'Haiku', description: 'Fastest, lowest cost', provider: 'anthropic' },
 ];
 
-type Step = 'welcome' | 'agents' | 'git' | 'complete';
+type Step = 'welcome' | 'agents' | 'git' | 'networking' | 'complete';
 
-const STEPS: Step[] = ['welcome', 'agents', 'git', 'complete'];
+const STEPS: Step[] = ['welcome', 'agents', 'git', 'networking', 'complete'];
 
 export function Setup() {
   const navigate = useNavigate();
@@ -42,6 +43,8 @@ export function Setup() {
   const [opencodeModel, setOpencodeModel] = useState('');
   const [githubToken, setGithubToken] = useState('');
   const [selectedSSHKeys, setSelectedSSHKeys] = useState<string[]>([]);
+  const [tailscaleEnabled, setTailscaleEnabled] = useState(false);
+  const [tailscaleAuthKey, setTailscaleAuthKey] = useState('');
 
   const { data: agents } = useQuery({
     queryKey: ['agents'],
@@ -66,6 +69,11 @@ export function Setup() {
   const { data: opencodeModelsData } = useQuery({
     queryKey: ['models', 'opencode'],
     queryFn: () => api.listModels('opencode'),
+  });
+
+  const { data: tailscaleConfig } = useQuery({
+    queryKey: ['tailscaleConfig'],
+    queryFn: api.getTailscaleConfig,
   });
 
   const claudeModels = claudeModelsData?.models?.length
@@ -93,6 +101,13 @@ export function Setup() {
     }
   }, [sshSettings]);
 
+  useEffect(() => {
+    if (tailscaleConfig) {
+      setTailscaleEnabled(tailscaleConfig.enabled);
+      setTailscaleAuthKey(tailscaleConfig.authKey || '');
+    }
+  }, [tailscaleConfig]);
+
   const agentsMutation = useMutation({
     mutationFn: (data: CodingAgents) => api.updateAgents(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
@@ -101,6 +116,12 @@ export function Setup() {
   const sshMutation = useMutation({
     mutationFn: (data: SSHSettings) => api.updateSSHSettings(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sshSettings'] }),
+  });
+
+  const tailscaleMutation = useMutation({
+    mutationFn: (config: { enabled?: boolean; authKey?: string }) =>
+      api.updateTailscaleConfig(config),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tailscaleConfig'] }),
   });
 
   const handleSaveAgents = async () => {
@@ -130,11 +151,23 @@ export function Setup() {
     });
   };
 
+  const handleSaveTailscale = async () => {
+    if (tailscaleEnabled && tailscaleAuthKey) {
+      await tailscaleMutation.mutateAsync({
+        enabled: tailscaleEnabled,
+        authKey: tailscaleAuthKey,
+      });
+    }
+  };
+
   const handleNext = async () => {
     const currentIndex = STEPS.indexOf(currentStep);
     if (currentStep === 'git') {
       await handleSaveAgents();
       await handleSaveSSH();
+    }
+    if (currentStep === 'networking') {
+      await handleSaveTailscale();
     }
     if (currentIndex < STEPS.length - 1) {
       setCurrentStep(STEPS[currentIndex + 1]);
@@ -167,7 +200,7 @@ export function Setup() {
   const currentStepIndex = STEPS.indexOf(currentStep);
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStep === 'complete';
-  const isPending = agentsMutation.isPending || sshMutation.isPending;
+  const isPending = agentsMutation.isPending || sshMutation.isPending || tailscaleMutation.isPending;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -229,6 +262,15 @@ export function Setup() {
               <div>
                 <p className="font-medium">Git Access</p>
                 <p className="text-sm text-muted-foreground">Set up GitHub and SSH keys</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Network className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Networking</p>
+                <p className="text-sm text-muted-foreground">Connect workspaces to your tailnet</p>
               </div>
             </div>
           </div>
@@ -455,6 +497,95 @@ export function Setup() {
         </div>
       )}
 
+      {currentStep === 'networking' && (
+        <div className="space-y-6">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-2">Networking</h1>
+            <p className="text-muted-foreground">
+              Connect workspaces to your Tailscale network (optional)
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div
+              className={`border rounded-lg overflow-hidden transition-colors ${tailscaleEnabled ? 'border-blue-500' : ''}`}
+            >
+              <div
+                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => setTailscaleEnabled(!tailscaleEnabled)}
+              >
+                <div
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    tailscaleEnabled ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/30'
+                  }`}
+                >
+                  {tailscaleEnabled && <Check className="h-3 w-3 text-white" />}
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <Network className="h-5 w-5 text-blue-500" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold">Tailscale</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Access workspaces from any device on your tailnet
+                  </p>
+                </div>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${tailscaleEnabled ? 'rotate-180' : ''}`}
+                />
+              </div>
+              {tailscaleEnabled && (
+                <div className="px-4 pb-4 space-y-3 border-t bg-muted/30">
+                  <div className="pt-3">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Generate an auth key from the{' '}
+                      <a
+                        href="https://login.tailscale.com/admin/settings/keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        Tailscale admin console
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </p>
+                    <Input
+                      type="password"
+                      value={tailscaleAuthKey}
+                      onChange={(e) => setTailscaleAuthKey(e.target.value)}
+                      placeholder="tskey-auth-..."
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>Recommended settings when generating the key:</p>
+                    <ul className="list-disc list-inside ml-2">
+                      <li>Reusable: Yes</li>
+                      <li>Ephemeral: No</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 rounded-lg border bg-muted/30">
+              <h4 className="font-medium mb-2 text-sm">What does this enable?</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>
+                  • Access workspaces by hostname:{' '}
+                  <code className="bg-muted px-1 rounded text-xs">http://perry-myworkspace:3000</code>
+                </li>
+                <li>
+                  • SSH directly:{' '}
+                  <code className="bg-muted px-1 rounded text-xs">ssh workspace@perry-myworkspace</code>
+                </li>
+                <li>• Works from any device on your tailnet</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentStep === 'complete' && (
         <div className="text-center space-y-6">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 flex items-center justify-center">
@@ -492,7 +623,13 @@ export function Setup() {
                 </span>
               </div>
             )}
-            {!claudeToken && !opencodeToken && !githubToken && selectedSSHKeys.length === 0 && (
+            {tailscaleEnabled && tailscaleAuthKey && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Check className="h-4 w-4 text-green-500" />
+                <span>Tailscale networking enabled</span>
+              </div>
+            )}
+            {!claudeToken && !opencodeToken && !githubToken && selectedSSHKeys.length === 0 && !tailscaleAuthKey && (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>No configuration added. You can always configure later in Settings.</span>
               </div>

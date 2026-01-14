@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, RefreshCw, Boxes, ChevronRight, Sparkles, Monitor, AlertTriangle, Shield } from 'lucide-react'
+import { Plus, RefreshCw, Boxes, ChevronRight, Sparkles, Monitor, AlertTriangle, Shield, Network } from 'lucide-react'
 import { api, type WorkspaceInfo, type CreateWorkspaceRequest, type HostInfo } from '@/lib/api'
 import { HOST_WORKSPACE_NAME } from '@shared/client-types'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,18 @@ function WorkspaceRow({ workspace, onClick }: { workspace: WorkspaceInfo; onClic
         </div>
         {workspace.repo && (
           <p className="text-sm text-muted-foreground truncate mt-0.5">{workspace.repo}</p>
+        )}
+        {workspace.tailscale?.status === 'connected' && workspace.tailscale.hostname && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <Network className="h-3 w-3 text-blue-500" />
+            <span className="text-xs text-muted-foreground font-mono">{workspace.tailscale.hostname}</span>
+          </div>
+        )}
+        {workspace.tailscale?.status === 'failed' && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <Network className="h-3 w-3 text-amber-500" />
+            <span className="text-xs text-amber-600 dark:text-amber-400">Tailscale failed</span>
+          </div>
         )}
       </div>
 

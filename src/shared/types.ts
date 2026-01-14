@@ -44,6 +44,21 @@ export interface TerminalSettings {
   preferredShell?: string;
 }
 
+export type TailscaleStatus = 'none' | 'connected' | 'failed';
+
+export interface TailscaleConfig {
+  enabled: boolean;
+  authKey: string;
+  hostnamePrefix?: string;
+}
+
+export interface WorkspaceTailscale {
+  status: TailscaleStatus;
+  hostname?: string;
+  ip?: string;
+  error?: string;
+}
+
 export type SkillAppliesTo = 'all' | Array<'claude-code' | 'opencode' | 'codex'>;
 
 export interface SkillDefinition {
@@ -95,6 +110,7 @@ export interface AgentConfig {
   allowHostAccess?: boolean;
   ssh?: SSHSettings;
   terminal?: TerminalSettings;
+  tailscale?: TailscaleConfig;
 }
 
 export interface ClientConfig {
@@ -122,6 +138,7 @@ export interface WorkspaceInfo {
   repo?: string;
   ports: WorkspacePorts;
   lastUsed?: string;
+  tailscale?: WorkspaceTailscale;
 }
 
 export interface WorkspaceState {

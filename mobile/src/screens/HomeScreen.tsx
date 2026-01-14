@@ -74,6 +74,16 @@ function WorkspaceRow({
         {workspace.repo && (
           <Text style={[styles.rowRepo, { color: colors.textMuted }]} numberOfLines={1}>{workspace.repo}</Text>
         )}
+        {workspace.tailscale?.status === 'connected' && workspace.tailscale.hostname && (
+          <Text style={[styles.rowTailscale, { color: colors.accent }]} numberOfLines={1}>
+            {workspace.tailscale.hostname}
+          </Text>
+        )}
+        {workspace.tailscale?.status === 'failed' && (
+          <Text style={[styles.rowTailscale, { color: colors.warning }]} numberOfLines={1}>
+            Tailscale failed
+          </Text>
+        )}
       </View>
       <Text style={[styles.rowChevron, { color: colors.textMuted }]}>›</Text>
     </TouchableOpacity>
@@ -474,6 +484,11 @@ const styles = StyleSheet.create({
   rowRepo: {
     fontSize: 13,
     color: '#8e8e93',
+    marginTop: 2,
+  },
+  rowTailscale: {
+    fontSize: 12,
+    fontFamily: 'monospace',
     marginTop: 2,
   },
   rowChevron: {

@@ -55,6 +55,13 @@ const WorkspacePortsSchema = z.object({
   forwards: z.array(PortMappingSchema).optional(),
 });
 
+const WorkspaceTailscaleSchema = z.object({
+  status: z.enum(['none', 'connected', 'failed']),
+  hostname: z.string().optional(),
+  ip: z.string().optional(),
+  error: z.string().optional(),
+});
+
 const WorkspaceInfoSchema = z.object({
   name: z.string(),
   status: WorkspaceStatusSchema,
@@ -63,6 +70,7 @@ const WorkspaceInfoSchema = z.object({
   repo: z.string().optional(),
   ports: WorkspacePortsSchema,
   lastUsed: z.string().optional(),
+  tailscale: WorkspaceTailscaleSchema.optional(),
 });
 
 const CredentialsSchema = z.object({
@@ -169,6 +177,12 @@ const SSHKeyInfoSchema = z.object({
 
 const TerminalSettingsSchema = z.object({
   preferredShell: z.string().optional(),
+});
+
+const TailscaleConfigSchema = z.object({
+  enabled: z.boolean(),
+  authKey: z.string(),
+  hostnamePrefix: z.string().optional(),
 });
 
 export interface TailscaleInfo {
@@ -597,6 +611,39 @@ export function createRouter(ctx: RouterContext) {
       ctx.config.set(newConfig);
       await saveAgentConfig(newConfig, ctx.configDir);
       return input;
+    });
+
+  const getTailscaleConfig = os
+    .output(TailscaleConfigSchema.partial().extend({ enabled: z.boolean() }))
+    .handler(async () => {
+      const config = ctx.config.get();
+      return {
+        enabled: config.tailscale?.enabled ?? false,
+        authKey: config.tailscale?.authKey ? '********' : '',
+        hostnamePrefix: config.tailscale?.hostnamePrefix,
+      };
+    });
+
+  const updateTailscaleConfig = os
+    .input(TailscaleConfigSchema.partial())
+    .output(TailscaleConfigSchema.partial().extend({ enabled: z.boolean() }))
+    .handler(async ({ input }) => {
+      const currentConfig = ctx.config.get();
+      const currentTailscale = currentConfig.tailscale || { enabled: false, authKey: '' };
+      const newTailscale = {
+        ...currentTailscale,
+        ...input,
+        authKey:
+          input.authKey && input.authKey !== '********' ? input.authKey : currentTailscale.authKey,
+      };
+      const newConfig = { ...currentConfig, tailscale: newTailscale };
+      ctx.config.set(newConfig);
+      await saveAgentConfig(newConfig, ctx.configDir);
+      return {
+        enabled: newTailscale.enabled,
+        authKey: newTailscale.authKey ? '********' : '',
+        hostnamePrefix: newTailscale.hostnamePrefix,
+      };
     });
 
   const GitHubRepoSchema = z.object({
@@ -1632,6 +1679,10 @@ export function createRouter(ctx: RouterContext) {
       terminal: {
         get: getTerminalSettings,
         update: updateTerminalSettings,
+      },
+      tailscale: {
+        get: getTailscaleConfig,
+        update: updateTailscaleConfig,
       },
     },
   };

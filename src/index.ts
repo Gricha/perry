@@ -7,7 +7,13 @@ import { startAgent } from './agent/run';
 import { installService, uninstallService, showStatus, getServiceStatus } from './agent/systemd';
 import { createApiClient, ApiClientError } from './client/api';
 import { loadClientConfig, getWorker, setWorker } from './client/config';
-import { openWSShell, openDockerExec, getTerminalWSUrl, isLocalWorker } from './client/ws-shell';
+import {
+  openWSShell,
+  openDockerExec,
+  openTailscaleSSH,
+  getTerminalWSUrl,
+  isLocalWorker,
+} from './client/ws-shell';
 import { getContainerName, getContainerIp } from './docker';
 import { startProxy, parsePortForward, formatPortForwards } from './client/proxy';
 import {
@@ -179,6 +185,11 @@ program
           console.log(`    Repo: ${ws.repo}`);
         }
         console.log(`    SSH Port: ${ws.ports.ssh}`);
+        if (ws.tailscale?.status === 'connected' && ws.tailscale.hostname) {
+          console.log(`    Tailscale: ${ws.tailscale.hostname}`);
+        } else if (ws.tailscale?.status === 'failed') {
+          console.log(`    Tailscale: failed (${ws.tailscale.error || 'unknown error'})`);
+        }
         console.log(`    Created: ${new Date(ws.created).toLocaleString()}`);
         console.log('');
       }
@@ -365,7 +376,17 @@ program
         process.exit(1);
       }
 
-      if (isLocalWorker(worker)) {
+      const tailscaleHostname = workspace.tailscale?.hostname;
+      const tailscaleConnected = workspace.tailscale?.status === 'connected';
+
+      if (tailscaleConnected && tailscaleHostname) {
+        await openTailscaleSSH({
+          hostname: tailscaleHostname,
+          onError: (err) => {
+            console.error(`\nConnection error: ${err.message}`);
+          },
+        });
+      } else if (isLocalWorker(worker)) {
         const containerName = getContainerName(name);
         await openDockerExec({
           containerName,
