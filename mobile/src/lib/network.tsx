@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo'
@@ -35,6 +35,8 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
   const [isOnline, setIsOnline] = useState(true)
   const [lastError, setLastError] = useState<string | null>(null)
   const [serverHostname, setServerHostname] = useState<string | null>(null)
+  const statusRef = useRef<ConnectionStatus>(status)
+  statusRef.current = status
 
   const checkConnection = useCallback(async () => {
     setStatus('connecting')
@@ -73,13 +75,13 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       if (!online) {
         setStatus('disconnected')
         setLastError('No network connection')
-      } else if (status === 'disconnected') {
+      } else if (statusRef.current === 'disconnected') {
         checkConnection()
       }
     })
 
     const interval = setInterval(() => {
-      if (status === 'server-unreachable' || status === 'disconnected') {
+      if (statusRef.current === 'server-unreachable' || statusRef.current === 'disconnected') {
         checkConnection()
       }
     }, 30000)
@@ -88,7 +90,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       unsubscribe()
       clearInterval(interval)
     }
-  }, [checkConnection, status])
+  }, [checkConnection])
 
   return (
     <NetworkContext.Provider value={{ status, isOnline, lastError, checkConnection, serverHostname }}>
