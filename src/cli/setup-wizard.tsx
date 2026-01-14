@@ -5,10 +5,10 @@ import { loadAgentConfig, saveAgentConfig, getConfigDir, ensureConfigDir } from 
 import { discoverSSHKeys } from '../ssh';
 import type { SSHKeyInfo } from '../shared/client-types';
 
-type Step = 'welcome' | 'agents' | 'claude' | 'opencode' | 'github' | 'ssh' | 'complete';
+type Step = 'welcome' | 'agents' | 'claude' | 'opencode' | 'github' | 'ssh' | 'tailscale' | 'complete';
 type AgentId = 'claude' | 'opencode';
 
-const STEPS: Step[] = ['welcome', 'agents', 'claude', 'opencode', 'github', 'ssh', 'complete'];
+const STEPS: Step[] = ['welcome', 'agents', 'claude', 'opencode', 'github', 'ssh', 'tailscale', 'complete'];
 
 interface WizardState {
   selectedAgents: AgentId[];
@@ -18,6 +18,7 @@ interface WizardState {
   opencodeModel: string;
   githubToken: string;
   selectedSSHKeys: string[];
+  tailscaleAuthKey: string;
 }
 
 function SelectableItem({
@@ -61,6 +62,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
         <Text>• AI coding assistants (Claude Code, OpenCode)</Text>
         <Text>• Git access (GitHub token)</Text>
         <Text>• SSH keys for workspaces</Text>
+        <Text>• Tailscale networking</Text>
       </Box>
       <Box marginTop={1}>
         <Text color="gray">Press Enter to continue...</Text>
@@ -253,6 +255,7 @@ function CompleteStep({ state, onFinish }: { state: WizardState; onFinish: () =>
   if (state.githubToken) configured.push('GitHub');
   if (state.selectedSSHKeys.length > 0)
     configured.push(`${state.selectedSSHKeys.length} SSH key(s)`);
+  if (state.tailscaleAuthKey) configured.push('Tailscale');
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -298,6 +301,7 @@ function SetupWizard() {
     opencodeModel: '',
     githubToken: '',
     selectedSSHKeys: [],
+    tailscaleAuthKey: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -320,6 +324,7 @@ function SetupWizard() {
         opencodeModel: config.agents?.opencode?.model || '',
         githubToken: config.agents?.github?.token || '',
         selectedSSHKeys: config.ssh?.global.copy || [],
+        tailscaleAuthKey: config.tailscale?.authKey || '',
       }));
     };
     loadExisting().catch(() => {});
@@ -401,6 +406,14 @@ function SetupWizard() {
         };
       }
 
+      if (state.tailscaleAuthKey) {
+        config.tailscale = {
+          ...config.tailscale,
+          enabled: true,
+          authKey: state.tailscaleAuthKey,
+        };
+      }
+
       await saveAgentConfig(config, configDir);
     } catch {
       // Ignore save errors - user can reconfigure later
@@ -475,6 +488,18 @@ function SetupWizard() {
               onToggle={toggleSSHKey}
               onNext={nextStep}
               onBack={prevStep}
+            />
+          )}
+          {step === 'tailscale' && (
+            <TokenInputStep
+              title="Tailscale Auth Key"
+              placeholder="tskey-auth-..."
+              helpText="Generate at https://login.tailscale.com/admin/settings/keys (Reusable: Yes, Ephemeral: No)"
+              value={state.tailscaleAuthKey}
+              onChange={(v: string) => setState((s: WizardState) => ({ ...s, tailscaleAuthKey: v }))}
+              onNext={nextStep}
+              onBack={prevStep}
+              optional
             />
           )}
           {step === 'complete' && (

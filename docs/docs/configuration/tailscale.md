@@ -162,7 +162,7 @@ There are several ways to configure your Tailscale auth key:
 
 **Option A: Web UI Setup Wizard (First-time users)**
 
-When you first open Perry's Web UI, you'll be guided through a setup wizard. While the current wizard focuses on AI agents and Git, you can configure Tailscale immediately after in Settings.
+When you first open Perry's Web UI, you'll be guided through a setup wizard that includes a **Networking** step for Tailscale configuration.
 
 **Option B: CLI Setup Wizard**
 
@@ -172,7 +172,7 @@ Run the interactive setup wizard:
 perry config init
 ```
 
-This walks you through configuring AI agents, GitHub, and SSH keys. After completing the wizard, configure Tailscale via the Web UI or config file.
+This walks you through configuring AI agents, GitHub, SSH keys, and Tailscale networking.
 
 **Option C: Web UI Settings (Recommended)**
 
