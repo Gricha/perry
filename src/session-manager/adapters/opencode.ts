@@ -57,6 +57,24 @@ export function toOpenCodeModelParam(model: string): OpenCodeModelParam | null {
 export class OpenCodeAdapter implements AgentAdapter {
   readonly agentType = 'opencode' as const;
 
+  private getAuthHeader(): string | undefined {
+    return this.authHeader;
+  }
+
+  private getJsonHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const auth = this.getAuthHeader();
+    if (auth) headers.Authorization = auth;
+    return headers;
+  }
+
+  private addCurlAuth(args: string[]): void {
+    const auth = this.getAuthHeader();
+    if (auth) {
+      args.push('-H', `Authorization: ${auth}`);
+    }
+  }
+
   private containerName?: string;
   private agentSessionId?: string;
   private model?: string;
@@ -178,19 +196,17 @@ export class OpenCodeAdapter implements AgentAdapter {
   private async sessionExists(baseUrl: string, sessionId: string): Promise<boolean> {
     try {
       if (this.isHost) {
+        const auth = this.getAuthHeader();
         const response = await fetch(`${baseUrl}/session/${sessionId}`, {
           method: 'GET',
-          headers: this.authHeader ? { Authorization: this.authHeader } : undefined,
+          headers: auth ? { Authorization: auth } : undefined,
           signal: AbortSignal.timeout(5000),
         });
         return response.ok;
       }
 
       const args = ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '5'];
-
-      if (this.authHeader) {
-        args.push('-H', `Authorization: ${this.authHeader}`);
-      }
+      this.addCurlAuth(args);
 
       args.push(`${baseUrl}/session/${sessionId}`);
 
@@ -207,10 +223,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authHeader ? { Authorization: this.authHeader } : {}),
-        },
+        headers: this.getJsonHeaders(),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -236,9 +249,7 @@ export class OpenCodeAdapter implements AgentAdapter {
       'Content-Type: application/json',
     ];
 
-    if (this.authHeader) {
-      args.push('-H', `Authorization: ${this.authHeader}`);
-    }
+    this.addCurlAuth(args);
 
     args.push('-d', JSON.stringify(payload));
 
@@ -271,10 +282,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session/${this.agentSessionId}/prompt_async`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.authHeader ? { Authorization: this.authHeader } : {}),
-        },
+        headers: this.getJsonHeaders(),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -299,9 +307,7 @@ export class OpenCodeAdapter implements AgentAdapter {
         'Content-Type: application/json',
       ];
 
-      if (this.authHeader) {
-        args.push('-H', `Authorization: ${this.authHeader}`);
-      }
+      this.addCurlAuth(args);
 
       args.push('-d', JSON.stringify(payload));
 
@@ -326,10 +332,7 @@ export class OpenCodeAdapter implements AgentAdapter {
       let receivedIdle = false;
 
       const curlArgs = ['curl', '-s', '-N', '--max-time', String(SSE_TIMEOUT_MS / 1000)];
-
-      if (this.authHeader) {
-        curlArgs.push('-H', `Authorization: ${this.authHeader}`);
-      }
+      this.addCurlAuth(curlArgs);
 
       curlArgs.push(`http://localhost:${this.port}/event`);
 
