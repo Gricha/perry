@@ -582,8 +582,8 @@ export class WorkspaceManager {
       return;
     }
 
-    const prefix = this.config.tailscale.hostnamePrefix || 'perry';
-    const hostname = `${prefix}-${workspace.name}`;
+    const prefix = this.config.tailscale.hostnamePrefix;
+    const hostname = prefix ? `${prefix}${workspace.name}` : workspace.name;
 
     try {
       console.log(`[tailscale] Setting up Tailscale for ${workspace.name} as ${hostname}...`);

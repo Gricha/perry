@@ -173,16 +173,17 @@ export function TailscaleSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="hostnamePrefix">Hostname Prefix</Label>
+            <Label htmlFor="hostnamePrefix">Hostname Prefix (optional)</Label>
             <Input
               id="hostnamePrefix"
               type="text"
               value={hostnamePrefix}
               onChange={(e) => handlePrefixChange(e.target.value)}
-              placeholder="perry"
+              placeholder="e.g. perry-"
             />
             <p className="text-xs text-muted-foreground">
-              Workspaces will be named <code className="bg-muted px-1 rounded">{hostnamePrefix || 'perry'}-workspacename</code> on your tailnet
+              Workspaces will be named <code className="bg-muted px-1 rounded">{hostnamePrefix ? `${hostnamePrefix}myworkspace` : 'myworkspace'}</code> on your tailnet.
+              {!hostnamePrefix && ' Add a prefix like "perry-" to distinguish Perry workspaces.'}
             </p>
           </div>
         </div>
@@ -196,11 +197,11 @@ export function TailscaleSettings() {
           </li>
           <li>
             <span className="font-medium text-foreground">2.</span> Access workspaces directly by hostname, e.g.{' '}
-            <code className="bg-muted px-1 rounded">http://perry-myworkspace:3000</code>
+            <code className="bg-muted px-1 rounded">http://{hostnamePrefix}myworkspace:3000</code>
           </li>
           <li>
             <span className="font-medium text-foreground">3.</span> SSH works via MagicDNS:{' '}
-            <code className="bg-muted px-1 rounded">ssh workspace@perry-myworkspace</code>
+            <code className="bg-muted px-1 rounded">ssh workspace@{hostnamePrefix}myworkspace</code>
           </li>
           <li>
             <span className="font-medium text-foreground">4.</span> Workspaces are automatically removed from tailnet on delete

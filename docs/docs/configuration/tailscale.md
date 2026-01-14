@@ -26,8 +26,8 @@ open http://localhost:7391
 perry start myproject
 
 # 4. Access it from anywhere on your tailnet
-curl http://perry-myproject:3000
-ssh workspace@perry-myproject
+curl http://myproject:3000
+ssh workspace@myproject
 ```
 
 That's it! Read on for detailed setup and advanced configuration.
@@ -46,7 +46,7 @@ That's it! Read on for detailed setup and advanced configuration.
 ### With Tailscale
 
 - Access your Perry agent from anywhere (laptop, phone, tablet)
-- Each workspace gets a memorable hostname like `perry-myproject`
+- Each workspace gets its own hostname on your tailnet (e.g., `myproject`)
 - Direct access to any port on any workspace via MagicDNS
 - Secure, encrypted connections without exposing ports to the internet
 - Share development URLs with teammates on your tailnet
@@ -128,16 +128,16 @@ http://localhost:3000  # Only works on host machine
 You get:
 
 ```
-http://perry-myproject:3000  # Works from any device on your tailnet
+http://myproject:3000  # Works from any device on your tailnet
 ```
 
 **Use cases:**
 
 - Test your mobile app against a dev server running in a workspace
-- Share a preview URL with a teammate: "Check out `http://perry-myproject:3000`"
+- Share a preview URL with a teammate: "Check out `http://myproject:3000`"
 - Access databases, Redis, or any service running in a workspace
 - Connect your IDE on one machine to a workspace running on another
-- SSH directly into workspaces: `ssh workspace@perry-myproject`
+- SSH directly into workspaces: `ssh workspace@myproject`
 
 ### Setup
 
@@ -227,9 +227,13 @@ When a workspace starts with Tailscale configured:
 
 1. The container starts with the `TS_AUTHKEY` environment variable
 2. The Tailscale daemon (`tailscaled`) starts inside the container
-3. The workspace runs `tailscale up --hostname=perry-{workspace-name}`
-4. The workspace appears on your tailnet as `perry-{workspace-name}`
+3. The workspace runs `tailscale up --hostname={prefix}{workspace-name}`
+4. The workspace appears on your tailnet (e.g., `myproject` or `perry-myproject` if you set a prefix)
 5. All ports on the workspace are accessible via this hostname
+
+:::tip Hostname Prefix
+By default, workspaces use their name directly as the hostname (e.g., `myproject`). You can optionally set a prefix in Settings > Tailscale to distinguish Perry workspaces. If you want a dash separator, include it in the prefix (e.g., `perry-` results in `perry-myproject`).
+:::
 
 When a workspace is deleted:
 
@@ -242,19 +246,19 @@ Once configured, access any service in any workspace:
 
 ```bash
 # Web server on port 3000
-curl http://perry-myproject:3000
+curl http://myproject:3000
 
 # API on port 8080
-curl http://perry-backend:8080/api/health
+curl http://backend:8080/api/health
 
 # Database
-psql -h perry-myproject -U postgres
+psql -h myproject -U postgres
 
 # Redis
-redis-cli -h perry-myproject
+redis-cli -h myproject
 
 # SSH into workspace
-ssh workspace@perry-myproject
+ssh workspace@myproject
 ```
 
 ### Viewing Tailscale Status
@@ -290,9 +294,9 @@ perry start myproject --clone https://github.com/myuser/myapp
 npm run dev  # Starts on port 3000
 
 # 4. From any device on your tailnet:
-# - Browser: http://perry-myproject:3000
+# - Browser: http://myproject:3000
 # - Mobile: Same URL
-# - Another terminal: curl http://perry-myproject:3000
+# - Another terminal: curl http://myproject:3000
 ```
 
 ## Security Considerations
@@ -353,8 +357,8 @@ tailscale status
 ### Workspace: Hostname Not Resolving
 
 1. Ensure MagicDNS is enabled in your [Tailscale admin console](https://login.tailscale.com/admin/dns)
-2. Check the workspace is connected: `tailscale status` (look for `perry-{name}`)
-3. Try the full hostname: `perry-myproject.your-tailnet.ts.net`
+2. Check the workspace is connected: `tailscale status` (look for your workspace name)
+3. Try the full hostname: `myproject.your-tailnet.ts.net`
 
 ### Auth Key Expired or Invalid
 
@@ -386,7 +390,7 @@ Shows Tailscale status including DNS name and HTTPS URL if available.
 | Scenario | Behavior |
 |----------|----------|
 | No auth key configured | Workspaces don't join tailnet |
-| Auth key configured, workspace starting | Joins tailnet as `perry-{name}` |
+| Auth key configured, workspace starting | Joins tailnet as `{prefix}{name}` (prefix is optional) |
 | Auth key configured, workspace stopping | Stays on tailnet (persists) |
 | Auth key configured, workspace deleted | Runs `tailscale logout`, removed from tailnet |
 
