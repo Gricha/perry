@@ -4,6 +4,7 @@ import type { ChatMessage } from '../../chat/types';
 import { execInContainer } from '../../docker';
 import { ensureOpenCodeServer } from '../opencode/server';
 import { loadAgentConfig } from '../../config/loader';
+import { Buffer } from 'buffer';
 
 type MessageCallback = (message: ChatMessage) => void;
 type StatusCallback = (status: SessionStatus) => void;
@@ -63,6 +64,7 @@ export class OpenCodeAdapter implements AgentAdapter {
   private port?: number;
   private isHost = false;
   private projectPath?: string;
+  private authHeader?: string;
 
   private sseProcess: Subprocess<'ignore', 'pipe', 'pipe'> | null = null;
   private currentMessageId?: string;
@@ -96,6 +98,14 @@ export class OpenCodeAdapter implements AgentAdapter {
 
     const config = options.configDir ? await loadAgentConfig(options.configDir) : null;
     const opencodeServer = config?.agents?.opencode?.server;
+
+    if (opencodeServer?.password) {
+      const username = opencodeServer.username || 'opencode';
+      const token = Buffer.from(`${username}:${opencodeServer.password}`).toString('base64');
+      this.authHeader = `Basic ${token}`;
+    } else {
+      this.authHeader = undefined;
+    }
 
     try {
       this.port = await ensureOpenCodeServer({
@@ -170,26 +180,21 @@ export class OpenCodeAdapter implements AgentAdapter {
       if (this.isHost) {
         const response = await fetch(`${baseUrl}/session/${sessionId}`, {
           method: 'GET',
+          headers: this.authHeader ? { Authorization: this.authHeader } : undefined,
           signal: AbortSignal.timeout(5000),
         });
         return response.ok;
       }
 
-      const result = await execInContainer(
-        this.containerName!,
-        [
-          'curl',
-          '-s',
-          '-o',
-          '/dev/null',
-          '-w',
-          '%{http_code}',
-          '--max-time',
-          '5',
-          `${baseUrl}/session/${sessionId}`,
-        ],
-        { user: 'workspace' }
-      );
+      const args = ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '5'];
+
+      if (this.authHeader) {
+        args.push('-H', `Authorization: ${this.authHeader}`);
+      }
+
+      args.push(`${baseUrl}/session/${sessionId}`);
+
+      const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
       return result.stdout.trim() === '200';
     } catch {
       return false;
@@ -202,7 +207,10 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authHeader ? { Authorization: this.authHeader } : {}),
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -215,24 +223,26 @@ export class OpenCodeAdapter implements AgentAdapter {
       return session.id;
     }
 
-    const result = await execInContainer(
-      this.containerName!,
-      [
-        'curl',
-        '-s',
-        '-f',
-        '--max-time',
-        String(MESSAGE_TIMEOUT_MS / 1000),
-        '-X',
-        'POST',
-        `${baseUrl}/session`,
-        '-H',
-        'Content-Type: application/json',
-        '-d',
-        JSON.stringify(payload),
-      ],
-      { user: 'workspace' }
-    );
+    const args = [
+      'curl',
+      '-s',
+      '-f',
+      '--max-time',
+      String(MESSAGE_TIMEOUT_MS / 1000),
+      '-X',
+      'POST',
+      `${baseUrl}/session`,
+      '-H',
+      'Content-Type: application/json',
+    ];
+
+    if (this.authHeader) {
+      args.push('-H', `Authorization: ${this.authHeader}`);
+    }
+
+    args.push('-d', JSON.stringify(payload));
+
+    const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
 
     if (result.exitCode !== 0) {
       throw new Error(`Failed to create session: ${result.stderr || 'Unknown error'}`);
@@ -261,7 +271,10 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (this.isHost) {
       const response = await fetch(`${baseUrl}/session/${this.agentSessionId}/prompt_async`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authHeader ? { Authorization: this.authHeader } : {}),
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(MESSAGE_TIMEOUT_MS),
       });
@@ -270,27 +283,29 @@ export class OpenCodeAdapter implements AgentAdapter {
         throw new Error(`Failed to send message: ${response.statusText}`);
       }
     } else {
-      const result = await execInContainer(
-        this.containerName!,
-        [
-          'curl',
-          '-s',
-          '-w',
-          '%{http_code}',
-          '-o',
-          '/dev/null',
-          '--max-time',
-          String(MESSAGE_TIMEOUT_MS / 1000),
-          '-X',
-          'POST',
-          `${baseUrl}/session/${this.agentSessionId}/prompt_async`,
-          '-H',
-          'Content-Type: application/json',
-          '-d',
-          JSON.stringify(payload),
-        ],
-        { user: 'workspace' }
-      );
+      const args = [
+        'curl',
+        '-s',
+        '-w',
+        '%{http_code}',
+        '-o',
+        '/dev/null',
+        '--max-time',
+        String(MESSAGE_TIMEOUT_MS / 1000),
+        '-X',
+        'POST',
+        `${baseUrl}/session/${this.agentSessionId}/prompt_async`,
+        '-H',
+        'Content-Type: application/json',
+      ];
+
+      if (this.authHeader) {
+        args.push('-H', `Authorization: ${this.authHeader}`);
+      }
+
+      args.push('-d', JSON.stringify(payload));
+
+      const result = await execInContainer(this.containerName!, args, { user: 'workspace' });
 
       const httpCode = result.stdout.trim();
       if (result.exitCode !== 0 || (httpCode !== '204' && httpCode !== '200')) {
@@ -310,14 +325,13 @@ export class OpenCodeAdapter implements AgentAdapter {
       let resolved = false;
       let receivedIdle = false;
 
-      const curlArgs = [
-        'curl',
-        '-s',
-        '-N',
-        '--max-time',
-        String(SSE_TIMEOUT_MS / 1000),
-        `http://localhost:${this.port}/event`,
-      ];
+      const curlArgs = ['curl', '-s', '-N', '--max-time', String(SSE_TIMEOUT_MS / 1000)];
+
+      if (this.authHeader) {
+        curlArgs.push('-H', `Authorization: ${this.authHeader}`);
+      }
+
+      curlArgs.push(`http://localhost:${this.port}/event`);
 
       const spawnArgs = this.isHost
         ? curlArgs
