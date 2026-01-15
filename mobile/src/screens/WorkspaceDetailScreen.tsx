@@ -24,7 +24,7 @@ type DateGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older'
 
 const DELETE_ACTION_WIDTH = 80
 
-function DeleteAction({
+function WorkspaceDetailDeleteAction({
   drag,
   onPress,
   color,
@@ -416,7 +416,7 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
                  friction={2}
                  rightThreshold={40}
                  renderRightActions={(_prog, drag, swipeable) => (
-                   <DeleteAction
+                   <WorkspaceDetailDeleteAction
                      drag={drag}
                      onPress={() => confirmDeleteSession(item.session, swipeable.close)}
                      color={colors.error}

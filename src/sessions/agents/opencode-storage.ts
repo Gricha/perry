@@ -237,7 +237,8 @@ export async function deleteOpencodeSession(
   try {
     await fs.unlink(sessionFile);
   } catch (err) {
-    return { success: false, error: `Failed to delete session file: ${err}` };
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to delete session file: ${message}` };
   }
 
   if (internalId) {

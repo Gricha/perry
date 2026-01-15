@@ -26,7 +26,7 @@ import { RepoSelector } from '../components/RepoSelector'
 
 const DELETE_ACTION_WIDTH = 80
 
-function DeleteAction({
+function HomeDeleteAction({
   drag,
   onPress,
   color,
@@ -285,7 +285,7 @@ export function HomeScreen() {
             friction={2}
             rightThreshold={40}
             renderRightActions={(_prog, drag, swipeable) => (
-              <DeleteAction
+              <HomeDeleteAction
                 drag={drag}
                 onPress={() => confirmDeleteWorkspace(item, swipeable.close)}
                 color={colors.error}

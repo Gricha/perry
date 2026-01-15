@@ -49,8 +49,6 @@ export class SessionManager {
         return new OpenCodeAdapter();
       case 'codex':
         throw new Error('Codex adapter not yet implemented');
-      default:
-        throw new Error(`Unknown agent type: ${agentType}`);
     }
   }
 
