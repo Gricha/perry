@@ -76,6 +76,7 @@ test.describe('OpenCode Connection Error Handling', () => {
   });
 
   test('should receive error message when message send fails', async ({ page }) => {
+    test.setTimeout(120000); // 2 minutes for API response in CI
     const { messages } = createWSCollector(page);
 
     // Open a new chat
@@ -114,7 +115,8 @@ test.describe('OpenCode Connection Error Handling', () => {
     await page.keyboard.press('Enter');
 
     // Wait for processing - we expect either success or error
-    await page.waitForTimeout(10000);
+    // Use longer timeout for CI where API cold starts may be slower
+    await page.waitForTimeout(30000);
 
     // Verify we received a 'connected' message at minimum
     const connected = await waitForMessageType(messages, 'connected', 5000);
@@ -123,6 +125,7 @@ test.describe('OpenCode Connection Error Handling', () => {
     // Check that we have some response (either success or error)
     const hasResponse =
       messages.some((m) => m.type === 'assistant') ||
+      messages.some((m) => m.type === 'text') ||
       messages.some((m) => m.type === 'error') ||
       messages.some((m) => m.type === 'done');
 

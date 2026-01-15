@@ -311,6 +311,19 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-test
           cache-to: ${{ steps.docker-changes.outputs.changed == 'true' && steps.fork-check.outputs.is_fork == 'false' && format('type=registry,ref={0}/{1}:buildcache-test,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
+      - name: Configure agent for e2e tests
+        run: |
+          mkdir -p ~/.config/perry
+          if [ -n "$OPENCODE_TOKEN" ]; then
+            echo '{"agents":{"opencode":{"zen_token":"'"$OPENCODE_TOKEN"'","model":"opencode/gpt-5-nano"}}}' > ~/.config/perry/config.json
+            echo "OpenCode configured with gpt-5-nano model"
+          else
+            echo '{}' > ~/.config/perry/config.json
+            echo "No OPENCODE_TOKEN - OpenCode tests will be skipped"
+          fi
+        env:
+          OPENCODE_TOKEN: ${{ secrets.OPENCODE_TOKEN }}
+
       - name: Start agent
         run: |
           bun run src/index.ts agent run --port 7391 &
@@ -322,16 +335,40 @@ jobs:
           bun run src/index.ts start test
           bun run src/index.ts list
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (web/e2e)
         run: |
-          cd web && bun run test:e2e --grep-invert "OpenCode"
+          if [ -n "$OPENCODE_TOKEN" ]; then
+            cd web && bun run test:e2e
+          else
+            cd web && bun run test:e2e --grep-invert "OpenCode"
+          fi
+        env:
+          CI: true
+          OPENCODE_TOKEN: ${{ secrets.OPENCODE_TOKEN }}
+
+      - name: Stop agent for web integration tests
+        run: |
+          pkill -f "bun run src/index.ts agent" || true
+          sleep 2
+
+      - name: Run Playwright tests (test/web - self-contained)
+        run: |
+          bun run test:web
         env:
           CI: true
 
-      - name: Upload Playwright report
+      - name: Upload Playwright report (web/e2e)
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: web/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright report (test/web)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-web-integration
+          path: playwright-report/
           retention-days: 7
