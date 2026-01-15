@@ -322,16 +322,35 @@ jobs:
           bun run src/index.ts start test
           bun run src/index.ts list
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (web/e2e)
         run: |
           cd web && bun run test:e2e --grep-invert "OpenCode"
         env:
           CI: true
 
-      - name: Upload Playwright report
+      - name: Stop agent for web integration tests
+        run: |
+          pkill -f "bun run src/index.ts agent" || true
+          sleep 2
+
+      - name: Run Playwright tests (test/web - self-contained)
+        run: |
+          bun run test:web
+        env:
+          CI: true
+
+      - name: Upload Playwright report (web/e2e)
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: web/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright report (test/web)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-web-integration
+          path: playwright-report/
           retention-days: 7
