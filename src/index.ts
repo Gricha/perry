@@ -204,7 +204,7 @@ async function promptForAgent(): Promise<string> {
   return agentHost;
 }
 
-async function getClient(timeoutMs?: number) {
+async function createClient(timeoutMs?: number) {
   const agent = await getAgentWithFallback();
   return createApiClient(agent, undefined, timeoutMs);
 }
@@ -237,7 +237,7 @@ program
   .description('List all workspaces')
   .action(async () => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const workspaces = await client.listWorkspaces();
 
       if (workspaces.length === 0) {
@@ -273,7 +273,7 @@ program
   .option('--clone <url>', 'Git repository URL to clone (when creating)')
   .action(async (name, options) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       console.log(`Starting workspace '${name}'...`);
 
       let workspace;
@@ -316,7 +316,7 @@ program
   .description('Stop a running workspace')
   .action(async (name) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       console.log(`Stopping workspace '${name}'...`);
 
       const workspace = await client.stopWorkspace(name);
@@ -333,7 +333,7 @@ program
   .description('Delete a workspace')
   .action(async (name) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       console.log(`Deleting workspace '${name}'...`);
 
       await client.deleteWorkspace(name);
@@ -349,7 +349,7 @@ program
   .description('Clone an existing workspace')
   .action(async (source, cloneName) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       console.log(`Cloning workspace '${source}' to '${cloneName}'...`);
       console.log('This may take a while for large workspaces.');
 
@@ -368,7 +368,7 @@ program
   .description('Show workspace or agent info')
   .action(async (name) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
 
       if (name) {
         const workspace = await client.getWorkspace(name);
@@ -405,7 +405,7 @@ program
   .option('-n, --tail <lines>', 'Number of lines to show', '100')
   .action(async (name, options) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const logs = await client.getLogs(name, parseInt(options.tail, 10));
       console.log(logs);
     } catch (err) {
@@ -419,7 +419,7 @@ program
   .option('-a, --all', 'Sync all running workspaces')
   .action(async (name, options) => {
     try {
-      const client = await getClient(5 * 60 * 1000);
+      const client = await createClient(5 * 60 * 1000);
 
       if (options.all) {
         console.log('Syncing all running workspaces...');
@@ -462,7 +462,7 @@ program
   .action(async (name) => {
     try {
       const agentHost = await getAgentWithFallback();
-      const client = await getClient();
+      const client = await createClient();
 
       const workspace = await client.getWorkspace(name);
       if (workspace.status !== 'running') {
@@ -508,7 +508,7 @@ program
   .action(async (name, ports: string[]) => {
     try {
       const agentHost = await getAgentWithFallback();
-      const client = await getClient();
+      const client = await createClient();
 
       const workspace = await client.getWorkspace(name);
       if (workspace.status !== 'running') {
@@ -602,7 +602,7 @@ program
   .description('Configure port mappings for a workspace (e.g. 3000, 8080:3000)')
   .action(async (name, ports: string[]) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
 
       const workspace = await client.getWorkspace(name);
       if (!workspace) {
@@ -793,7 +793,7 @@ sshCmd
   .description('Show current SSH configuration')
   .action(async () => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const ssh = await client.getSSHSettings();
 
       console.log('');
@@ -844,7 +844,7 @@ sshCmd
   .description('Toggle auto-authorization of host keys (on/off)')
   .action(async (toggle?: string) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const settings = await client.getSSHSettings();
 
       if (!toggle) {
@@ -871,7 +871,7 @@ sshCmd
   .option('-w, --workspace <name>', 'Apply to specific workspace only')
   .action(async (keyPath: string, options: { workspace?: string }) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const settings = await client.getSSHSettings();
 
       const normalizedPath = keyPath.replace(/\.pub$/, '');
@@ -907,7 +907,7 @@ sshCmd
   .option('-w, --workspace <name>', 'Apply to specific workspace only')
   .action(async (keyPath: string, options: { workspace?: string }) => {
     try {
-      const client = await getClient();
+      const client = await createClient();
       const settings = await client.getSSHSettings();
 
       if (options.workspace) {
@@ -947,7 +947,7 @@ sshCmd
       options: { workspace?: string; copy?: boolean; authorize?: boolean }
     ) => {
       try {
-        const client = await getClient();
+        const client = await createClient();
         const settings = await client.getSSHSettings();
 
         const normalizedPath = keyPath.replace(/\.pub$/, '');
@@ -1254,7 +1254,7 @@ function handleError(err: unknown): never {
       console.error(`Error: ${JSON.stringify(err)}`);
     }
   } else if (err !== undefined && err !== null) {
-    console.error(`Error: ${String(err)}`);
+    console.error('Error:', err);
   } else {
     console.error('An unknown error occurred');
   }

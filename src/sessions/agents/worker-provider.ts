@@ -4,7 +4,7 @@ import { createWorkerClient, type WorkerClient } from '../../worker/client';
 
 const clientCache = new Map<string, WorkerClient>();
 
-async function getClient(containerName: string): Promise<WorkerClient> {
+async function getWorkerClient(containerName: string): Promise<WorkerClient> {
   let client = clientCache.get(containerName);
   if (!client) {
     client = await createWorkerClient(containerName);
@@ -14,7 +14,7 @@ async function getClient(containerName: string): Promise<WorkerClient> {
 }
 
 export async function discoverSessionsViaWorker(containerName: string): Promise<RawSession[]> {
-  const client = await getClient(containerName);
+  const client = await getWorkerClient(containerName);
   const sessions = await client.listSessions();
 
   return sessions.map((s) => ({
@@ -31,7 +31,7 @@ export async function getSessionDetailsViaWorker(
   containerName: string,
   rawSession: RawSession
 ): Promise<SessionListItem | null> {
-  const client = await getClient(containerName);
+  const client = await getWorkerClient(containerName);
   const session = await client.getSession(rawSession.id);
 
   if (!session) {
@@ -53,7 +53,7 @@ export async function getSessionMessagesViaWorker(
   containerName: string,
   sessionId: string
 ): Promise<{ id: string; messages: SessionMessage[] } | null> {
-  const client = await getClient(containerName);
+  const client = await getWorkerClient(containerName);
   const result = await client.getMessages(sessionId, { limit: 1000, offset: 0 });
 
   if (!result || result.messages.length === 0) {
@@ -76,7 +76,7 @@ export async function deleteSessionViaWorker(
   containerName: string,
   sessionId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const client = await getClient(containerName);
+  const client = await getWorkerClient(containerName);
   return client.deleteSession(sessionId);
 }
 

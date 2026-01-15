@@ -13,7 +13,7 @@ export interface SessionNamesStore {
   names: Record<string, SessionNameRecord>;
 }
 
-function getStorePath(stateDir: string): string {
+function getNamesStorePath(stateDir: string): string {
   return join(stateDir, 'session-names.json');
 }
 
@@ -22,7 +22,7 @@ function makeKey(workspaceName: string, sessionId: string): string {
 }
 
 async function loadStore(stateDir: string): Promise<SessionNamesStore> {
-  const storePath = getStorePath(stateDir);
+  const storePath = getNamesStorePath(stateDir);
   try {
     const content = await readFile(storePath, 'utf-8');
     return JSON.parse(content) as SessionNamesStore;
@@ -32,7 +32,7 @@ async function loadStore(stateDir: string): Promise<SessionNamesStore> {
 }
 
 async function saveStore(stateDir: string, store: SessionNamesStore): Promise<void> {
-  const storePath = getStorePath(stateDir);
+  const storePath = getNamesStorePath(stateDir);
   await mkdir(dirname(storePath), { recursive: true });
   await writeFile(storePath, JSON.stringify(store, null, 2));
 }

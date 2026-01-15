@@ -31,14 +31,14 @@ export function extractClaudeSessionName(content: string): string | null {
 }
 
 export function extractContent(
-  content: string | Array<{ type: string; text?: string }> | undefined | unknown
+  content: string | Array<{ type: string; text?: string }> | undefined
 ): string | null {
   if (!content) return null;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const textParts = content
-      .filter((c: { type: string; text?: string }) => c.type === 'text' && c.text)
-      .map((c: { type: string; text?: string }) => c.text);
+      .filter((part) => part.type === 'text' && part.text)
+      .map((part) => part.text);
     return textParts.join('\n') || null;
   }
   return null;
