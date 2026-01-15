@@ -115,15 +115,21 @@ perry agent status
 curl http://localhost:7391/health
 ```
 
-### "No worker configured"
+### "No agent configured"
+
+If you run a Perry command without an agent configured (and no local agent is running), Perry will prompt you interactively for the agent hostname.
+
+You can also configure it manually:
 
 ```bash
-# For local agent
-perry config worker localhost:7391
+# For remote agent
+perry config agent myserver.ts.net
 
-# For remote agent (Tailscale)
-perry config worker myserver.ts.net
+# With explicit port
+perry config agent myserver.ts.net:7391
 ```
+
+For local usage, simply start the agent with `perry agent run` and Perry will automatically connect to it.
 
 ## AI Agent Issues
 

@@ -122,7 +122,9 @@ export interface AgentConfig {
 }
 
 export interface ClientConfig {
-  worker: string;
+  agent?: string;
+  /** @deprecated Use 'agent' instead */
+  worker?: string;
 }
 
 export type WorkspaceStatus = 'running' | 'stopped' | 'creating' | 'error';

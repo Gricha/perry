@@ -11,7 +11,14 @@ export async function loadClientConfig(configDir?: string): Promise<ClientConfig
 
   try {
     const content = await fs.readFile(configPath, 'utf-8');
-    return JSON.parse(content) as ClientConfig;
+    const config = JSON.parse(content) as ClientConfig;
+    // Migration: rename 'worker' to 'agent' if old config exists
+    if ('worker' in config && !(config as ClientConfig).agent) {
+      (config as ClientConfig).agent = (config as { worker?: string }).worker;
+      delete (config as { worker?: string }).worker;
+      await saveClientConfig(config, configDir);
+    }
+    return config;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       return null;
@@ -28,13 +35,17 @@ export async function saveClientConfig(config: ClientConfig, configDir?: string)
   await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 }
 
-export async function getWorker(configDir?: string): Promise<string | null> {
+export async function getAgent(configDir?: string): Promise<string | null> {
   const config = await loadClientConfig(configDir);
-  return config?.worker || null;
+  return config?.agent || null;
 }
 
-export async function setWorker(worker: string, configDir?: string): Promise<void> {
-  const config = (await loadClientConfig(configDir)) || { worker: '' };
-  config.worker = worker;
+export async function setAgent(agent: string, configDir?: string): Promise<void> {
+  const config = (await loadClientConfig(configDir)) || { agent: '' };
+  config.agent = agent;
   await saveClientConfig(config, configDir);
 }
+
+// Legacy aliases for backwards compatibility
+export const getWorker = getAgent;
+export const setWorker = setAgent;

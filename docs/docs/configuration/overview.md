@@ -11,7 +11,7 @@ Perry stores configuration in `~/.config/perry/`.
 | File | Purpose |
 |------|---------|
 | `config.json` | Agent configuration (credentials, SSH keys, scripts) |
-| `client.json` | Client configuration (worker hostname) |
+| `client.json` | Client configuration (remote agent hostname) |
 | `state.json` | Workspace state (managed automatically) |
 
 ## Agent Configuration
@@ -75,11 +75,16 @@ Go to http://localhost:7391 and click Settings.
 $EDITOR ~/.config/perry/config.json
 ```
 
-**Option 3: CLI commands**
+**Option 3: Interactive wizard**
 
 ```bash
-perry config show
-perry config agent
+perry agent config
+```
+
+**Option 4: CLI commands**
+
+```bash
+perry agent show-config
 perry ssh copy ~/.ssh/id_ed25519
 ```
 
@@ -94,17 +99,21 @@ Configuration changes take effect:
 
 Location: `~/.config/perry/client.json`
 
+Used when connecting to a remote agent from your local machine.
+
 ```json
 {
-  "worker": "myserver.tail1234.ts.net:7391"
+  "agent": "myserver.tail1234.ts.net:7391"
 }
 ```
 
 Set via CLI:
 
 ```bash
-perry config worker myserver.tail1234.ts.net
+perry config agent myserver.tail1234.ts.net
 ```
+
+If you run any `perry` command without configuring an agent (and no local agent is running), Perry will interactively prompt you for the agent hostname.
 
 ## Configuration Sections
 
