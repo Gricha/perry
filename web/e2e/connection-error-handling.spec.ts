@@ -76,6 +76,7 @@ test.describe('OpenCode Connection Error Handling', () => {
   });
 
   test('should receive error message when message send fails', async ({ page }) => {
+    test.setTimeout(120000); // 2 minutes for API response in CI
     const { messages } = createWSCollector(page);
 
     // Open a new chat
