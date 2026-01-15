@@ -2,11 +2,12 @@
 
 import { Command } from 'commander';
 import { spawn } from 'child_process';
+import * as readline from 'readline';
 import pkg from '../package.json';
 import { startAgent } from './agent/run';
 import { installService, uninstallService, showStatus, getServiceStatus } from './agent/systemd';
-import { createApiClient, ApiClientError } from './client/api';
-import { loadClientConfig, getWorker, setWorker } from './client/config';
+import { createApiClient, ApiClientError, formatWorkerBaseUrl } from './client/api';
+import { loadClientConfig, getAgent, setAgent } from './client/config';
 import {
   openWSShell,
   openDockerExec,
@@ -143,23 +144,91 @@ async function checkLocalAgent(): Promise<boolean> {
   }
 }
 
-async function getClient(timeoutMs?: number) {
-  const worker = await getWorkerWithFallback();
-  return createApiClient(worker, undefined, timeoutMs);
+async function checkAgentReachable(host: string): Promise<boolean> {
+  try {
+    // Use formatWorkerBaseUrl which already handles IPv6 correctly
+    const baseUrl = formatWorkerBaseUrl(host);
+    const response = await fetch(`${baseUrl}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
-async function getWorkerWithFallback(): Promise<string> {
-  let worker = await getWorker();
-  if (!worker) {
+/**
+ * Extract host:port from user input for storage in config.
+ * Uses URL parsing to handle IPv6 correctly.
+ */
+function extractHostPort(input: string): string {
+  const baseUrl = formatWorkerBaseUrl(input);
+  const url = new URL(baseUrl);
+  return url.host; // Returns host:port (with brackets for IPv6)
+}
+
+async function promptForAgent(): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  console.log('');
+  console.log('No agent configured and no local agent running.');
+  console.log('');
+
+  const hostname = await new Promise<string>((resolve) => {
+    rl.question('Enter agent hostname (e.g., myserver.local or 192.168.1.100): ', (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+
+  if (!hostname) {
+    throw new Error('No hostname provided');
+  }
+
+  const agentHost = extractHostPort(hostname);
+
+  console.log(`Checking connection to ${agentHost}...`);
+  const reachable = await checkAgentReachable(agentHost);
+  if (!reachable) {
+    console.error(`Could not connect to agent at ${agentHost}`);
+    console.error('Make sure the agent is running: perry agent run');
+    throw new Error('Agent not reachable');
+  }
+
+  await setAgent(agentHost);
+  console.log(`Agent configured: ${agentHost}`);
+  console.log('');
+  return agentHost;
+}
+
+async function getClient(timeoutMs?: number) {
+  const agent = await getAgentWithFallback();
+  return createApiClient(agent, undefined, timeoutMs);
+}
+
+async function getAgentWithFallback(): Promise<string> {
+  let agent = await getAgent();
+  if (!agent) {
     const localRunning = await checkLocalAgent();
     if (localRunning) {
-      worker = `localhost:${DEFAULT_AGENT_PORT}`;
+      agent = `localhost:${DEFAULT_AGENT_PORT}`;
     } else {
-      console.error('No worker configured. Run: perry config worker <hostname>');
-      process.exit(1);
+      // Check if TTY is available for interactive prompt
+      if (process.stdin.isTTY) {
+        agent = await promptForAgent();
+      } else {
+        console.error('No agent configured and no local agent running.');
+        console.error('');
+        console.error('Configure an agent with: perry config agent <hostname>');
+        console.error('Or start a local agent with: perry agent run');
+        process.exit(1);
+      }
     }
   }
-  return worker;
+  return agent;
 }
 
 program
@@ -392,7 +461,7 @@ program
   .description('Open interactive terminal to workspace')
   .action(async (name) => {
     try {
-      const worker = await getWorkerWithFallback();
+      const agentHost = await getAgentWithFallback();
       const client = await getClient();
 
       const workspace = await client.getWorkspace(name);
@@ -411,7 +480,7 @@ program
             console.error(`\nConnection error: ${err.message}`);
           },
         });
-      } else if (isLocalWorker(worker)) {
+      } else if (isLocalWorker(agentHost)) {
         const containerName = getContainerName(name);
         await openDockerExec({
           containerName,
@@ -420,7 +489,7 @@ program
           },
         });
       } else {
-        const wsUrl = getTerminalWSUrl(worker, name);
+        const wsUrl = getTerminalWSUrl(agentHost, name);
         await openWSShell({
           url: wsUrl,
           onError: (err) => {
@@ -438,7 +507,7 @@ program
   .description('Forward ports from workspace to local machine')
   .action(async (name, ports: string[]) => {
     try {
-      const worker = await getWorkerWithFallback();
+      const agentHost = await getAgentWithFallback();
       const client = await getClient();
 
       const workspace = await client.getWorkspace(name);
@@ -467,7 +536,7 @@ program
         console.log(`Using configured ports: ${formatted}`);
       }
 
-      if (isLocalWorker(worker)) {
+      if (isLocalWorker(agentHost)) {
         const containerName = getContainerName(name);
         const containerIp = await getContainerIp(containerName);
         if (!containerIp) {
@@ -509,7 +578,7 @@ program
         console.log('');
 
         await startProxy({
-          worker,
+          worker: agentHost,
           sshPort: workspace.ports.ssh,
           forwards,
           onConnect: () => {
@@ -575,46 +644,96 @@ program
     }
   });
 
+// Client configuration commands
 const configCmd = program
   .command('config')
-  .description('Manage configuration')
+  .description('Manage client configuration')
   .action(async () => {
-    const { runSetupWizard } = await import('./cli/setup-wizard');
-    await runSetupWizard();
+    // Show current config by default
+    const clientConfig = await loadClientConfig();
+    const configDir = getConfigDir();
+
+    console.log('Client Configuration:');
+    console.log(`  Config Dir: ${configDir}`);
+    console.log(`  Agent: ${clientConfig?.agent || '(not set)'}`);
+    console.log('');
+    console.log('To configure the agent connection: perry config agent <hostname>');
   });
 
 configCmd
   .command('show')
-  .description('Show current configuration')
+  .description('Show current client configuration')
   .action(async () => {
     const clientConfig = await loadClientConfig();
     const configDir = getConfigDir();
 
     console.log('Client Configuration:');
     console.log(`  Config Dir: ${configDir}`);
-    console.log(`  Worker: ${clientConfig?.worker || '(not set)'}`);
+    console.log(`  Agent: ${clientConfig?.agent || '(not set)'}`);
   });
 
 configCmd
-  .command('worker [hostname]')
-  .description('Get or set the worker hostname')
+  .command('agent [hostname]')
+  .description('Get or set the agent hostname')
   .action(async (hostname) => {
     if (hostname) {
-      await setWorker(hostname);
-      console.log(`Worker set to: ${hostname}`);
+      const agentHost = extractHostPort(hostname);
+
+      console.log(`Checking connection to ${agentHost}...`);
+      const reachable = await checkAgentReachable(agentHost);
+      if (!reachable) {
+        console.error(`Could not connect to agent at ${agentHost}`);
+        console.error('Make sure the agent is running: perry agent run');
+        process.exit(1);
+      }
+
+      await setAgent(agentHost);
+      console.log(`Agent configured: ${agentHost}`);
     } else {
-      const worker = await getWorker();
-      if (worker) {
-        console.log(worker);
+      const agent = await getAgent();
+      if (agent) {
+        console.log(agent);
       } else {
-        console.log('No worker configured.');
+        console.log('No agent configured.');
+        console.log('');
+        console.log('Usage: perry config agent <hostname>');
+        console.log('Example: perry config agent myserver.local');
       }
     }
   });
 
+// Keep 'worker' as hidden alias for backwards compatibility
 configCmd
-  .command('agent')
-  .description('Show agent configuration')
+  .command('worker [hostname]', { hidden: true })
+  .description('Alias for "agent" (deprecated)')
+  .action(async (hostname) => {
+    if (hostname) {
+      const agentHost = extractHostPort(hostname);
+      await setAgent(agentHost);
+      console.log(`Agent set to: ${agentHost}`);
+      console.log('Note: "perry config worker" is deprecated, use "perry config agent" instead.');
+    } else {
+      const agent = await getAgent();
+      if (agent) {
+        console.log(agent);
+      } else {
+        console.log('No agent configured.');
+      }
+    }
+  });
+
+// Agent configuration command (moved under 'perry agent config')
+agentCmd
+  .command('config')
+  .description('Configure the agent (AI assistants, SSH keys, etc.)')
+  .action(async () => {
+    const { runSetupWizard } = await import('./cli/setup-wizard');
+    await runSetupWizard();
+  });
+
+agentCmd
+  .command('show-config')
+  .description('Show current agent configuration')
   .action(async () => {
     const configDir = getConfigDir();
     await ensureConfigDir(configDir);

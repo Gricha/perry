@@ -66,6 +66,30 @@ perry agent logs -n 100      # Show last 100 lines
 | `-f, --follow` | Follow log output |
 | `-n, --lines <n>` | Number of lines to show (default: 50) |
 
+### `perry agent config`
+
+Launch the interactive configuration wizard. Use this on the machine running the agent to configure AI assistants, SSH keys, GitHub token, and Tailscale.
+
+```bash
+perry agent config
+```
+
+### `perry agent show-config`
+
+Show current agent configuration.
+
+```bash
+perry agent show-config
+```
+
+### `perry agent kill`
+
+Stop the running agent daemon.
+
+```bash
+perry agent kill
+```
+
 ## Workspace Commands
 
 ### `perry start <name>`
@@ -215,31 +239,31 @@ perry build --no-cache
 
 ## Configuration Commands
 
-### `perry config show`
+### `perry config`
 
-Show current configuration.
-
-```bash
-perry config show
-```
-
-### `perry config worker [hostname]`
-
-Get or set the worker hostname.
+Show current client configuration.
 
 ```bash
-perry config worker                    # Show current worker
-perry config worker myserver:7391      # Set worker
-perry config worker myserver.ts.net    # Tailscale hostname
+perry config
+perry config show    # Same as above
 ```
 
-### `perry config agent`
+### `perry config agent [hostname]`
 
-Show agent configuration.
+Get or set the agent hostname for remote connections.
 
 ```bash
-perry config agent
+perry config agent                     # Show current agent
+perry config agent myserver            # Set agent (uses default port 7391)
+perry config agent myserver:7391       # Set agent with explicit port
+perry config agent myserver.ts.net     # Tailscale hostname
 ```
+
+When you set an agent, Perry verifies the connection before saving.
+
+If you run any Perry command without configuring an agent (and no local agent is running), Perry will interactively prompt you for the agent hostname.
+
+See also: `perry agent config` and `perry agent show-config` in [Agent Commands](#agent-commands).
 
 ## SSH Commands
 

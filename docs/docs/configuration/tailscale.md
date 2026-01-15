@@ -96,7 +96,7 @@ If Tailscale is configured, you'll see:
 
 ```bash
 # Configure CLI to use remote agent
-perry config worker your-machine.tail-scale.ts.net
+perry config agent your-machine.tail-scale.ts.net
 
 # Use normally
 perry list

@@ -50,10 +50,12 @@ To use the CLI from a different machine (like your laptop):
 2. Point it to your agent:
 
 ```bash
-perry config worker <hostname>:7391
+perry config agent <hostname>
 ```
 
-Replace `<hostname>` with your machine's Tailscale hostname or IP address. Now all `perry` commands will run against the remote agent.
+Replace `<hostname>` with your machine's Tailscale hostname or IP address. The default port (7391) is assumed if not specified. Now all `perry` commands will run against the remote agent.
+
+If you run any `perry` command without configuring an agent first, and no local agent is running, Perry will interactively prompt you for the agent hostname.
 
 ## That's It
 

@@ -241,26 +241,27 @@ describe('CLI commands', () => {
     it('shows current configuration', async () => {
       const result = await runCLIExpecting(
         ['config', 'show'],
-        ['Client Configuration:', 'Worker:'],
+        ['Client Configuration:', 'Agent:'],
         { env: cliEnv() }
       );
       expect(result.code).toBe(0);
     });
 
-    it('gets worker hostname', async () => {
-      const result = await runCLI(['config', 'worker'], { env: cliEnv() });
+    it('gets agent hostname', async () => {
+      const result = await runCLI(['config', 'agent'], { env: cliEnv() });
       expect(result.code).toBe(0);
       expect(result.stdout).toContain(`localhost:${agent.port}`);
     });
 
-    it('sets worker hostname', async () => {
+    it('sets agent hostname (via deprecated worker command)', async () => {
       const result = await runCLI(['config', 'worker', 'new-host:8080'], { env: cliEnv() });
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('Worker set to: new-host:8080');
+      expect(result.stdout).toContain('Agent set to: new-host:8080');
 
+      // Reset config for other tests
       await fs.writeFile(
         path.join(clientConfigDir, 'client.json'),
-        JSON.stringify({ worker: `localhost:${agent.port}` })
+        JSON.stringify({ agent: `localhost:${agent.port}` })
       );
     });
   });
