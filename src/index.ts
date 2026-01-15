@@ -160,42 +160,42 @@ async function checkAgentReachable(host: string): Promise<boolean> {
   }
 }
 
-function promptForAgent(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
+async function promptForAgent(): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
 
-    console.log('');
-    console.log('No agent configured and no local agent running.');
-    console.log('');
-    rl.question('Enter agent hostname (e.g., myserver.local or 192.168.1.100): ', async (answer) => {
+  console.log('');
+  console.log('No agent configured and no local agent running.');
+  console.log('');
+
+  const hostname = await new Promise<string>((resolve) => {
+    rl.question('Enter agent hostname (e.g., myserver.local or 192.168.1.100): ', (answer) => {
       rl.close();
-      const hostname = answer.trim();
-      if (!hostname) {
-        reject(new Error('No hostname provided'));
-        return;
-      }
-
-      // Add default port if not specified
-      const agentHost = hostname.includes(':') ? hostname : `${hostname}:${DEFAULT_AGENT_PORT}`;
-
-      console.log(`Checking connection to ${agentHost}...`);
-      const reachable = await checkAgentReachable(agentHost);
-      if (!reachable) {
-        console.error(`Could not connect to agent at ${agentHost}`);
-        console.error('Make sure the agent is running: perry agent run');
-        reject(new Error('Agent not reachable'));
-        return;
-      }
-
-      await setAgent(agentHost);
-      console.log(`Agent configured: ${agentHost}`);
-      console.log('');
-      resolve(agentHost);
+      resolve(answer.trim());
     });
   });
+
+  if (!hostname) {
+    throw new Error('No hostname provided');
+  }
+
+  // Add default port if not specified
+  const agentHost = hostname.includes(':') ? hostname : `${hostname}:${DEFAULT_AGENT_PORT}`;
+
+  console.log(`Checking connection to ${agentHost}...`);
+  const reachable = await checkAgentReachable(agentHost);
+  if (!reachable) {
+    console.error(`Could not connect to agent at ${agentHost}`);
+    console.error('Make sure the agent is running: perry agent run');
+    throw new Error('Agent not reachable');
+  }
+
+  await setAgent(agentHost);
+  console.log(`Agent configured: ${agentHost}`);
+  console.log('');
+  return agentHost;
 }
 
 async function getClient(timeoutMs?: number) {
