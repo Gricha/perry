@@ -338,7 +338,7 @@ function SessionListItem({
   )
 }
 
-type TerminalMode = { type: 'terminal'; command: string }
+type TerminalMode = { type: 'terminal'; command: string; runId?: string }
 
 export function WorkspaceDetail() {
   const { name: rawName } = useParams<{ name: string }>()
@@ -549,7 +549,8 @@ export function WorkspaceDetail() {
   }
 
   const handleNewSession = (agentType: AgentType = 'claude-code') => {
-    setTerminalMode({ type: 'terminal', command: agentType })
+    const sessionId = `${agentType}-${Date.now()}`
+    setTerminalMode({ type: 'terminal', command: agentType, runId: sessionId })
   }
 
   if (isLoading) {
@@ -757,7 +758,7 @@ export function WorkspaceDetail() {
                     key={`agent-${name}`}
                     workspaceName={name!}
                     initialCommand={terminalMode.command}
-                    runId={terminalMode.command}
+                    runId={terminalMode.runId ?? terminalMode.command}
                   />
                 </div>
               </div>
