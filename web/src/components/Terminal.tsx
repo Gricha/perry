@@ -195,8 +195,10 @@ function TerminalInstance({ workspaceName, initialCommand, runId }: TerminalProp
 
       cachedRef.current = cached
       cached.lastUsed = Date.now()
-      cached.initialCommandSent = false
-      cached.runId = runId
+      if (cached.runId !== runId) {
+        cached.initialCommandSent = false
+        cached.runId = runId
+      }
       setIsInitialized(true)
 
       const term = cached.terminal

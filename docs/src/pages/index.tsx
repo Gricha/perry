@@ -72,7 +72,7 @@ const features = [
     icon: '03',
     title: 'Tailnet Ready',
     description: 'Workspaces register themselves on your tailnet for direct CLI, web UI, or SSH access.',
-  }
+  },
   {
     icon: '04',
     title: 'Docker-in-Docker',
