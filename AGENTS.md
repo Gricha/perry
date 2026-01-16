@@ -9,6 +9,7 @@ Use the `skill` tool for common workflows:
 | `validate` | Before committing, after changes, to verify code quality |
 | `test` | To run targeted tests for your changes |
 | `release` | To cut a new version release |
+| `create-pr` | To create a pull request with concise description |
 
 ## Code Review Agents
 
