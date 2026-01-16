@@ -109,9 +109,9 @@ perry shell myproject
 - `https://your-machine.tail-scale.ts.net` (with HTTPS)
 - `http://your-machine.tail-scale.ts.net:7391` (without HTTPS)
 
-**From mobile:**
+**From another device:**
 
-Access the Web UI from your phone's browser while connected to your tailnet.
+Access the Web UI from any browser on your tailnet.
 
 ## Part 2: Workspace Networking
 
@@ -133,7 +133,7 @@ http://myproject:3000  # Works from any device on your tailnet
 
 **Use cases:**
 
-- Test your mobile app against a dev server running in a workspace
+- Test a dev server running in a workspace from another device
 - Share a preview URL with a teammate: "Check out `http://myproject:3000`"
 - Access databases, Redis, or any service running in a workspace
 - Connect your IDE on one machine to a workspace running on another

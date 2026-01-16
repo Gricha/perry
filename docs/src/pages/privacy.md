@@ -4,17 +4,17 @@
 
 ## Overview
 
-Perry is an open-source tool for creating isolated Docker-in-Docker development environments. This privacy policy covers the Perry mobile application.
+Perry is an open-source tool for creating isolated Docker-in-Docker development environments. This privacy policy covers the Perry web UI.
 
 ## Data Collection
 
 **Perry does not collect, store, or transmit any personal data to external servers.**
 
-The Perry mobile app:
+The Perry web UI:
 - Connects only to your self-hosted Perry agent on your local network or via Tailscale
 - Does not include any analytics, tracking, or telemetry
 - Does not require user accounts or authentication with external services
-- Stores configuration locally on your device only
+- Stores configuration locally in your browser only
 
 ## Local Network Access
 
@@ -26,7 +26,7 @@ Perry requires local network access to communicate with your Perry agent. This c
 ## Data Storage
 
 All data is stored locally:
-- **On your device:** App preferences and agent connection settings
+- **In your browser:** UI preferences and agent connection settings
 - **On your Perry agent:** Workspace configurations and state (self-hosted by you)
 
 ## Third-Party Services

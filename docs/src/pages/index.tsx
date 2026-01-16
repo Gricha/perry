@@ -14,12 +14,12 @@ function HomepageHeader() {
         <Heading as="h1" className={styles.heroTitle}>
           Perry
         </Heading>
-        <p className={styles.heroSubtitle}>
-          Self-hosted dev containers, accessible anywhere
-        </p>
-        <p className={styles.heroTagline}>
-          <span>Docker</span> workspaces with <span>SSH</span>, <span>Web UI</span>, and <span>AI coding tools</span> built in
-        </p>
+          <p className={styles.heroSubtitle}>
+            Self-hosted dev containers, auto-registered on your tailnet
+          </p>
+          <p className={styles.heroTagline}>
+            <span>Docker</span> workspaces with <span>Tailscale</span>, <span>SSH</span>, <span>Web UI</span>, and <span>AI coding tools</span> built in
+          </p>
         <div className={styles.buttons}>
           <Link
             className="button button--primary button--lg"
@@ -70,8 +70,8 @@ const features = [
   },
   {
     icon: '03',
-    title: 'Remote Access',
-    description: 'Work from anywhere via Tailscale. Web UI, CLI, or SSH - your choice.',
+    title: 'Tailnet Ready',
+    description: 'Workspaces register themselves on your tailnet for direct CLI, web UI, or SSH access.',
   },
   {
     icon: '04',
@@ -115,8 +115,6 @@ function HomepageFeatures(): ReactNode {
 }
 
 function RemoteAccess(): ReactNode {
-  const terminalMobileImg = useBaseUrl('/img/demo-terminal-mobile.gif');
-  const chatMobileImg = useBaseUrl('/img/demo-chat-mobile.gif');
   const demoImg = useBaseUrl('/img/demo.gif');
 
   return (
@@ -126,21 +124,11 @@ function RemoteAccess(): ReactNode {
           Access From Anywhere
         </Heading>
         <p className={styles.sectionSubtitle}>
-          Work from your phone, tablet, or any browser via Tailscale.
+          Workspaces auto-register on your tailnet for direct access from any device.
         </p>
-        <div className={styles.demoGrid}>
-          <div className={styles.demoItem}>
-            <img src={terminalMobileImg} alt="Terminal on mobile" />
-            <p>Mobile terminal</p>
-          </div>
-          <div className={styles.demoItem}>
-            <img src={chatMobileImg} alt="AI chat on mobile" />
-            <p>AI sessions on the go</p>
-          </div>
-        </div>
         <div className={styles.demoWeb}>
           <img src={demoImg} alt="Web UI demo" />
-          <p>Full Web UI for desktop</p>
+          <p>Web UI, CLI, and SSH stay in sync</p>
         </div>
       </div>
     </section>
