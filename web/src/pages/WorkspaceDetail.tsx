@@ -351,20 +351,21 @@ export function WorkspaceDetail() {
   const currentTab = (searchParams.get('tab') as TabType) || 'sessions'
   const sessionParam = searchParams.get('session')
   const agentParam = searchParams.get('agent') as AgentType | null
+  const runIdParam = searchParams.get('runId')
 
   const terminalMode: TerminalMode | null = useMemo(() => {
     if (!sessionParam && !agentParam) return null
     if (agentParam === 'codex') {
-      return { type: 'terminal', command: sessionParam ? `codex resume ${sessionParam}` : 'codex' }
+      return { type: 'terminal', command: sessionParam ? `codex resume ${sessionParam}` : 'codex', runId: runIdParam ?? undefined }
     }
     if (agentParam && sessionParam) {
       return { type: 'terminal', command: `${agentParam} resume ${sessionParam}` }
     }
     if (agentParam) {
-      return { type: 'terminal', command: agentParam }
+      return { type: 'terminal', command: agentParam, runId: runIdParam ?? undefined }
     }
     return null
-  }, [sessionParam, agentParam])
+  }, [sessionParam, agentParam, runIdParam])
 
   const setTerminalMode = useCallback((mode: TerminalMode | null) => {
     if (!mode) {
@@ -372,6 +373,7 @@ export function WorkspaceDetail() {
         const next = new URLSearchParams(prev)
         next.delete('session')
         next.delete('agent')
+        next.delete('runId')
         return next
       })
       return
@@ -383,9 +385,13 @@ export function WorkspaceDetail() {
       if (resumeMatch) {
         next.set('agent', resumeMatch[1])
         next.set('session', resumeMatch[2])
+        next.delete('runId')
       } else {
         next.set('agent', mode.command)
         next.delete('session')
+        if (mode.runId) {
+          next.set('runId', mode.runId)
+        }
       }
       return next
     })
