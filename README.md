@@ -13,22 +13,16 @@
 </p>
 
 <p align="center">
-  Continue your coding sessions on the go. Self-hosted workspaces, accessible over Tailscale.
-</p>
-
-<p align="center">
-  <img src="assets/demo-terminal-mobile.gif" alt="Terminal" width="280">
-  &nbsp;&nbsp;&nbsp;
-  <img src="assets/demo-chat-mobile.gif" alt="Chat" width="280">
+  Self-hosted workspaces with AI coding agents, accessible from anywhere over Tailscale.
 </p>
 
 ## Overview
 
-Perry is an agent (agent P) designed to run as a daemon on your machine. It allows your clients - other machines through CLI, web, or mobile app - to connect directly to your workspaces over the Tailscale network.
+Perry is an agent (agent P) designed to run as a daemon on your machine. It auto-registers containerized workspaces on your Tailscale network so your CLI, web UI, or SSH clients can connect directly.
 
 It can be connected directly to your host, or it can create docker containers so that your work can be fully isolated.
 
-Continue your sessions on the go!
+Continue your sessions from any device on your tailnet.
 
 **[Get Started →](https://gricha.github.io/perry/docs/getting-started)**
 
@@ -36,8 +30,7 @@ Continue your sessions on the go!
 
 - **AI Coding Agents** - Claude Code, OpenCode, Codex CLI pre-installed
 - **Self-Hosted** - Run on your own hardware, full control
-- **Remote Access** - Use from anywhere via Tailscale, CLI, web, or SSH
-- **Web UI** - Manage workspaces from your browser
+- **Remote Access** - Use from anywhere via CLI, web, or SSH over Tailscale
 - **Isolated Environments** - Each workspace runs in its own container
 
 ## Setup
@@ -54,32 +47,39 @@ curl -fsSL https://raw.githubusercontent.com/gricha/perry/main/install.sh | bash
 perry agent run
 ```
 
-Web UI: **http://localhost:7391** (or your Tailscale host)
+## Access From Anywhere
 
-### Create & Use Workspaces
+Once your agent is running, connect from any device on your Tailscale network.
 
-**Via CLI:**
+### CLI
+
+The fastest way to access workspaces from any machine:
 
 ```bash
-# Create workspace
-perry create myproject
+# Point to your agent (one-time setup)
+perry config agent <hostname>
 
-# Or clone a repo
-perry create myproject --clone git@github.com:user/repo.git
+# Create workspace and clone a repo
+perry start my-proj --clone git@github.com:user/repo.git
 
-# Shell into workspace
-perry shell myproject
+# Shell into the workspace
+perry shell my-proj
 
-# Manage workspaces
-perry start myproject
-perry stop myproject
-perry delete myproject
-perry list
+# Or attach an AI coding agent directly
+opencode attach http://my-proj:4096
 ```
 
-**Via Web UI:**
+### Web UI
 
-Open http://localhost:7391 (or your Tailscale host) and click "+" to create a workspace.
+Open `http://<hostname>:7391` to manage workspaces from your browser.
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Web UI Demo" width="800">
+</p>
+
+### Remote Access
+
+Each workspace is registered on your tailnet, so you can connect directly using CLI, web UI, or SSH.
 
 <p align="center">
   <img src="assets/demo.gif" alt="Web UI Demo" width="800">

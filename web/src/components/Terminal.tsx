@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ghostty, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web'
 import { getTerminalUrl } from '@/lib/api'
 
 interface TerminalProps {
   workspaceName: string
   initialCommand?: string
+  runId?: string
 }
 
 const MAX_CACHED_TERMINALS = 5
@@ -16,6 +17,7 @@ interface CachedTerminal {
   ws: WebSocket | null
   lastUsed: number
   initialCommandSent: boolean
+  runId?: string
 }
 
 const terminalCache = new Map<string, CachedTerminal>()
@@ -26,10 +28,10 @@ function evictLRU(): void {
   let oldest: string | null = null
   let oldestTime = Infinity
 
-  for (const [name, cached] of terminalCache) {
+  for (const [key, cached] of terminalCache) {
     if (cached.lastUsed < oldestTime) {
       oldestTime = cached.lastUsed
-      oldest = name
+      oldest = key
     }
   }
 
@@ -44,10 +46,10 @@ function evictLRU(): void {
 }
 
 function getOrCreateTerminal(
-  workspaceName: string,
+  cacheKey: string,
   ghosttyFactory: () => Promise<Ghostty>
 ): Promise<CachedTerminal> {
-  const existing = terminalCache.get(workspaceName)
+  const existing = terminalCache.get(cacheKey)
   if (existing) {
     existing.lastUsed = Date.now()
     return Promise.resolve(existing)
@@ -99,14 +101,14 @@ function getOrCreateTerminal(
       initialCommandSent: false,
     }
 
-    terminalCache.set(workspaceName, cached)
+    terminalCache.set(cacheKey, cached)
     evictLRU()
 
     return cached
   })
 }
 
-function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
+function TerminalInstance({ workspaceName, initialCommand, runId }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const cachedRef = useRef<CachedTerminal | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
@@ -114,9 +116,15 @@ function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
   const [isInitialized, setIsInitialized] = useState(false)
   const [hasReceivedData, setHasReceivedData] = useState(false)
 
+  const cacheKey = useMemo(() => `${workspaceName}:${runId ?? 'default'}`, [workspaceName, runId])
+
   const setupWebSocket = useCallback((cached: CachedTerminal, cancelled: { current: boolean }) => {
     if (cached.ws && cached.ws.readyState === WebSocket.OPEN) {
       setIsConnected(true)
+      if (initialCommand && !cached.initialCommandSent) {
+        cached.initialCommandSent = true
+        cached.ws.send(initialCommand + '\n')
+      }
       return
     }
 
@@ -182,11 +190,13 @@ function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
     const connect = async () => {
       if (!terminalRef.current || cancelled.current) return
 
-      const cached = await getOrCreateTerminal(workspaceName, () => Ghostty.load())
+      const cached = await getOrCreateTerminal(cacheKey, () => Ghostty.load())
       if (cancelled.current) return
 
       cachedRef.current = cached
       cached.lastUsed = Date.now()
+      cached.initialCommandSent = false
+      cached.runId = runId
       setIsInitialized(true)
 
       const term = cached.terminal
@@ -264,7 +274,7 @@ function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
       }
       cachedRef.current = null
     }
-  }, [workspaceName, setupWebSocket])
+  }, [cacheKey, runId, setupWebSocket, workspaceName])
 
   return (
     <>
@@ -294,13 +304,14 @@ function TerminalInstance({ workspaceName, initialCommand }: TerminalProps) {
   )
 }
 
-export function Terminal({ workspaceName, initialCommand }: TerminalProps) {
+export function Terminal({ workspaceName, initialCommand, runId }: TerminalProps) {
   return (
     <div className="relative h-full w-full bg-[#0d1117] rounded-lg overflow-hidden cursor-default" data-testid="terminal-container">
       <TerminalInstance
-        key={workspaceName}
+        key={`${workspaceName}-${runId ?? 'default'}`}
         workspaceName={workspaceName}
         initialCommand={initialCommand}
+        runId={runId}
       />
     </div>
   )

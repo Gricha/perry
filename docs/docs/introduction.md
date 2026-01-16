@@ -12,16 +12,36 @@ Perry is a self-hosted daemon that:
 
 - **Spawns sandboxed containers** for isolated development workspaces
 - **Runs AI coding agents** (Claude Code, OpenCode, Codex) against your workspaces—or directly on the host
-- **Provides remote access** via Tailscale through a responsive web app or native mobile app
+- **Provides remote access** via CLI, web UI, or SSH over Tailscale
 
 Think of it as your personal development environment manager that you can access from anywhere.
+
+## Access From Anywhere
+
+Perry is designed for remote access. Once your agent is running, you can connect from any device on your Tailscale network.
+
+**CLI** — The fastest way to access workspaces:
+```bash
+# Create and clone a repo
+perry start my-proj --clone git@github.com:user/repo.git
+
+# Shell into the workspace
+perry shell my-proj
+
+# Or attach an AI coding agent directly
+opencode attach http://my-proj:4096
+```
+
+**Web UI** — Full workspace management at `http://<hostname>:7391`
+
+**SSH** — Connect directly to registered workspaces on your tailnet
 
 ## How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Your Devices                           │
-│   Browser (Web UI)  •  Mobile App  •  CLI  •  SSH          │
+│   Browser (Web UI)  •  CLI  •  SSH                          │
 └─────────────────────────┬───────────────────────────────────┘
                           │ Tailscale / Local
                           ▼

@@ -33,7 +33,6 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Terminal } from '@/components/Terminal'
-import { Chat } from '@/components/Chat'
 import { cn } from '@/lib/utils'
 import { AgentIcon } from '@/components/AgentIcon'
 import {
@@ -58,6 +57,7 @@ import {
 type TabType = 'sessions' | 'terminal' | 'settings'
 
 const AGENT_LABELS: Record<AgentType | 'all', string> = {
+
   all: 'All Agents',
   'claude-code': 'Claude Code',
   opencode: 'OpenCode',
@@ -338,7 +338,7 @@ function SessionListItem({
   )
 }
 
-type ChatMode = { type: 'chat'; sessionId?: string; agentType?: AgentType; projectPath?: string } | { type: 'terminal'; command: string }
+type TerminalMode = { type: 'terminal'; command: string }
 
 export function WorkspaceDetail() {
   const { name: rawName } = useParams<{ name: string }>()
@@ -352,52 +352,43 @@ export function WorkspaceDetail() {
   const sessionParam = searchParams.get('session')
   const agentParam = searchParams.get('agent') as AgentType | null
 
-  const [projectPathOverride, setProjectPathOverride] = useState<string | undefined>(undefined)
-
-  const chatMode: ChatMode | null = useMemo(() => {
+  const terminalMode: TerminalMode | null = useMemo(() => {
     if (!sessionParam && !agentParam) return null
     if (agentParam === 'codex') {
       return { type: 'terminal', command: sessionParam ? `codex resume ${sessionParam}` : 'codex' }
     }
-    return {
-      type: 'chat',
-      sessionId: sessionParam || undefined,
-      agentType: (agentParam || 'claude-code') as AgentType,
-      projectPath: projectPathOverride,
+    if (agentParam && sessionParam) {
+      return { type: 'terminal', command: `${agentParam} resume ${sessionParam}` }
     }
-  }, [sessionParam, agentParam, projectPathOverride])
+    if (agentParam) {
+      return { type: 'terminal', command: agentParam }
+    }
+    return null
+  }, [sessionParam, agentParam])
 
-  const setChatMode = useCallback((mode: ChatMode | null) => {
+  const setTerminalMode = useCallback((mode: TerminalMode | null) => {
     if (!mode) {
-      setProjectPathOverride(undefined)
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev)
         next.delete('session')
         next.delete('agent')
         return next
       })
-    } else if (mode.type === 'chat') {
-      if (mode.projectPath) {
-        setProjectPathOverride(mode.projectPath)
-      }
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev)
-        if (mode.sessionId) next.set('session', mode.sessionId)
-        else next.delete('session')
-        if (mode.agentType) next.set('agent', mode.agentType)
-        return next
-      })
-    } else if (mode.type === 'terminal') {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev)
-        next.set('agent', 'codex')
-        if (mode.command.includes('resume')) {
-          const match = mode.command.match(/resume\s+(\S+)/)
-          if (match) next.set('session', match[1])
-        }
-        return next
-      })
+      return
     }
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      const resumeMatch = mode.command.match(/^(\S+)\s+resume\s+(\S+)/)
+      if (resumeMatch) {
+        next.set('agent', resumeMatch[1])
+        next.set('session', resumeMatch[2])
+      } else {
+        next.set('agent', mode.command)
+        next.delete('session')
+      }
+      return next
+    })
   }, [setSearchParams])
 
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all')
@@ -428,19 +419,17 @@ export function WorkspaceDetail() {
     })
   }
 
-  const handleSessionId = useCallback((sessionId: string) => {
-    if (name && chatMode?.type === 'chat') {
-      const agent = chatMode.agentType || 'claude-code'
-      api.recordSessionAccess(name, sessionId, agent).catch(() => {})
-      queryClient.invalidateQueries({ queryKey: ['sessions', name] })
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev)
-        next.set('session', sessionId)
-        next.set('agent', agent)
-        return next
-      })
-    }
-  }, [name, chatMode, queryClient, setSearchParams])
+  const handleSessionId = useCallback((sessionId: string, agent: AgentType) => {
+    if (!name) return
+    api.recordSessionAccess(name, sessionId, agent).catch(() => {})
+    queryClient.invalidateQueries({ queryKey: ['sessions', name] })
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('session', sessionId)
+      next.set('agent', agent)
+      return next
+    })
+  }, [name, queryClient, setSearchParams])
 
   const { data: hostInfo, isLoading: hostLoading } = useQuery({
     queryKey: ['hostInfo'],
@@ -479,14 +468,6 @@ export function WorkspaceDetail() {
     return sessionList.filter((session) => matchingIds.has(session.id))
   }, [sessions, debouncedQuery, searchData])
 
-  useEffect(() => {
-    if (sessionParam && !projectPathOverride && sessions) {
-      const session = sessions.find(s => s.id === sessionParam)
-      if (session?.projectPath) {
-        setProjectPathOverride(session.projectPath)
-      }
-    }
-  }, [sessionParam, projectPathOverride, sessions])
 
   const startMutation = useMutation({
     mutationFn: () => api.startWorkspace(name!),
@@ -501,7 +482,7 @@ export function WorkspaceDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace', name] })
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
-      setChatMode(null)
+      setTerminalMode(null)
     },
   })
 
@@ -559,26 +540,16 @@ export function WorkspaceDetail() {
   })
 
   const handleResume = (session: SessionInfo) => {
-    if (session.agentType === 'claude-code' || session.agentType === 'opencode') {
-      setChatMode({
-        type: 'chat',
-        sessionId: session.id,
-        agentType: session.agentType,
-        projectPath: session.projectPath,
-      })
-    } else {
-      const resumeId = session.agentSessionId || session.id
-      setChatMode({ type: 'terminal', command: `codex resume ${resumeId}` })
+    const resumeId = session.agentSessionId || session.id
+    setTerminalMode({ type: 'terminal', command: `${session.agentType} resume ${resumeId}` })
+    if (name) {
+      api.recordSessionAccess(name, session.id, session.agentType).catch(() => {})
+      queryClient.invalidateQueries({ queryKey: ['sessions', name] })
     }
   }
 
-  const handleNewChat = (agentType: AgentType = 'claude-code') => {
-    setProjectPathOverride(undefined)
-    if (agentType === 'claude-code' || agentType === 'opencode') {
-      setChatMode({ type: 'chat', agentType })
-    } else {
-      setChatMode({ type: 'terminal', command: 'codex' })
-    }
+  const handleNewSession = (agentType: AgentType = 'claude-code') => {
+    setTerminalMode({ type: 'terminal', command: agentType })
   }
 
   if (isLoading) {
@@ -772,31 +743,24 @@ export function WorkspaceDetail() {
           <div className="h-full flex flex-col">
             {!isRunning ? (
               renderStartPrompt()
-            ) : chatMode ? (
-              chatMode.type === 'chat' ? (
-                <Chat
-                  key={`chat-${chatMode.agentType}`}
-                  workspaceName={name!}
-                  sessionId={chatMode.sessionId}
-                  agentType={chatMode.agentType}
-                  projectPath={chatMode.projectPath}
-                  onSessionId={handleSessionId}
-                  onBack={() => setChatMode(null)}
-                />
-              ) : (
-                <div className="flex flex-col h-full">
-                  <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50">
-                    <Button variant="ghost" size="sm" onClick={() => setChatMode(null)}>
-                      <ArrowLeft className="h-4 w-4 mr-1" />
-                      Back to Sessions
-                    </Button>
-                    <span className="text-sm font-medium">Agent Terminal</span>
-                  </div>
-                  <div className="flex-1">
-                    <Terminal key={`agent-${name}`} workspaceName={name!} initialCommand={chatMode.command} />
-                  </div>
+            ) : terminalMode ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50">
+                  <Button variant="ghost" size="sm" onClick={() => setTerminalMode(null)}>
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Back to Sessions
+                  </Button>
+                  <span className="text-sm font-medium">Agent Terminal</span>
                 </div>
-              )
+                <div className="flex-1">
+                  <Terminal
+                    key={`agent-${name}`}
+                    workspaceName={name!}
+                    initialCommand={terminalMode.command}
+                    runId={terminalMode.command}
+                  />
+                </div>
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-border/50">
@@ -847,19 +811,19 @@ export function WorkspaceDetail() {
                     <DropdownMenuTrigger asChild>
                       <Button size="sm" className="h-8 px-2 sm:px-3 flex-shrink-0 ml-auto">
                         <Play className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">New Chat</span>
+                        <span className="hidden sm:inline">New Session</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleNewChat('claude-code')}>
+                      <DropdownMenuItem onClick={() => handleNewSession('claude-code')}>
                         <span className="w-2 h-2 rounded-full bg-orange-500 mr-2" />
                         Claude Code
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleNewChat('opencode')}>
+                      <DropdownMenuItem onClick={() => handleNewSession('opencode')}>
                         <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
                         OpenCode
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleNewChat('codex')}>
+                      <DropdownMenuItem onClick={() => handleNewSession('codex')}>
                         <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
                         Codex
                       </DropdownMenuItem>
@@ -874,25 +838,27 @@ export function WorkspaceDetail() {
                     </div>
                   ) : !sessions || sessions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-                      <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground mb-4">No sessions yet</p>
+                        <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                        <p className="text-muted-foreground mb-4">No agent sessions yet</p>
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button>
                             <Play className="mr-2 h-4 w-4" />
-                            Start a chat
+                              Start an agent session
+
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleNewChat('claude-code')}>
+                          <DropdownMenuItem onClick={() => handleNewSession('claude-code')}>
                             <span className="w-2 h-2 rounded-full bg-orange-500 mr-2" />
                             Claude Code
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleNewChat('opencode')}>
+                          <DropdownMenuItem onClick={() => handleNewSession('opencode')}>
                             <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
                             OpenCode
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleNewChat('codex')}>
+                          <DropdownMenuItem onClick={() => handleNewSession('codex')}>
                             <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
                             Codex
                           </DropdownMenuItem>

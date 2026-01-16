@@ -24,14 +24,6 @@ perry clone myproject myproject-experiment
 4. Enter a name for the new workspace
 5. Click "Clone Workspace"
 
-### Via Mobile App
-
-1. Open the workspace details
-2. Go to Settings
-3. Tap "Clone Workspace" in the Clone section
-4. Enter a name for the new workspace
-5. Tap "Clone"
-
 ### What Gets Cloned
 
 - All files in `/home/workspace` (your code, configurations, etc.)
@@ -128,7 +120,7 @@ perry shell my-app
 claude
 ```
 
-Or use the Web UI's chat interface directly.
+Or launch the agent directly in the Web UI terminal.
 
 ### OpenCode
 
