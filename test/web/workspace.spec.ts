@@ -235,7 +235,9 @@ test.describe('Web UI - Terminal', () => {
       const sessionsTab = page.getByRole('button', { name: /sessions/i });
       await sessionsTab.click();
 
-      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({
+        timeout: 10000,
+      });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -262,7 +264,9 @@ test.describe('Web UI - Sessions', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
-      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({
+        timeout: 30000,
+      });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -288,7 +292,9 @@ test.describe('Web UI - Sessions', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
-      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({
+        timeout: 30000,
+      });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -375,10 +381,7 @@ test.describe('Web UI - Sessions', () => {
     }
   }, 120000);
 
-  test('resuming session from project folder opens terminal', async ({
-    agent,
-    page,
-  }) => {
+  test('resuming session from project folder opens terminal', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     const sessionId = `project-path-test-${Date.now()}`;
     const projectDir = '-home-workspace-myproject';
