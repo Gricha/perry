@@ -419,18 +419,6 @@ export function WorkspaceDetail() {
     })
   }
 
-  const handleSessionId = useCallback((sessionId: string, agent: AgentType) => {
-    if (!name) return
-    api.recordSessionAccess(name, sessionId, agent).catch(() => {})
-    queryClient.invalidateQueries({ queryKey: ['sessions', name] })
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.set('session', sessionId)
-      next.set('agent', agent)
-      return next
-    })
-  }, [name, queryClient, setSearchParams])
-
   const { data: hostInfo, isLoading: hostLoading } = useQuery({
     queryKey: ['hostInfo'],
     queryFn: api.getHostInfo,

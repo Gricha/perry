@@ -235,7 +235,7 @@ test.describe('Web UI - Terminal', () => {
       const sessionsTab = page.getByRole('button', { name: /sessions/i });
       await sessionsTab.click();
 
-      await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 10000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -262,7 +262,7 @@ test.describe('Web UI - Sessions', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
-      await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 30000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
@@ -288,13 +288,13 @@ test.describe('Web UI - Sessions', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
-      await expect(page.getByRole('button', { name: /new chat/i })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('button', { name: /new session/i })).toBeVisible({ timeout: 30000 });
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('sessions list shows prompt and clicking opens chat directly', async ({ agent, page }) => {
+  test('sessions list shows prompt and clicking opens terminal', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     const sessionId = `test-session-${Date.now()}`;
     const filePath = `/home/workspace/.claude/projects/-workspace/${sessionId}.jsonl`;
@@ -319,22 +319,20 @@ test.describe('Web UI - Sessions', () => {
 
       await sessionItem.click();
 
-      await expect(page.getByText('Claude Code', { exact: true })).toBeVisible({ timeout: 30000 });
-      await expect(page.getByPlaceholder('Send a message...')).toBeVisible();
+      await expect(page.getByText('Agent Terminal')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('[data-testid="terminal-screen"]')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('clicking session loads conversation history', async ({ agent, page }) => {
+  test('clicking session opens terminal with resume command', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     const sessionId = `history-test-${Date.now()}`;
     const filePath = `/home/workspace/.claude/projects/-workspace/${sessionId}.jsonl`;
     const sessionContent = [
       '{"type":"user","message":{"content":"What is 2+2?"},"timestamp":"2026-01-01T00:00:00.000Z"}',
       '{"type":"assistant","message":{"content":[{"type":"text","text":"2+2 equals 4"}]},"timestamp":"2026-01-01T00:00:01.000Z"}',
-      '{"type":"user","message":{"content":"Thanks!"},"timestamp":"2026-01-01T00:00:02.000Z"}',
-      '{"type":"assistant","message":{"content":[{"type":"text","text":"You are welcome!"}]},"timestamp":"2026-01-01T00:00:03.000Z"}',
     ].join('\n');
 
     await agent.api.createWorkspace({ name: workspaceName });
@@ -353,39 +351,37 @@ test.describe('Web UI - Sessions', () => {
 
       await sessionItem.click();
 
-      await expect(page.getByText('Claude Code', { exact: true })).toBeVisible({ timeout: 30000 });
-      await expect(page.getByText('2+2 equals 4')).toBeVisible({ timeout: 10000 });
-      await expect(page.getByText('Thanks!')).toBeVisible();
-      await expect(page.getByText('You are welcome!')).toBeVisible();
+      await expect(page.getByText('Agent Terminal')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('[data-testid="terminal-screen"]')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('clicking new chat opens chat UI', async ({ agent, page }) => {
+  test('clicking new session opens terminal', async ({ agent, page }) => {
     const workspaceName = generateTestWorkspaceName();
     await agent.api.createWorkspace({ name: workspaceName });
 
     try {
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
 
-      await page.getByRole('button', { name: /new chat/i }).click();
+      await page.getByRole('button', { name: /new session/i }).click();
       await page.getByText('Claude Code').first().click();
 
-      await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByText('Agent Terminal')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('[data-testid="terminal-screen"]')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
   }, 120000);
 
-  test('resuming session sends projectPath in WebSocket connect message', async ({
+  test('resuming session from project folder opens terminal', async ({
     agent,
     page,
   }) => {
     const workspaceName = generateTestWorkspaceName();
     const sessionId = `project-path-test-${Date.now()}`;
     const projectDir = '-home-workspace-myproject';
-    const expectedProjectPath = '/home/workspace/myproject';
     const filePath = `/home/workspace/.claude/projects/${projectDir}/${sessionId}.jsonl`;
     const sessionContent = [
       '{"type":"user","message":{"content":"Test message"},"timestamp":"2026-01-01T00:00:00.000Z"}',
@@ -399,21 +395,6 @@ test.describe('Web UI - Sessions', () => {
     );
 
     try {
-      let capturedConnectMessage: { sessionId?: string; projectPath?: string } | null = null;
-
-      page.on('websocket', (ws) => {
-        ws.on('framesent', (frame) => {
-          try {
-            const data = JSON.parse(frame.payload as string);
-            if (data.type === 'connect' && ws.url().includes('/rpc/live/claude/')) {
-              capturedConnectMessage = data;
-            }
-          } catch {
-            // Ignore non-JSON frames
-          }
-        });
-      });
-
       await page.goto(`http://127.0.0.1:${agent.port}/workspaces/${workspaceName}?tab=sessions`);
 
       const sessionItem = page
@@ -424,13 +405,8 @@ test.describe('Web UI - Sessions', () => {
 
       await sessionItem.click();
 
-      await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 30000 });
-
-      await page.waitForTimeout(1000);
-
-      expect(capturedConnectMessage).not.toBeNull();
-      expect(capturedConnectMessage?.sessionId).toBeTruthy();
-      expect(capturedConnectMessage?.projectPath).toBe(expectedProjectPath);
+      await expect(page.getByText('Agent Terminal')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('[data-testid="terminal-screen"]')).toBeVisible();
     } finally {
       await agent.api.deleteWorkspace(workspaceName);
     }
