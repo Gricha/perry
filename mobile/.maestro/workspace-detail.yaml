@@ -1,0 +1,59 @@
+appId: com.subroutine.workspace
+---
+# Test: Workspace Detail Screen Navigation
+# Verifies workspace detail screen displays correctly with tabs
+
+- launchApp:
+    clearState: true
+
+# Wait for app to fully load
+- extendedWaitUntil:
+    visible: "Workspaces"
+    timeout: 10000
+
+# If no workspaces exist, test gracefully exits
+- runFlow:
+    when:
+      visible: "No workspaces yet"
+    commands:
+      - assertVisible: "Tap + to create one"
+
+# If workspaces exist, navigate to detail screen
+- runFlow:
+    when:
+      visible: "Details"
+    commands:
+      # Tap on Details button to navigate
+      - tapOn: "Details"
+
+      # Should see the detail screen with back button
+      - assertVisible: "←"
+
+      # Should see the tab bar with Sessions and Settings
+      - assertVisible: "Sessions"
+      - assertVisible: "Settings"
+
+      # Sessions tab should be active by default
+      # Test switching to Settings tab
+      - tapOn: "Settings"
+
+      # Should see workspace settings content
+      - assertVisible: "Workspace Info"
+      - assertVisible: "Sync Credentials"
+      - assertVisible: "Actions"
+
+      # Test switching back to Sessions tab
+      - tapOn: "Sessions"
+
+      # Handle empty sessions
+      - runFlow:
+          when:
+            visible: "No sessions"
+          commands:
+            - assertVisible: "No sessions"
+
+      # Navigate back to workspaces list
+      - tapOn: "←"
+
+      # Should be back on workspaces screen
+      - assertVisible: "Workspaces"

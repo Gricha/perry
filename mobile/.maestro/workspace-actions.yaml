@@ -1,0 +1,77 @@
+appId: com.subroutine.workspace
+---
+# Test: Workspace Start/Stop/Recover Operations
+# Verifies start, stop, and recover buttons work correctly for workspaces
+
+- launchApp:
+    clearState: true
+
+# Wait for app to fully load
+- extendedWaitUntil:
+    visible: "Workspaces"
+    timeout: 10000
+
+# If no workspaces exist, the test gracefully handles empty state
+- runFlow:
+    when:
+      visible: "No workspaces yet"
+    commands:
+      - assertVisible: "Tap + to create one"
+
+# If workspaces exist, test navigating to detail screen
+- runFlow:
+    when:
+      visible: "Details"
+    commands:
+      # Tap on the Details button to navigate to workspace detail
+      - tapOn: "Details"
+      # Should see workspace detail screen with Sessions and Settings tabs
+      - assertVisible: "Sessions"
+      - assertVisible: "Settings"
+      # Test switching to Settings tab
+      - tapOn: "Settings"
+      # Should see settings options
+      - assertVisible: "Workspace Info"
+      # Go back to workspaces list
+      - tapOn:
+          text: ".*←.*"
+          optional: true
+
+# Test start button if workspace is stopped
+- runFlow:
+    when:
+      visible:
+        text: "Start"
+    commands:
+      - tapOn: "Start"
+      # Wait a moment for the action to register
+      - extendedWaitUntil:
+          visible:
+            text: "running|Stop"
+          timeout: 5000
+
+# Test stop button if workspace is running
+- runFlow:
+    when:
+      visible:
+        text: "Stop"
+    commands:
+      - tapOn: "Stop"
+      # Wait a moment for the action to register
+      - extendedWaitUntil:
+          visible:
+            text: "stopped|Start"
+          timeout: 5000
+
+# Test recover button if workspace is in error state
+- runFlow:
+    when:
+      visible:
+        text: "Recover"
+    commands:
+      - tapOn: "Recover"
+      # Wait for recovery to attempt
+      - extendedWaitUntil:
+          visible:
+            text: "running|Start"
+          timeout: 5000

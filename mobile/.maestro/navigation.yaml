@@ -1,0 +1,45 @@
+appId: com.subroutine.workspace
+---
+# Test: Basic Navigation Between Screens
+# Verifies all three tabs are accessible and display correct content
+
+- launchApp:
+    clearState: true
+
+# Wait for app to fully load
+- extendedWaitUntil:
+    visible: "Workspaces"
+    timeout: 10000
+
+# Navigate to Sessions tab
+- tapOn: "Sessions"
+
+# Handle either error state or loaded state
+- runFlow:
+    when:
+      visible: "Cannot Load Sessions"
+    commands:
+      - assertVisible: "Retry"
+
+- runFlow:
+    when:
+      visible: "All"
+    commands:
+      - assertVisible: "Claude"
+      - assertVisible: "OpenCode"
+
+# Navigate to Settings tab
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- assertVisible: "Connection"
+
+# Navigate back to Workspaces tab
+- tapOn: "Workspaces"
+- assertVisible: "Workspaces"
+
+# Verify tab switching is smooth - do a full cycle
+- tapOn: "Sessions"
+- tapOn: "Settings"
+- assertVisible: "Connection"
+- tapOn: "Workspaces"
+- assertVisible: "Workspaces"

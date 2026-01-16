@@ -1,0 +1,374 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install
+          cd web && bun install
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Typecheck
+        run: bun x tsc --noEmit
+
+      - name: Lint web
+        run: bun run lint:web
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install
+          cd web && bun install
+
+      - name: Build
+        run: bun run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  binary:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Compile binary
+        run: |
+          bun build ./src/index.ts --compile --minify --outfile=perry-test
+
+      - name: Test binary runs
+        run: |
+          ./perry-test --version
+          ./perry-test --help
+
+      - name: Test binary with web assets
+        run: |
+          mkdir -p test-install/bin
+          cp perry-test test-install/bin/perry
+          cp -r dist/agent/web test-install/
+          ./test-install/bin/perry --version
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install
+          cd web && bun install
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for Dockerfile changes
+        id: docker-changes
+        run: |
+          # For PRs, compare against base branch
+          # For pushes, compare against previous commit
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          # Check if any files in perry/ directory changed
+          if git diff --name-only "$BASE_SHA" HEAD 2>/dev/null | grep -q "^perry/"; then
+            echo "Dockerfile or related files changed - will rebuild and update cache"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Dockerfile changes detected - using cached layers"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if PR is from fork
+        id: fork-check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is_fork=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build workspace image (with cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./perry
+          load: true
+          tags: perry:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-test
+          cache-to: ${{ steps.docker-changes.outputs.changed == 'true' && steps.fork-check.outputs.is_fork == 'false' && format('type=registry,ref={0}/{1}:buildcache-test,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Run tests (shard ${{ matrix.shard }}/3)
+        run: |
+          # Skip Docker build in test setup since we already have the image
+          export SKIP_DOCKER_BUILD=true
+          bun run test --shard=${{ matrix.shard }}/3
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install
+          cd web && bun install
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(cd web && bun pm ls | grep '@playwright/test' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd web && bun x playwright install chromium --with-deps
+
+      - name: Install Playwright deps (cached)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd web && bun x playwright install-deps chromium
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for Dockerfile changes
+        id: docker-changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if git diff --name-only "$BASE_SHA" HEAD 2>/dev/null | grep -q "^perry/"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if PR is from fork
+        id: fork-check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is_fork=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build workspace image (with cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./perry
+          load: true
+          tags: perry:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-test
+          cache-to: ${{ steps.docker-changes.outputs.changed == 'true' && steps.fork-check.outputs.is_fork == 'false' && format('type=registry,ref={0}/{1}:buildcache-test,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Configure agent for e2e tests
+        run: |
+          mkdir -p ~/.config/perry
+          if [ -n "$OPENCODE_TOKEN" ]; then
+            echo '{"agents":{"opencode":{"zen_token":"'"$OPENCODE_TOKEN"'","model":"opencode/gpt-5-nano"}}}' > ~/.config/perry/config.json
+            echo "OpenCode configured with gpt-5-nano model"
+          else
+            echo '{}' > ~/.config/perry/config.json
+            echo "No OPENCODE_TOKEN - OpenCode tests will be skipped"
+          fi
+        env:
+          OPENCODE_TOKEN: ${{ secrets.OPENCODE_TOKEN }}
+
+      - name: Start agent
+        run: |
+          bun run src/index.ts agent run --port 7391 &
+          sleep 5
+          curl -s http://localhost:7391/health || (echo "Agent failed to start" && exit 1)
+
+      - name: Create test workspace
+        run: |
+          bun run src/index.ts start test
+          bun run src/index.ts list
+
+      - name: Run Playwright tests (web/e2e)
+        run: |
+          if [ -n "$OPENCODE_TOKEN" ]; then
+            cd web && bun run test:e2e
+          else
+            cd web && bun run test:e2e --grep-invert "OpenCode"
+          fi
+        env:
+          CI: true
+          OPENCODE_TOKEN: ${{ secrets.OPENCODE_TOKEN }}
+
+      - name: Stop agent for web integration tests
+        run: |
+          pkill -f "bun run src/index.ts agent" || true
+          sleep 2
+
+      - name: Run Playwright tests (test/web - self-contained)
+        run: |
+          bun run test:web
+        env:
+          CI: true
+
+      - name: Upload Playwright report (web/e2e)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright report (test/web)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-web-integration
+          path: playwright-report/
+          retention-days: 7

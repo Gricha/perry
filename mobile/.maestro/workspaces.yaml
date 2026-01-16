@@ -1,0 +1,39 @@
+appId: com.subroutine.workspace
+---
+# Test: Workspace List Display
+# Verifies the workspace list loads and displays correctly
+
+- launchApp:
+    clearState: true
+
+# Wait for app to fully load
+- extendedWaitUntil:
+    visible: "Workspaces"
+    timeout: 10000
+
+# Verify bottom navigation is visible
+- assertVisible: "Sessions"
+- assertVisible: "Settings"
+
+# Handle either error state or loaded state
+- runFlow:
+    when:
+      visible: "Cannot Load Workspaces"
+    commands:
+      - assertVisible: "Retry"
+
+- runFlow:
+    when:
+      visible: "No workspaces yet"
+    commands:
+      - assertVisible: "Tap + to create one"
+
+# If workspaces exist, verify stats bar and workspace items
+- runFlow:
+    when:
+      visible: "Total"
+    commands:
+      - assertVisible: "Running"
+      - assertVisible: "Stopped"
+      # Verify workspace items have expected buttons
+      - assertVisible: "Details"

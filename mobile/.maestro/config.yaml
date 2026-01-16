@@ -1,0 +1,8 @@
+flows:
+  - workspaces.yaml
+  - navigation.yaml
+  - settings.yaml
+  - workspace-actions.yaml
+  - workspace-detail.yaml
+  - session-filter.yaml
+  - session-chat.yaml

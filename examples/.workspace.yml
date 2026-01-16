@@ -1,0 +1,13 @@
+repo:
+  remote: git@github.com:gricha/workspace-demo.git
+  branch: main
+  cloneArgs:
+    - --depth=1
+
+bootstrap:
+  scripts:
+    - scripts/install-tools.sh
+
+forwards:
+  - 5172
+  - 5173

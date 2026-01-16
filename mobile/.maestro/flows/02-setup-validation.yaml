@@ -1,0 +1,22 @@
+appId: com.gricha.perry
+name: Setup Screen - Form Validation
+tags:
+  - setup
+  - validation
+---
+- launchApp:
+    clearState: true
+
+# Scroll down to see form inputs
+- scroll
+
+# Test empty hostname validation
+- tapOn:
+    id: "connect-button"
+- assertVisible: "Please enter a hostname"
+
+# Verify we can type in the hostname field
+- tapOn:
+    id: "hostname-input"
+- inputText: "test-server.local"
+- assertVisible: "test-server.local"

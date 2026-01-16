@@ -1,0 +1,74 @@
+appId: com.subroutine.workspace
+---
+# Test: Settings Screen Visibility and Interactions
+# Verifies key settings sections are accessible
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load then navigate to Settings
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+- tapOn: "Settings"
+
+# Settings header and Connection section (always visible at top)
+- assertVisible: "Settings"
+- assertVisible: "Connection"
+- assertVisible: "Agent Server"
+- assertVisible: "Hostname"
+
+# Sync section
+- assertVisible: "Sync"
+- assertVisible: "Sync All Workspaces"
+
+# Coding Agents section header
+- assertVisible: "Coding Agents"
+
+# Scroll down to see all content
+- swipe:
+    direction: UP
+    duration: 300
+
+- swipe:
+    direction: UP
+    duration: 300
+
+# Environment Variables section
+- assertVisible: "Environment Variables"
+
+# Scroll more
+- swipe:
+    direction: UP
+    duration: 300
+
+- swipe:
+    direction: UP
+    duration: 300
+
+# File Mappings and Scripts sections
+- assertVisible: "File Mappings"
+
+- swipe:
+    direction: UP
+    duration: 300
+
+- assertVisible: "Scripts"
+
+- swipe:
+    direction: UP
+    duration: 300
+
+- assertVisible: "About"
+
+# Handle connection states
+- runFlow:
+    when:
+      visible: "Server Unreachable"
+    commands:
+      - assertVisible: "Retry Connection"
+
+# Navigate back to Workspaces
+- tapOn: "Workspaces"
+- assertVisible: "Workspaces"

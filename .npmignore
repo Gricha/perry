@@ -1,0 +1,19 @@
+# Tests
+test/
+*.test.js
+vitest.config.js
+
+# Development
+.git/
+.github/
+.vscode/
+*.log
+node_modules/
+
+# Examples and docs
+examples/
+packages/
+
+# Local workspace state
+.workspaces/
+.workspace.yml

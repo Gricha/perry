@@ -1,0 +1,195 @@
+name: Mobile E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * 1'  # Monday 9am UTC
+
+jobs:
+  maestro-ios:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            mobile/node_modules
+          key: ${{ runner.os }}-bun-mobile-${{ hashFiles('mobile/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-mobile-
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: bun install
+
+      - name: Select Xcode version
+        id: xcode
+        run: |
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+            echo "version=16.2" >> $GITHUB_OUTPUT
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+            echo "version=16.1" >> $GITHUB_OUTPUT
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+            echo "version=16.0" >> $GITHUB_OUTPUT
+          else
+            echo "Available Xcode versions:"
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+            exit 1
+          fi
+          xcodebuild -version
+
+      - name: Generate native fingerprint
+        id: fingerprint
+        working-directory: mobile
+        run: |
+          # Fingerprint based on files that affect native build
+          FINGERPRINT=$(cat \
+            app.json \
+            package.json \
+            bun.lock \
+            2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+          echo "hash=$FINGERPRINT" >> $GITHUB_OUTPUT
+          echo "Native fingerprint: $FINGERPRINT"
+
+      - name: Cache iOS prebuild + Pods
+        id: ios-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            mobile/ios
+            !mobile/ios/build
+          key: ${{ runner.os }}-ios-native-xcode${{ steps.xcode.outputs.version }}-${{ steps.fingerprint.outputs.hash }}
+
+      - name: Generate iOS native code
+        if: steps.ios-cache.outputs.cache-hit != 'true'
+        working-directory: mobile
+        run: bunx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        if: steps.ios-cache.outputs.cache-hit != 'true'
+        working-directory: mobile/ios
+        run: pod install
+
+      - name: Cache Pods Derived Data
+        id: pods-derived-cache
+        uses: actions/cache@v4
+        with:
+          path: mobile/ios/.pods-derived-data
+          key: ${{ runner.os }}-pods-derived-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('mobile/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-derived-xcode${{ steps.xcode.outputs.version }}-
+
+      - name: List available simulators
+        run: xcrun simctl list devices available
+
+      - name: Boot iOS Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 16" | head -1 | grep -oE '[A-F0-9-]{36}')
+          if [ -z "$DEVICE_ID" ]; then
+            DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 15" | head -1 | grep -oE '[A-F0-9-]{36}')
+          fi
+          if [ -z "$DEVICE_ID" ]; then
+            DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | grep -oE '[A-F0-9-]{36}')
+          fi
+          echo "DEVICE_ID=$DEVICE_ID" >> $GITHUB_ENV
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+      - name: Build iOS app for simulator
+        working-directory: mobile/ios
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+        run: |
+          # Use separate derived data for Pods (cached) and app (not cached)
+          # This allows incremental Pod builds while app always rebuilds
+          echo "Pods derived data cache hit: ${{ steps.pods-derived-cache.outputs.cache-hit }}"
+
+          xcodebuild -workspace Perry.xcworkspace \
+            -scheme Perry \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "id=${{ env.DEVICE_ID }}" \
+            -derivedDataPath .pods-derived-data \
+            build \
+            | tee build.log | xcpretty || (cat build.log && exit 1)
+
+      - name: Show build summary
+        if: always()
+        working-directory: mobile/ios
+        run: |
+          echo "=== Derived data size ==="
+          du -sh .pods-derived-data 2>/dev/null || echo "No derived data"
+          echo ""
+          echo "=== Build products ==="
+          find .pods-derived-data -name "*.app" -type d 2>/dev/null || echo "No .app found"
+
+      - name: Install app on simulator
+        run: |
+          APP_PATH=$(find mobile/ios/.pods-derived-data -name "*.app" -type d | head -1)
+          echo "Installing app from: $APP_PATH"
+          xcrun simctl install "${{ env.DEVICE_ID }}" "$APP_PATH"
+
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Launch app and take debug screenshot
+        run: |
+          export PATH="$HOME/.maestro/bin:$PATH"
+          xcrun simctl launch "${{ env.DEVICE_ID }}" com.gricha.perry || true
+          sleep 5
+          xcrun simctl io "${{ env.DEVICE_ID }}" screenshot /tmp/app-launch-debug.png || true
+
+      - name: Run Maestro tests
+        working-directory: mobile
+        run: |
+          export PATH="$HOME/.maestro/bin:$PATH"
+          maestro test .maestro/flows/ --exclude-tags=chat --format junit --output maestro-report.xml
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+
+      - name: Upload debug screenshot
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: debug-screenshot
+          path: /tmp/app-launch-debug.png
+          retention-days: 7
+
+      - name: Upload Maestro report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: maestro-report
+          path: mobile/maestro-report.xml
+          retention-days: 7
+
+      - name: Upload Maestro screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: maestro-screenshots
+          path: ~/.maestro/tests/
+          retention-days: 7
