@@ -57,9 +57,9 @@ async function ensureWorkspaceImage(): Promise<string> {
   }
 
   throw new Error(
-    `Workspace image not found. Either:\n` +
-      `  1. Run 'perry build' to build locally, or\n` +
-      `  2. Check your network connection to pull from registry`
+    `Workspace image ${registryImage} not available.\n` +
+      `The agent could not find or pull the required image.\n` +
+      `This may happen if the version was just released and the image is still being published.`
   );
 }
 
