@@ -10,7 +10,7 @@ OpenCode runs as a server inside each workspace. This lets you connect from the 
 
 <video controls src="/video/opencode-perry.mov" width="100%"></video>
 
-![OpenCode mobile client](/img/opencode-mobile.png)
+<img src="/img/opencode-mobile.png" alt="OpenCode mobile client" width="360" />
 
 ## 1) Configure OpenCode
 
