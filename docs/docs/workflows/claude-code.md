@@ -6,6 +6,10 @@ sidebar_position: 2
 
 Claude Code and Codex run inside workspaces. There is no external server to attach to, so you connect via a terminal and run the client in the workspace.
 
+## Overview
+
+This flow is terminal-first. You connect to the workspace, launch the agent, and continue work from any device via CLI, Web UI terminal, or SSH clients like Termius.
+
 ## 1) Configure credentials
 
 Claude Code:
@@ -50,6 +54,13 @@ codex
 - `perry shell` from any machine pointed at the agent
 - Web UI terminal from the workspace page
 - SSH directly (Tailscale) or with a client like Termius
+
+## On-the-go access
+
+If you are away from your main machine, the fastest options are:
+
+- Web UI terminal on your phone or tablet
+- SSH from a mobile client (Termius, Prompt, etc.)
 
 ## Sessions
 
