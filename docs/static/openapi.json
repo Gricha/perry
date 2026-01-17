@@ -15,6 +15,9 @@
     "/workspaces/list": {
       "post": {
         "operationId": "workspaces.list",
+        "tags": [
+          "Workspaces"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -37,6 +40,9 @@
     "/workspaces/get": {
       "post": {
         "operationId": "workspaces.get",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -77,6 +83,9 @@
     "/workspaces/create": {
       "post": {
         "operationId": "workspaces.create",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -216,6 +225,9 @@
     "/workspaces/clone": {
       "post": {
         "operationId": "workspaces.clone",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -347,6 +359,9 @@
     "/workspaces/delete": {
       "post": {
         "operationId": "workspaces.delete",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -387,6 +402,9 @@
     "/workspaces/start": {
       "post": {
         "operationId": "workspaces.start",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -526,6 +544,9 @@
     "/workspaces/stop": {
       "post": {
         "operationId": "workspaces.stop",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -653,6 +674,9 @@
     "/workspaces/logs": {
       "post": {
         "operationId": "workspaces.logs",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -697,6 +721,9 @@
     "/workspaces/sync": {
       "post": {
         "operationId": "workspaces.sync",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -737,6 +764,9 @@
     "/workspaces/syncAll": {
       "post": {
         "operationId": "workspaces.syncAll",
+        "tags": [
+          "Workspaces"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -759,6 +789,9 @@
     "/workspaces/touch": {
       "post": {
         "operationId": "workspaces.touch",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -886,6 +919,9 @@
     "/workspaces/getPortForwards": {
       "post": {
         "operationId": "workspaces.getPortForwards",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -948,6 +984,9 @@
     "/workspaces/setPortForwards": {
       "post": {
         "operationId": "workspaces.setPortForwards",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1098,6 +1137,9 @@
     "/workspaces/updateWorker": {
       "post": {
         "operationId": "workspaces.updateWorker",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1138,6 +1180,9 @@
     "/workspaces/exec": {
       "post": {
         "operationId": "workspaces.exec",
+        "tags": [
+          "Workspaces"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1206,6 +1251,9 @@
     "/sessions/list": {
       "post": {
         "operationId": "sessions.list",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1261,6 +1309,9 @@
     "/sessions/get": {
       "post": {
         "operationId": "sessions.get",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1321,6 +1372,9 @@
     "/sessions/rename": {
       "post": {
         "operationId": "sessions.rename",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1371,6 +1425,9 @@
     "/sessions/clearName": {
       "post": {
         "operationId": "sessions.clearName",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1415,6 +1472,9 @@
     "/sessions/getRecent": {
       "post": {
         "operationId": "sessions.getRecent",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1453,6 +1513,9 @@
     "/sessions/recordAccess": {
       "post": {
         "operationId": "sessions.recordAccess",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1505,6 +1568,9 @@
     "/sessions/delete": {
       "post": {
         "operationId": "sessions.delete",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1557,6 +1623,9 @@
     "/sessions/search": {
       "post": {
         "operationId": "sessions.search",
+        "tags": [
+          "Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1603,6 +1672,9 @@
     "/live/list": {
       "post": {
         "operationId": "live.list",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1640,6 +1712,9 @@
     "/live/get": {
       "post": {
         "operationId": "live.get",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1680,6 +1755,9 @@
     "/live/getStatus": {
       "post": {
         "operationId": "live.getStatus",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1720,6 +1798,9 @@
     "/live/start": {
       "post": {
         "operationId": "live.start",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1780,6 +1861,9 @@
     "/live/sendMessage": {
       "post": {
         "operationId": "live.sendMessage",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1824,6 +1908,9 @@
     "/live/interrupt": {
       "post": {
         "operationId": "live.interrupt",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1864,6 +1951,9 @@
     "/live/dispose": {
       "post": {
         "operationId": "live.dispose",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1904,6 +1994,9 @@
     "/live/getMessages": {
       "post": {
         "operationId": "live.getMessages",
+        "tags": [
+          "Live Sessions"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1947,6 +2040,9 @@
     "/models/list": {
       "post": {
         "operationId": "models.list",
+        "tags": [
+          "Models"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1993,6 +2089,9 @@
     "/github/listRepos": {
       "post": {
         "operationId": "github.listRepos",
+        "tags": [
+          "GitHub"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2091,6 +2190,9 @@
     "/host/info": {
       "post": {
         "operationId": "host.info",
+        "tags": [
+          "Host"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2113,6 +2215,9 @@
     "/info": {
       "post": {
         "operationId": "info",
+        "tags": [
+          "Info"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2135,6 +2240,9 @@
     "/config/credentials/get": {
       "post": {
         "operationId": "config.credentials.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2176,6 +2284,9 @@
     "/config/credentials/update": {
       "post": {
         "operationId": "config.credentials.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2251,6 +2362,9 @@
     "/config/scripts/get": {
       "post": {
         "operationId": "config.scripts.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2279,6 +2393,9 @@
     "/config/scripts/update": {
       "post": {
         "operationId": "config.scripts.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2328,6 +2445,9 @@
     "/config/agents/get": {
       "post": {
         "operationId": "config.agents.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2391,6 +2511,9 @@
     "/config/agents/update": {
       "post": {
         "operationId": "config.agents.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2510,6 +2633,9 @@
     "/config/skills/get": {
       "post": {
         "operationId": "config.skills.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2573,6 +2699,9 @@
     "/config/skills/update": {
       "post": {
         "operationId": "config.skills.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2692,6 +2821,9 @@
     "/config/mcp/get": {
       "post": {
         "operationId": "config.mcp.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2788,6 +2920,9 @@
     "/config/mcp/update": {
       "post": {
         "operationId": "config.mcp.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2973,6 +3108,9 @@
     "/config/ssh/get": {
       "post": {
         "operationId": "config.ssh.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -3044,6 +3182,9 @@
     "/config/ssh/update": {
       "post": {
         "operationId": "config.ssh.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3179,6 +3320,9 @@
     "/config/ssh/listKeys": {
       "post": {
         "operationId": "config.ssh.listKeys",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -3233,6 +3377,9 @@
     "/config/terminal/get": {
       "post": {
         "operationId": "config.terminal.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -3258,6 +3405,9 @@
     "/config/terminal/update": {
       "post": {
         "operationId": "config.terminal.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3295,6 +3445,9 @@
     "/config/tailscale/get": {
       "post": {
         "operationId": "config.tailscale.get",
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -3326,6 +3479,9 @@
     "/config/tailscale/update": {
       "post": {
         "operationId": "config.tailscale.update",
+        "tags": [
+          "Configuration"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3375,5 +3531,31 @@
         }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Configuration"
+    },
+    {
+      "name": "GitHub"
+    },
+    {
+      "name": "Host"
+    },
+    {
+      "name": "Info"
+    },
+    {
+      "name": "Live Sessions"
+    },
+    {
+      "name": "Models"
+    },
+    {
+      "name": "Sessions"
+    },
+    {
+      "name": "Workspaces"
+    }
+  ]
 }

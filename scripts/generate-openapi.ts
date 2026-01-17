@@ -29,8 +29,48 @@ const generator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],
 });
 
+function addTagsToSpec(spec: any): any {
+  const tagMapping: Record<string, string> = {
+    '/workspaces': 'Workspaces',
+    '/sessions': 'Sessions',
+    '/live': 'Live Sessions',
+    '/models': 'Models',
+    '/github': 'GitHub',
+    '/host': 'Host',
+    '/info': 'Info',
+    '/config/credentials': 'Configuration',
+    '/config/scripts': 'Configuration',
+    '/config/agents': 'Configuration',
+    '/config/skills': 'Configuration',
+    '/config/mcp': 'Configuration',
+    '/config/ssh': 'Configuration',
+    '/config/terminal': 'Configuration',
+    '/config/tailscale': 'Configuration',
+  };
+
+  const usedTags = new Set<string>();
+
+  for (const [path, methods] of Object.entries(spec.paths || {})) {
+    const tag = Object.entries(tagMapping).find(([prefix]) => path.startsWith(prefix))?.[1];
+    if (tag) {
+      usedTags.add(tag);
+      for (const method of Object.values(methods as Record<string, any>)) {
+        if (typeof method === 'object' && method !== null) {
+          method.tags = [tag];
+        }
+      }
+    }
+  }
+
+  spec.tags = Array.from(usedTags)
+    .sort()
+    .map((name) => ({ name }));
+
+  return spec;
+}
+
 async function main() {
-  const spec = await generator.generate(router, {
+  let spec = await generator.generate(router, {
     info: {
       title: 'Perry API',
       version: '1.0.0',
@@ -44,6 +84,8 @@ async function main() {
       },
     ],
   });
+
+  spec = addTagsToSpec(spec);
 
   const outputPath = join(import.meta.dirname, '..', 'docs', 'static', 'openapi.json');
   mkdirSync(dirname(outputPath), { recursive: true });
