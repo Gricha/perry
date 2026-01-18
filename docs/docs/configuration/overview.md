@@ -6,6 +6,8 @@ sidebar_position: 1
 
 Perry stores configuration in `~/.config/perry/`.
 
+You can override the config directory with `PERRY_CONFIG_DIR` or `WS_CONFIG_DIR`.
+
 ## Configuration Files
 
 | File | Purpose |
@@ -34,11 +36,10 @@ Location: `~/.config/perry/config.json`
     "github": {
       "token": "ghp_..."
     },
-    "claude_code": {
-      "oauth_token": "..."
-    },
     "opencode": {
-      "zen_token": "..."
+      "server": {
+        "hostname": "0.0.0.0"
+      }
     }
   },
   "ssh": {
@@ -117,9 +118,8 @@ If you run any `perry` command without configuring an agent (and no local agent 
 
 ## Configuration Sections
 
-- [Environment Variables](./environment.md) - Inject env vars into workspaces
-- [Files](./files.md) - Copy files into workspaces
+- [Credentials](./credentials.md) - Env vars, files, and SSH keys
+- [Agents](./agents.md) - Agent sync, OpenCode server, GitHub token
 - [Scripts](./scripts.md) - Run scripts after workspace starts
-- [GitHub](./github.md) - GitHub token and SSH key setup
-- [AI Agents](./ai-agents.md) - Claude Code, OpenCode, Codex CLI
-- [Tailscale](./tailscale.md) - Remote agent access and workspace networking via Tailscale
+- [Tailscale](./tailscale.md) - Remote agent access and workspace networking
+- [GitHub](./github.md) - Token setup and cloning
