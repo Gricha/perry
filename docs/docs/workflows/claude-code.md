@@ -14,7 +14,7 @@ This flow is terminal-first. You connect to the workspace, launch the agent, and
 
 <video controls src="/video/claude-perry.mov" width="100%"></video>
 
-Claude Code is available directly in the workspace terminal:
+Claude Code is available directly in the workspace terminal (via Perry Web UI or SSH clients like Termius):
 
 <img src="/img/claude-mobile.png" alt="Claude Code on mobile terminal" width="360" />
 
