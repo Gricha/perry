@@ -381,16 +381,15 @@ export function AgentsSettingsScreen({ navigation }: any) {
   });
 
   const handleSave = () => {
-    mutation.mutate({
-      ...(agents ?? {}),
-      opencode: {
-        server: {
-          hostname: opencodeServerHostname.trim() || undefined,
-          username: opencodeServerUsername.trim() || undefined,
-          password: opencodeServerPassword || undefined,
-        },
+    const nextAgents = agents ? { ...agents } : {};
+    nextAgents.opencode = {
+      server: {
+        hostname: opencodeServerHostname.trim() || undefined,
+        username: opencodeServerUsername.trim() || undefined,
+        password: opencodeServerPassword || undefined,
       },
-    });
+    };
+    mutation.mutate(nextAgents);
   };
 
   if (isLoading) {
