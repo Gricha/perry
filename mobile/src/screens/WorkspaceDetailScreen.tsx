@@ -178,6 +178,7 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
 
   const isRunning = isHost ? true : workspace?.status === 'running'
   const isCreating = isHost ? false : workspace?.status === 'creating'
+  const startupSteps = workspace?.startup?.steps ?? []
 
   const { data: sessionsData, isLoading: sessionsLoading, refetch: refetchSessions } = useQuery({
     queryKey: ['sessions', name, agentFilter],
@@ -414,6 +415,32 @@ export function WorkspaceDetailScreen({ route, navigation }: any) {
             <ActivityIndicator size="large" color={colors.warning} style={{ marginBottom: 16 }} />
             <Text style={[styles.notRunningText, { color: colors.textMuted }]}>Workspace is starting</Text>
             <Text style={[styles.notRunningSubtext, { color: colors.textMuted }]}>Please wait while the container starts up</Text>
+            {startupSteps.length > 0 && (
+              <View style={[styles.startupSteps, { borderColor: colors.border, backgroundColor: colors.surfaceSecondary }]}>
+                {startupSteps.map((step) => {
+                  const color = step.status === 'done'
+                    ? colors.success
+                    : step.status === 'running'
+                      ? colors.warning
+                      : step.status === 'error'
+                        ? colors.error
+                        : step.status === 'skipped'
+                          ? colors.textMuted
+                          : colors.textMuted
+                  return (
+                    <View key={step.id} style={styles.startupStepRow}>
+                      <View style={[styles.startupStepDot, { backgroundColor: color }]} />
+                      <View style={styles.startupStepText}>
+                        <Text style={[styles.startupStepTitle, { color: colors.text }]}>{step.label}</Text>
+                        {step.message && (
+                          <Text style={[styles.startupStepMessage, { color: colors.textMuted }]}>{step.message}</Text>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })}
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.notRunning}>
@@ -639,6 +666,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#636366',
     marginTop: 6,
+  },
+  startupSteps: {
+    width: '100%',
+    marginTop: 16,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  startupStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  startupStepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  startupStepText: {
+    flex: 1,
+  },
+  startupStepTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  startupStepMessage: {
+    fontSize: 12,
+    marginTop: 2,
   },
   empty: {
     flex: 1,

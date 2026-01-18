@@ -3,7 +3,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import pkg from '../../package.json';
-import type { AgentConfig, PortMapping } from '../shared/types';
+import type {
+  AgentConfig,
+  PortMapping,
+  WorkspaceStartupState,
+  WorkspaceStartupStatus,
+} from '../shared/types';
 import type { Workspace, CreateWorkspaceOptions } from './types';
 import { StateManager } from './state';
 import { expandPath } from '../config/loader';
@@ -301,7 +306,7 @@ export class WorkspaceManager {
   private async setupWorkspaceCredentials(
     containerName: string,
     workspaceName: string | undefined,
-    options: { strictWorker: boolean }
+    options: { strictWorker: boolean; startOpenCodeServer?: boolean }
   ): Promise<void> {
     await this.copyGitConfig(containerName);
     await this.copyCredentialFiles(containerName);
@@ -310,9 +315,86 @@ export class WorkspaceManager {
     await this.copyPerryWorker(containerName);
     await this.ensurePerryOnPath(containerName);
     await this.startWorkerServer(containerName, options);
-    await this.startOpenCodeServer(containerName);
+    if (options.startOpenCodeServer ?? true) {
+      await this.startOpenCodeServer(containerName);
+    }
     if (workspaceName) {
       await this.setupSSHKeys(containerName, workspaceName);
+    }
+  }
+
+  private createStartupState(): WorkspaceStartupState {
+    const steps = [
+      { id: 'prepare', label: 'Preparing container', status: 'pending' as const },
+      { id: 'start', label: 'Starting container', status: 'pending' as const },
+      { id: 'sync', label: 'Syncing workspace files', status: 'pending' as const },
+      { id: 'update', label: 'Updating agents', status: 'pending' as const },
+      { id: 'scripts', label: 'Running startup scripts', status: 'pending' as const },
+      { id: 'tailscale', label: 'Configuring Tailscale', status: 'pending' as const },
+    ];
+    return { steps, updatedAt: new Date().toISOString() };
+  }
+
+  private async setStartupStep(
+    workspace: Workspace,
+    id: string,
+    status: WorkspaceStartupStatus,
+    message?: string
+  ): Promise<void> {
+    if (!workspace.startup) {
+      workspace.startup = this.createStartupState();
+    }
+    const step = workspace.startup.steps.find((s) => s.id === id);
+    if (step) {
+      step.status = status;
+      step.message = message;
+    }
+    workspace.startup.updatedAt = new Date().toISOString();
+    await this.state.setWorkspace(workspace);
+  }
+
+  private async setStartupError(workspace: Workspace, message: string): Promise<void> {
+    if (!workspace.startup) {
+      return;
+    }
+    const step =
+      workspace.startup.steps.find((s) => s.status === 'running') ||
+      workspace.startup.steps.find((s) => s.status === 'pending');
+    if (step) {
+      step.status = 'error';
+      step.message = message;
+    }
+    workspace.startup.updatedAt = new Date().toISOString();
+    await this.state.setWorkspace(workspace);
+  }
+
+  private async finalizeStartup(workspace: Workspace): Promise<void> {
+    workspace.startup = undefined;
+    await this.state.setWorkspace(workspace);
+  }
+
+  private async updateAgentBinaries(containerName: string): Promise<void> {
+    const updates = [
+      {
+        name: 'claude',
+        command: 'command -v claude >/dev/null 2>&1 || exit 0; curl -fsSL https://claude.ai/install.sh | bash',
+      },
+      {
+        name: 'opencode',
+        command: 'command -v opencode >/dev/null 2>&1 || exit 0; curl -fsSL https://opencode.ai/install | bash',
+      },
+    ];
+
+    for (const update of updates) {
+      const result = await docker.execInContainer(
+        containerName,
+        ['sh', '-c', update.command],
+        { user: 'workspace' }
+      );
+      if (result.exitCode !== 0) {
+        const details = result.stderr || result.stdout || 'unknown error';
+        console.warn(`[agents] ${update.name} update failed: ${details}`);
+      }
     }
   }
 
@@ -793,9 +875,17 @@ export class WorkspaceManager {
       },
       lastUsed: new Date().toISOString(),
     };
+    workspace.startup = this.createStartupState();
+    if (!this.config.tailscale?.enabled || !this.config.tailscale?.authKey) {
+      const step = workspace.startup.steps.find((s) => s.id === 'tailscale');
+      if (step) {
+        step.status = 'skipped';
+      }
+    }
     await this.state.setWorkspace(workspace);
 
     try {
+      await this.setStartupStep(workspace, 'prepare', 'running');
       const workspaceImage = await ensureWorkspaceImage();
 
       if (!(await docker.volumeExists(volumeName))) {
@@ -848,20 +938,42 @@ export class WorkspaceManager {
       workspace.ports.ssh = sshPort;
       await this.state.setWorkspace(workspace);
 
+      await this.setStartupStep(workspace, 'prepare', 'done');
+      await this.setStartupStep(workspace, 'start', 'running');
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-      await this.setupWorkspaceCredentials(containerName, name, { strictWorker: false });
+      await this.setStartupStep(workspace, 'start', 'done');
+      await this.setStartupStep(workspace, 'sync', 'running');
+      await this.setupWorkspaceCredentials(containerName, name, {
+        strictWorker: false,
+        startOpenCodeServer: false,
+      });
+      await this.setStartupStep(workspace, 'sync', 'done');
+      await this.setStartupStep(workspace, 'update', 'running');
+      await this.updateAgentBinaries(containerName);
+      await this.setStartupStep(workspace, 'update', 'done');
+      await this.startOpenCodeServer(containerName);
 
       workspace.status = 'running';
+      workspace.lastUsed = new Date().toISOString();
       await this.state.setWorkspace(workspace);
 
+      await this.setStartupStep(workspace, 'scripts', 'running');
       await this.runUserScripts(containerName);
+      await this.setStartupStep(workspace, 'scripts', 'done');
 
-      await this.setupTailscale(containerName, workspace);
-      await this.state.setWorkspace(workspace);
+      if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+        await this.setStartupStep(workspace, 'tailscale', 'running');
+        await this.setupTailscale(containerName, workspace);
+        await this.setStartupStep(workspace, 'tailscale', 'done');
+        await this.state.setWorkspace(workspace);
+      }
 
+      await this.finalizeStartup(workspace);
       return workspace;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.setStartupError(workspace, message);
       workspace.status = 'error';
       await this.state.setWorkspace(workspace);
       throw err;
@@ -887,8 +999,31 @@ export class WorkspaceManager {
       const containerName = getContainerName(name);
       const volumeName = `${VOLUME_PREFIX}${name}`;
       const exists = await docker.containerExists(containerName);
+      const running = exists ? await docker.containerRunning(containerName) : false;
+      if (running) {
+        workspace.status = 'running';
+        workspace.lastUsed = new Date().toISOString();
+        workspace.startup = undefined;
+        await this.state.setWorkspace(workspace);
+        return workspace;
+      }
+      workspace.startup = this.createStartupState();
+      if (!this.config.tailscale?.enabled || !this.config.tailscale?.authKey) {
+        const step = workspace.startup.steps.find((s) => s.id === 'tailscale');
+        if (step) {
+          step.status = 'skipped';
+        }
+      }
+      if (exists) {
+        const step = workspace.startup.steps.find((s) => s.id === 'prepare');
+        if (step) {
+          step.status = 'skipped';
+        }
+      }
+      await this.state.setWorkspace(workspace);
 
       if (!exists) {
+        await this.setStartupStep(workspace, 'prepare', 'running');
         const volumeExists = await docker.volumeExists(volumeName);
         if (!volumeExists) {
           throw new Error(
@@ -942,31 +1077,44 @@ export class WorkspaceManager {
         workspace.containerId = containerId;
         workspace.ports.ssh = sshPort;
         await this.state.setWorkspace(workspace);
+        await this.setStartupStep(workspace, 'prepare', 'done');
       }
 
-      const running = await docker.containerRunning(containerName);
-      if (running) {
-        workspace.status = 'running';
-        workspace.lastUsed = new Date().toISOString();
-        await this.state.setWorkspace(workspace);
-        return workspace;
-      }
-
+      await this.setStartupStep(workspace, 'start', 'running');
       await docker.startContainer(containerName);
       await docker.waitForContainerReady(containerName);
-      await this.setupWorkspaceCredentials(containerName, name, { strictWorker: false });
+      await this.setStartupStep(workspace, 'start', 'done');
+      await this.setStartupStep(workspace, 'sync', 'running');
+      await this.setupWorkspaceCredentials(containerName, name, {
+        strictWorker: false,
+        startOpenCodeServer: false,
+      });
+      await this.setStartupStep(workspace, 'sync', 'done');
+      await this.setStartupStep(workspace, 'update', 'running');
+      await this.updateAgentBinaries(containerName);
+      await this.setStartupStep(workspace, 'update', 'done');
+      await this.startOpenCodeServer(containerName);
 
       workspace.status = 'running';
       workspace.lastUsed = new Date().toISOString();
       await this.state.setWorkspace(workspace);
 
+      await this.setStartupStep(workspace, 'scripts', 'running');
       await this.runUserScripts(containerName);
+      await this.setStartupStep(workspace, 'scripts', 'done');
 
-      await this.setupTailscale(containerName, workspace);
-      await this.state.setWorkspace(workspace);
+      if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+        await this.setStartupStep(workspace, 'tailscale', 'running');
+        await this.setupTailscale(containerName, workspace);
+        await this.setStartupStep(workspace, 'tailscale', 'done');
+        await this.state.setWorkspace(workspace);
+      }
 
+      await this.finalizeStartup(workspace);
       return workspace;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.setStartupError(workspace, message);
       workspace.status = previousStatus === 'error' ? 'error' : 'stopped';
       await this.state.setWorkspace(workspace);
       throw err;
@@ -1130,11 +1278,19 @@ export class WorkspaceManager {
       },
       lastUsed: new Date().toISOString(),
     };
+    workspace.startup = this.createStartupState();
+    if (!this.config.tailscale?.enabled || !this.config.tailscale?.authKey) {
+      const step = workspace.startup.steps.find((s) => s.id === 'tailscale');
+      if (step) {
+        step.status = 'skipped';
+      }
+    }
     await this.state.setWorkspace(workspace);
 
     const wasRunning = await docker.containerRunning(sourceContainerName);
 
     try {
+      await this.setStartupStep(workspace, 'prepare', 'running');
       if (wasRunning) {
         await docker.stopContainer(sourceContainerName);
       }
@@ -1187,20 +1343,42 @@ export class WorkspaceManager {
       workspace.ports.ssh = sshPort;
       await this.state.setWorkspace(workspace);
 
+      await this.setStartupStep(workspace, 'prepare', 'done');
+      await this.setStartupStep(workspace, 'start', 'running');
       await docker.startContainer(cloneContainerName);
       await docker.waitForContainerReady(cloneContainerName);
-      await this.setupWorkspaceCredentials(cloneContainerName, cloneName, { strictWorker: false });
+      await this.setStartupStep(workspace, 'start', 'done');
+      await this.setStartupStep(workspace, 'sync', 'running');
+      await this.setupWorkspaceCredentials(cloneContainerName, cloneName, {
+        strictWorker: false,
+        startOpenCodeServer: false,
+      });
+      await this.setStartupStep(workspace, 'sync', 'done');
+      await this.setStartupStep(workspace, 'update', 'running');
+      await this.updateAgentBinaries(cloneContainerName);
+      await this.setStartupStep(workspace, 'update', 'done');
+      await this.startOpenCodeServer(cloneContainerName);
 
       workspace.status = 'running';
+      workspace.lastUsed = new Date().toISOString();
       await this.state.setWorkspace(workspace);
 
+      await this.setStartupStep(workspace, 'scripts', 'running');
       await this.runUserScripts(cloneContainerName);
+      await this.setStartupStep(workspace, 'scripts', 'done');
 
-      await this.setupTailscale(cloneContainerName, workspace);
-      await this.state.setWorkspace(workspace);
+      if (this.config.tailscale?.enabled && this.config.tailscale?.authKey) {
+        await this.setStartupStep(workspace, 'tailscale', 'running');
+        await this.setupTailscale(cloneContainerName, workspace);
+        await this.setStartupStep(workspace, 'tailscale', 'done');
+        await this.state.setWorkspace(workspace);
+      }
 
+      await this.finalizeStartup(workspace);
       return workspace;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.setStartupError(workspace, message);
       workspace.status = 'error';
       await this.state.setWorkspace(workspace);
 

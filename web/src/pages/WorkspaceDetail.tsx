@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   FolderSync,
   Search,
+  Circle,
   X,
 } from 'lucide-react'
 import { api, type SessionInfo, type AgentType, type PortMapping } from '@/lib/api'
@@ -466,6 +467,8 @@ export function WorkspaceDetail() {
     queryKey: ['workspace', name],
     queryFn: () => api.getWorkspace(name!),
     enabled: !!name && !isHostWorkspace,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'creating' ? 2000 : false,
   })
 
   const isLoading = isHostWorkspace ? hostLoading : workspaceLoading
@@ -624,6 +627,7 @@ export function WorkspaceDetail() {
   const isError = isHostWorkspace ? false : workspace?.status === 'error'
   const isCreating = isHostWorkspace ? false : workspace?.status === 'creating'
   const displayName = isHostWorkspace ? (hostInfo?.hostname || 'Host') : workspace?.name
+  const startupSteps = workspace?.startup?.steps ?? []
 
   const tabs = isHostWorkspace
     ? [
@@ -647,6 +651,38 @@ export function WorkspaceDetail() {
           <p className="text-muted-foreground mb-6 text-center max-w-md">
             Please wait while the workspace container starts up. This may take a moment if the Docker image is being downloaded.
           </p>
+          {startupSteps.length > 0 && (
+            <div className="w-full max-w-md space-y-2">
+              {startupSteps.map((step) => {
+                const icon =
+                  step.status === 'done' ? (
+                    <Check className="h-4 w-4 text-success" />
+                  ) : step.status === 'running' ? (
+                    <Loader2 className="h-4 w-4 text-amber-500 animate-spin" />
+                  ) : step.status === 'error' ? (
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                  ) : step.status === 'skipped' ? (
+                    <Check className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-muted-foreground" />
+                  )
+                return (
+                  <div
+                    key={step.id}
+                    className="flex items-center gap-3 rounded-md border border-border/50 bg-card/40 px-3 py-2"
+                  >
+                    {icon}
+                    <div className="flex-1 text-sm">
+                      <div className="font-medium text-foreground">{step.label}</div>
+                      {step.message && (
+                        <div className="text-xs text-muted-foreground">{step.message}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )
     }

@@ -122,6 +122,19 @@ export interface ClientConfig {
 }
 
 export type WorkspaceStatus = 'running' | 'stopped' | 'creating' | 'error';
+export type WorkspaceStartupStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
+
+export interface WorkspaceStartupStep {
+  id: string;
+  label: string;
+  status: WorkspaceStartupStatus;
+  message?: string;
+}
+
+export interface WorkspaceStartupState {
+  steps: WorkspaceStartupStep[];
+  updatedAt: string;
+}
 
 export interface PortMapping {
   host: number;
@@ -143,6 +156,7 @@ export interface WorkspaceInfo {
   ports: WorkspacePorts;
   lastUsed?: string;
   tailscale?: WorkspaceTailscale;
+  startup?: WorkspaceStartupState;
 }
 
 export interface WorkspaceState {

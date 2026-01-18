@@ -25,6 +25,21 @@ export interface WorkspaceInfo {
   };
   lastUsed?: string;
   tailscale?: WorkspaceTailscale;
+  startup?: WorkspaceStartupState;
+}
+
+export type WorkspaceStartupStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
+
+export interface WorkspaceStartupStep {
+  id: string;
+  label: string;
+  status: WorkspaceStartupStatus;
+  message?: string;
+}
+
+export interface WorkspaceStartupState {
+  steps: WorkspaceStartupStep[];
+  updatedAt: string;
 }
 
 export interface RecentSession {
