@@ -8,7 +8,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Core Tasks',
-      items: ['workspaces', 'connect', 'agents', 'networking', 'sync-update'],
+      items: ['workspaces', 'connect', 'agents', 'skills', 'networking', 'sync-update'],
     },
     {
       type: 'category',
