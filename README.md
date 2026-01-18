@@ -25,6 +25,8 @@ Continue your sessions from any device on your tailnet.
 
 **[Get Started →](https://gricha.github.io/perry/docs/getting-started)**
 
+Perry is not endorsing or associated with any crypto tokens or meme coins. If you'd like to support the project, the best way is to donate to your favorite charity, or to St. Jude: https://www.stjude.org/donate/donate-to-st-jude.html
+
 ## Features
 
 - **AI Coding Agents** - Claude Code, OpenCode, Codex CLI pre-installed
@@ -185,7 +187,3 @@ bun run test      # Tests only
 ## License
 
 MIT
-
-## Support
-
-Perry is not endorsing or associated with any crypto tokens or meme coins. If you'd like to support the project, the best way is to donate to your favorite charity, or to St. Jude: https://www.stjude.org/donate/donate-to-st-jude.html
