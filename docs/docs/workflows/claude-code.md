@@ -2,9 +2,9 @@
 sidebar_position: 2
 ---
 
-# Claude Code and Codex Workflow
+# Claude Code Workflow
 
-Claude Code and Codex run inside workspaces. There is no external server to attach to, so you connect via a terminal and run the client in the workspace.
+Claude Code runs inside workspaces. There is no external server to attach to, so you connect via a terminal and run the client in the workspace.
 
 ## Overview
 
@@ -13,6 +13,8 @@ This flow is terminal-first. You connect to the workspace, launch the agent, and
 ## Demo
 
 <video controls src="/video/claude-perry.mov" width="100%"></video>
+
+![Claude Code on mobile terminal](/img/claude-mobile.png)
 
 ## 1) Configure credentials
 
@@ -50,7 +52,6 @@ perry start myproject
 ```bash
 perry shell myproject
 claude
-codex
 ```
 
 ## Ways to connect
@@ -65,10 +66,6 @@ If you are away from your main machine, the fastest options are:
 
 - Web UI terminal on your phone or tablet
 - SSH from a mobile client (Termius, Prompt, etc.)
-
-Claude Code is available directly in the workspace terminal:
-
-![Claude Code on mobile terminal](/img/claude-mobile.png)
 
 ## Sessions
 
