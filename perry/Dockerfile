@@ -29,16 +29,6 @@ RUN ARCH=$(dpkg --print-architecture) \
   && rm -rf /tmp/awscliv2.zip /tmp/aws \
   && aws --version
 
-# Install Go
-RUN ARCH=$(dpkg --print-architecture) \
-  && if [ "$ARCH" = "amd64" ]; then GO_ARCH="amd64"; elif [ "$ARCH" = "arm64" ]; then GO_ARCH="arm64"; else GO_ARCH="$ARCH"; fi \
-  && curl -fsSL "https://go.dev/dl/go1.23.4.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz \
-  && tar -C /usr/local -xzf /tmp/go.tar.gz \
-  && rm /tmp/go.tar.gz \
-  && /usr/local/go/bin/go version
-
-ENV PATH="/usr/local/go/bin:${PATH}"
-
 # Install Tectonic (LaTeX)
 RUN ARCH=$(dpkg --print-architecture) \
   && if [ "$ARCH" = "amd64" ]; then TECTONIC_ARCH="x86_64-unknown-linux-musl"; elif [ "$ARCH" = "arm64" ]; then TECTONIC_ARCH="aarch64-unknown-linux-musl"; else TECTONIC_ARCH="$ARCH"; fi \
