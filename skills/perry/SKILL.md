@@ -63,14 +63,16 @@ Gotchas:
 ## SSH access
 
 ```bash
-ssh workspace-my-proj
+ssh workspace@my-proj
 ```
 
 Expected behavior:
+- The username is `workspace` and the hostname is the workspace name (e.g., `my-proj`).
 - The workspace inherits authorized keys from the host.
 - If your key works on the host, it should work on the workspace.
 
 Gotchas:
+- The SSH username is `workspace`, not part of the hostname. Use `ssh workspace@<name>`, not `ssh workspace-<name>`.
 - If SSH fails, ensure your host keys exist and the workspace is on the tailnet.
 
 ## Common commands
