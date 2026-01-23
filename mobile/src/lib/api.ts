@@ -126,11 +126,13 @@ type ServerMode = 'real' | 'demo';
 interface ServerConfig {
   host: string;
   port: number;
+  token?: string;
   mode?: ServerMode;
 }
 
 let baseUrl = '';
 let serverMode: ServerMode = 'real';
+let currentToken: string | undefined;
 
 export function setBaseUrl(url: string): void {
   baseUrl = url;
@@ -173,6 +175,7 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
   const mode = resolveMode(config.host, config.mode);
 
   baseUrl = `http://${normalizeHost(config.host)}:${config.port}`;
+  currentToken = config.token;
   client = createClient();
   setServerMode(mode);
   setUserContext(baseUrl);
@@ -180,16 +183,25 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
   return { ...config, mode };
 }
 
-export async function saveServerConfig(host: string, port: number = DEFAULT_PORT): Promise<void> {
+export async function saveServerConfig(
+  host: string,
+  port: number = DEFAULT_PORT,
+  token?: string
+): Promise<void> {
   const mode = resolveMode(host);
-  const config: ServerConfig = { host, port, mode };
+  const config: ServerConfig = { host, port, token, mode };
 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 
   baseUrl = `http://${normalizeHost(host)}:${port}`;
+  currentToken = token;
   client = createClient();
   setServerMode(mode);
   setUserContext(baseUrl);
+}
+
+export function getToken(): string | undefined {
+  return currentToken;
 }
 
 export function getDefaultPort(): number {
@@ -197,8 +209,16 @@ export function getDefaultPort(): number {
 }
 
 function createClient() {
+  const token = currentToken;
   const link = new RPCLink({
     url: `${baseUrl}/rpc`,
+    fetch: (url, init) => {
+      const headers = new Headers((init as RequestInit)?.headers);
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return fetch(url, { ...(init as RequestInit), headers });
+    },
   });
 
   return createORPCClient<{
