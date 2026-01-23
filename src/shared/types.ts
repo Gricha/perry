@@ -122,6 +122,7 @@ export interface AgentConfig {
 
 export interface ClientConfig {
   agent?: string;
+  token?: string;
   /** @deprecated Use 'agent' instead */
   worker?: string;
 }

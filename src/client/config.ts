@@ -46,6 +46,17 @@ export async function setAgent(agent: string, configDir?: string): Promise<void>
   await saveClientConfig(config, configDir);
 }
 
+export async function getToken(configDir?: string): Promise<string | null> {
+  const config = await loadClientConfig(configDir);
+  return config?.token || null;
+}
+
+export async function setToken(token: string, configDir?: string): Promise<void> {
+  const config = (await loadClientConfig(configDir)) || {};
+  config.token = token;
+  await saveClientConfig(config, configDir);
+}
+
 // Legacy aliases for backwards compatibility
 export const getWorker = getAgent;
 export const setWorker = setAgent;
