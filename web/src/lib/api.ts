@@ -59,6 +59,27 @@ export type {
   TailscaleConfig,
 };
 
+const TOKEN_STORAGE_KEY = 'perry_auth_token';
+
+function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  initClient();
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  initClient();
+}
+
+export function getToken(): string | null {
+  return getStoredToken();
+}
+
 function getRpcUrl(): string {
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/rpc`;
@@ -66,11 +87,7 @@ function getRpcUrl(): string {
   return '/rpc';
 }
 
-const link = new RPCLink({
-  url: getRpcUrl(),
-});
-
-const client = createORPCClient<{
+type ClientType = {
   workspaces: {
     list: () => Promise<WorkspaceInfo[]>;
     get: (input: { name: string }) => Promise<WorkspaceInfo>;
@@ -193,7 +210,27 @@ const client = createORPCClient<{
       }) => Promise<{ enabled: boolean; authKey?: string; hostnamePrefix?: string }>;
     };
   };
-}>(link);
+};
+
+let link: RPCLink;
+let client: ClientType;
+
+function initClient() {
+  const token = getStoredToken();
+  link = new RPCLink({
+    url: getRpcUrl(),
+    fetch: (url, init) => {
+      const headers = new Headers((init as RequestInit)?.headers);
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return fetch(url, { ...(init as RequestInit), headers });
+    },
+  });
+  client = createORPCClient<ClientType>(link);
+}
+
+initClient();
 
 export const api = {
   listWorkspaces: () => client.workspaces.list(),
