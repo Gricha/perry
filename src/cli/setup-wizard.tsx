@@ -73,7 +73,7 @@ function TokenInputStep({
     } else if (key.escape) {
       onBack();
     } else if (input === 'v' && key.ctrl) {
-      setShowValue((s: boolean) => !s);
+      setShowValue((s) => !s);
     } else if (input === 's' && optional) {
       onNext();
     }
@@ -127,7 +127,7 @@ function AuthStep({
     } else if (input === 'g' && !token) {
       onGenerate();
     } else if (input === 'v' && key.ctrl) {
-      setShowToken((s: boolean) => !s);
+      setShowToken((s) => !s);
     }
   });
 
@@ -197,9 +197,9 @@ function SSHKeySelectStep({
 
   useInput((input, key) => {
     if (key.upArrow) {
-      setHighlighted((h: number) => Math.max(0, h - 1));
+      setHighlighted((h) => Math.max(0, h - 1));
     } else if (key.downArrow) {
-      setHighlighted((h: number) => Math.min(privateKeys.length - 1, h + 1));
+      setHighlighted((h) => Math.min(privateKeys.length - 1, h + 1));
     } else if (input === ' ' && privateKeys.length > 0) {
       onToggle(privateKeys[highlighted].path);
     } else if (key.return) {
@@ -324,7 +324,7 @@ function SetupWizard() {
       const configDir = getConfigDir();
       await ensureConfigDir(configDir);
       const config = await loadAgentConfig(configDir);
-      setState((s: WizardState) => ({
+      setState((s) => ({
         ...s,
         authToken: config.auth?.token || '',
         authTokenGenerated: false,
@@ -351,17 +351,17 @@ function SetupWizard() {
   };
 
   const toggleSSHKey = (path: string) => {
-    setState((s: WizardState) => ({
+    setState((s) => ({
       ...s,
       selectedSSHKeys: s.selectedSSHKeys.includes(path)
-        ? s.selectedSSHKeys.filter((k: string) => k !== path)
+        ? s.selectedSSHKeys.filter((k) => k !== path)
         : [...s.selectedSSHKeys, path],
     }));
   };
 
   const generateAuthToken = () => {
     const token = `perry-${crypto.randomBytes(16).toString('hex')}`;
-    setState((s: WizardState) => ({
+    setState((s) => ({
       ...s,
       authToken: token,
       authTokenGenerated: true,
@@ -445,7 +445,7 @@ function SetupWizard() {
               placeholder="ghp_... or github_pat_..."
               helpText="Create at https://github.com/settings/personal-access-tokens/new"
               value={state.githubToken}
-              onChange={(v: string) => setState((s: WizardState) => ({ ...s, githubToken: v }))}
+              onChange={(v) => setState((s) => ({ ...s, githubToken: v }))}
               onNext={nextStep}
               onBack={prevStep}
               optional
@@ -466,9 +466,7 @@ function SetupWizard() {
               placeholder="tskey-auth-..."
               helpText="Generate at https://login.tailscale.com/admin/settings/keys (Reusable: Yes, Ephemeral: No)"
               value={state.tailscaleAuthKey}
-              onChange={(v: string) =>
-                setState((s: WizardState) => ({ ...s, tailscaleAuthKey: v }))
-              }
+              onChange={(v) => setState((s) => ({ ...s, tailscaleAuthKey: v }))}
               onNext={nextStep}
               onBack={prevStep}
               optional

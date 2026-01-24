@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Key, Shield, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { setToken } from '@/lib/api';
+import { setToken, clearToken } from '@/lib/api';
 
 interface AuthProps {
   onAuthenticated: () => void;
@@ -39,7 +39,7 @@ export function Auth({ onAuthenticated }: AuthProps) {
         onAuthenticated();
       } else if (response.status === 401) {
         setError('Invalid token');
-        setToken('');
+        clearToken();
       } else {
         setError('Connection failed. Please check the agent is running.');
       }
