@@ -25,7 +25,7 @@ import { McpServers } from './pages/McpServers';
 import { Auth } from './pages/Auth';
 import { Layout } from './components/Layout';
 import { SyncProvider } from './contexts/SyncContext';
-import { api, getToken } from './lib/api';
+import { api } from './lib/api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
