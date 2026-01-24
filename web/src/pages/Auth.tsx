@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Key, Shield, ArrowRight } from 'lucide-react';
+import Key from 'lucide-react/dist/esm/icons/key';
+import Shield from 'lucide-react/dist/esm/icons/shield';
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { setToken, clearToken } from '@/lib/api';
@@ -87,14 +89,10 @@ export function Auth({ onAuthenticated }: AuthProps) {
 
         <div className="mt-6 p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
           <p className="font-medium mb-2">Where do I find the token?</p>
-          <ul className="space-y-1 list-disc list-inside">
-            <li>
-              Run <code className="bg-muted px-1 rounded">perry agent config</code> on the agent
-            </li>
-            <li>
-              Or check <code className="bg-muted px-1 rounded">~/.config/perry/config.json</code>
-            </li>
-          </ul>
+          <p>
+            On the machine running the agent, run:{' '}
+            <code className="bg-muted px-1 rounded">perry agent show-token</code>
+          </p>
         </div>
       </div>
     </div>

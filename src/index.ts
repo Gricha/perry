@@ -800,6 +800,23 @@ agentCmd
     }
   });
 
+agentCmd
+  .command('show-token')
+  .description('Show the auth token for connecting clients')
+  .action(async () => {
+    const configDir = getConfigDir();
+    await ensureConfigDir(configDir);
+    const config = await loadAgentConfig(configDir);
+
+    if (!config.auth?.token) {
+      console.log('No auth token configured.');
+      console.log('Run `perry auth init` to generate one.');
+      process.exit(1);
+    }
+
+    console.log(config.auth.token);
+  });
+
 const authCmd = program.command('auth').description('Manage authentication');
 
 authCmd

@@ -11,6 +11,8 @@ Use the `skill` tool for common workflows:
 | `release` | To cut a new version release |
 | `create-pr` | To create a pull request with concise description |
 
+If validation fails due to missing tools, install dependencies first with `bun install`.
+
 ## Code Review Agents
 
 Before submitting changes, run review agents in parallel with validation:

@@ -234,6 +234,13 @@ export class ApiClient {
       }
 
       const orpcError = err as { code?: string; status?: number };
+      if (orpcError.status === 401) {
+        return new ApiClientError(
+          'Unauthorized. Get the token by running `perry agent show-token` on the agent, then set it here with `perry config token <token>`.',
+          401,
+          'UNAUTHORIZED'
+        );
+      }
       if (orpcError.code) {
         return new ApiClientError(err.message, orpcError.status || 500, orpcError.code);
       }
