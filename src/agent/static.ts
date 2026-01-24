@@ -77,6 +77,12 @@ export async function serveStatic(
   return true;
 }
 
+const API_PREFIXES = ['/rpc', '/health'];
+
+function isApiPath(pathname: string): boolean {
+  return API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 export async function serveStaticBun(pathname: string): Promise<Response | null> {
   const webDir = getWebDir();
   const indexPath = path.join(webDir, 'index.html');
@@ -104,6 +110,10 @@ export async function serveStaticBun(pathname: string): Promise<Response | null>
     } catch {
       return null;
     }
+  }
+
+  if (isApiPath(pathname)) {
+    return null;
   }
 
   const file = Bun.file(indexPath);

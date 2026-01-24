@@ -16,6 +16,7 @@ import { DEFAULT_AGENT_PORT } from '../shared/constants';
 export interface ApiClientOptions {
   baseUrl: string;
   timeout?: number;
+  token?: string;
 }
 
 export class ApiClientError extends Error {
@@ -34,21 +35,38 @@ type Client = RouterClient<AppRouter>;
 export class ApiClient {
   private baseUrl: string;
   private client: Client;
+  private token?: string;
 
   constructor(options: ApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
+    this.token = options.token;
 
+    const token = this.token;
+    const timeout = options.timeout || 30000;
     const link = new RPCLink({
       url: `${this.baseUrl}/rpc`,
-      fetch: (url, init) =>
-        fetch(url, { ...init, signal: AbortSignal.timeout(options.timeout || 30000) }),
+      fetch: (url, init) => {
+        const headers = new Headers((init as RequestInit)?.headers);
+        if (token) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
+        return fetch(url, {
+          ...(init as RequestInit),
+          headers,
+          signal: AbortSignal.timeout(timeout),
+        });
+      },
     });
 
     this.client = createORPCClient<Client>(link);
   }
 
   async health(): Promise<{ status: string; version: string }> {
-    const response = await fetch(`${this.baseUrl}/health`);
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const response = await fetch(`${this.baseUrl}/health`, { headers });
     return response.json();
   }
 
@@ -257,7 +275,12 @@ export function formatWorkerBaseUrl(worker: string, port?: number): string {
   return `http://${trimmed}:${effectivePort}`;
 }
 
-export function createApiClient(worker: string, port?: number, timeoutMs?: number): ApiClient {
+export function createApiClient(
+  worker: string,
+  port?: number,
+  timeoutMs?: number,
+  token?: string
+): ApiClient {
   const baseUrl = formatWorkerBaseUrl(worker, port);
-  return new ApiClient({ baseUrl, timeout: timeoutMs });
+  return new ApiClient({ baseUrl, timeout: timeoutMs, token });
 }

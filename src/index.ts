@@ -7,7 +7,7 @@ import pkg from '../package.json';
 import { startAgent } from './agent/run';
 import { installService, uninstallService, showStatus, getServiceStatus } from './agent/systemd';
 import { createApiClient, ApiClientError, formatWorkerBaseUrl } from './client/api';
-import { loadClientConfig, getAgent, setAgent } from './client/config';
+import { loadClientConfig, getAgent, setAgent, getToken, setToken } from './client/config';
 import {
   openWSShell,
   openDockerExec,
@@ -206,7 +206,8 @@ async function promptForAgent(): Promise<string> {
 
 async function createClient(timeoutMs?: number) {
   const agent = await getAgentWithFallback();
-  return createApiClient(agent, undefined, timeoutMs);
+  const token = await getToken();
+  return createApiClient(agent, undefined, timeoutMs, token || undefined);
 }
 
 async function getAgentWithFallback(): Promise<string> {
@@ -656,8 +657,15 @@ const configCmd = program
     console.log('Client Configuration:');
     console.log(`  Config Dir: ${configDir}`);
     console.log(`  Agent: ${clientConfig?.agent || '(not set)'}`);
+    if (clientConfig?.token) {
+      const masked = clientConfig.token.slice(0, 10) + '...' + clientConfig.token.slice(-4);
+      console.log(`  Token: ${masked}`);
+    } else {
+      console.log(`  Token: (not set)`);
+    }
     console.log('');
     console.log('To configure the agent connection: perry config agent <hostname>');
+    console.log('To configure the auth token: perry config token <token>');
   });
 
 configCmd
@@ -670,6 +678,12 @@ configCmd
     console.log('Client Configuration:');
     console.log(`  Config Dir: ${configDir}`);
     console.log(`  Agent: ${clientConfig?.agent || '(not set)'}`);
+    if (clientConfig?.token) {
+      const masked = clientConfig.token.slice(0, 10) + '...' + clientConfig.token.slice(-4);
+      console.log(`  Token: ${masked}`);
+    } else {
+      console.log(`  Token: (not set)`);
+    }
   });
 
 configCmd
@@ -722,6 +736,31 @@ configCmd
     }
   });
 
+configCmd
+  .command('token [token]')
+  .description('Get or set the auth token for API requests')
+  .option('--show', 'Show full token (default shows masked)')
+  .action(async (token, options) => {
+    if (token) {
+      await setToken(token);
+      console.log('Token saved');
+    } else {
+      const currentToken = await getToken();
+      if (currentToken) {
+        if (options.show) {
+          console.log(currentToken);
+        } else {
+          const masked = currentToken.slice(0, 10) + '...' + currentToken.slice(-4);
+          console.log(`Token: ${masked}`);
+        }
+      } else {
+        console.log('No token configured');
+        console.log('');
+        console.log('Usage: perry config token <token>');
+      }
+    }
+  });
+
 // Agent configuration command (moved under 'perry agent config')
 agentCmd
   .command('config')
@@ -759,6 +798,16 @@ agentCmd
     if (config.scripts.fail_on_error) {
       console.log(`  Scripts Fail on Error: enabled`);
     }
+  });
+
+const authCmd = program.command('auth').description('Manage authentication');
+
+authCmd
+  .command('init')
+  .description('Generate auth token for the agent')
+  .action(async () => {
+    const { authInit } = await import('./commands/auth');
+    await authInit();
   });
 
 const sshCmd = program.command('ssh').description('Manage SSH keys for workspaces');
