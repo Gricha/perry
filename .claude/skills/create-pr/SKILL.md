@@ -45,9 +45,14 @@ That's it. No "Test Plan", no "Screenshots", no checklists unless truly needed.
    git diff --name-only main...HEAD
    ```
 
-2. **Run validation + reviews in parallel** (REQUIRED before creating PR):
+2. **Run code-simplifier first** (if available):
 
-   Run these concurrently:
+   Run the `code-simplifier:code-simplifier` agent to simplify and clean up the code.
+   This step modifies code, so it must run before reviews. Commit any changes it makes.
+
+3. **Run validation + reviews in parallel**:
+
+   After code-simplifier is done, run these concurrently:
    - `bun run validate` (background)
    - Review agents based on changed files:
 
@@ -56,13 +61,12 @@ That's it. No "Test Plan", no "Screenshots", no checklists unless truly needed.
    | `src/agent/`, auth, user input, data handling | `security-review` |
    | Loops, data fetching, DB queries, heavy computation | `perf-review` |
    | `web/` or `mobile/` (.tsx/.jsx files) | `react-review` |
-   | Any code changes | `code-simplifier` (if available) |
 
-   Spawn all applicable agents in parallel using the Task tool.
+   Spawn all applicable review agents in parallel using the Task tool.
 
-3. **Fix any issues** found by validation or review agents before proceeding
+4. **Fix any issues** found by validation or review agents before proceeding
 
-4. **Create PR** (only after validation passes and reviews are addressed):
+5. **Create PR** (only after validation passes and reviews are addressed):
    ```bash
    gh pr create --title "<type>: <description>" --body "$(cat <<'EOF'
    ## Summary
