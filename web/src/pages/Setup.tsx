@@ -147,8 +147,7 @@ export function Setup() {
   const handleNext = async () => {
     const currentIndex = STEPS.indexOf(currentStep);
     if (currentStep === 'git') {
-      await handleSaveAgents();
-      await handleSaveSSH();
+      await Promise.all([handleSaveAgents(), handleSaveSSH()]);
     }
     if (currentStep === 'networking') {
       await handleSaveTailscale();
@@ -174,11 +173,9 @@ export function Setup() {
   };
 
   const toggleSSHKey = (keyPath: string) => {
-    if (selectedSSHKeys.includes(keyPath)) {
-      setSelectedSSHKeys(selectedSSHKeys.filter((k) => k !== keyPath));
-    } else {
-      setSelectedSSHKeys([...selectedSSHKeys, keyPath]);
-    }
+    setSelectedSSHKeys((current) =>
+      current.includes(keyPath) ? current.filter((k) => k !== keyPath) : [...current, keyPath]
+    );
   };
 
   const currentStepIndex = STEPS.indexOf(currentStep);
