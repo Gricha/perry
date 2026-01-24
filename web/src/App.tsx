@@ -65,8 +65,8 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     if (workspacesError && error) {
-      const errorMessage = (error as Error).message || '';
-      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+      const status = (error as { status?: number }).status;
+      if (status === 401) {
         setNeedsAuth(true);
         return;
       }
