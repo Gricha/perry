@@ -1,6 +1,7 @@
 node_modules
 dist
 packages/test-*
+.env.local
 
 # Lock files (only bun.lock is used)
 yarn.lock
